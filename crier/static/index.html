@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#101a18" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>Sentinel Crier</title>
+    <link rel="manifest" href="/static/manifest.webmanifest" />
+    <link rel="icon" href="/static/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/app.css" />
+    <script defer src="/static/app.js"></script>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <a class="brand" href="/" aria-label="Sentinel Crier home"
+          ><span class="brandmark">C</span
+          ><span>SENTINEL <strong>CRIER</strong></span></a
+        ><span id="mode" class="pill">PREVIEW MODE</span>
+      </header>
+      <main>
+        <section class="intro">
+          <p class="eyebrow">YOUR TRADES, CLEARLY ANNOUNCED</p>
+          <h1>A trade happens.<br /><em>Your people know.</em></h1>
+          <p class="lede">
+            Compact fill alerts, straight to Discord.<br />Built around the way
+            you trade.
+          </p>
+        </section>
+        <section id="unlock" class="unlock panel">
+          <div>
+            <p class="eyebrow">PRIVATE CONSOLE</p>
+            <h2>Open your trading desk</h2>
+            <p>
+              Enter the access token from your Crier server. It stays in memory
+              for this session.
+            </p>
+          </div>
+          <form id="unlock-form">
+            <label for="token">Access token</label>
+            <div class="input-row">
+              <input
+                id="token"
+                type="password"
+                autocomplete="off"
+                required
+                minlength="32"
+                placeholder="Paste your access token"
+              /><button type="submit">
+                Unlock <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </form>
+        </section>
+        <div id="console" hidden>
+          <nav class="tabs" aria-label="Console sections">
+            <button class="tab active" data-panel="studio" aria-current="page">
+              Alert studio</button
+            ><button class="tab" data-panel="activity">
+              Activity <span id="activity-count">0</span></button
+            ><button class="tab" data-panel="connections">Connections</button>
+          </nav>
+          <section id="studio" class="view studio">
+            <div class="preview-column">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">01 / THE MESSAGE</p>
+                  <h2>Small card. Full picture.</h2>
+                </div>
+                <span class="sample-badge">SAMPLE DATA</span>
+              </div>
+              <div class="scenario" role="group" aria-label="Preview trade">
+                <button
+                  data-scenario="option_buy"
+                  class="selected"
+                  aria-pressed="true"
+                >
+                  Buy</button
+                ><button data-scenario="option_sell" aria-pressed="false">
+                  Sell</button
+                ><button data-scenario="partial" aria-pressed="false">
+                  Partial fill</button
+                ><button data-scenario="stock_buy" aria-pressed="false">
+                  Stock
+                </button>
+              </div>
+              <div class="discord-window">
+                <div class="channel">
+                  <span aria-hidden="true">#</span> trade-alerts
+                  <span class="channel-tag">DISCORD PREVIEW</span>
+                </div>
+                <div class="discord-message">
+                  <div class="avatar">C</div>
+                  <div class="message-body">
+                    <div class="sender">
+                      Sentinel Crier <span>APP</span
+                      ><small>Sample message</small>
+                    </div>
+                    <div id="card" class="embed"></div>
+                    <div id="text-preview" hidden></div>
+                  </div>
+                </div>
+              </div>
+              <p class="preview-note">
+                <span aria-hidden="true">◈</span> Homebrew CardKit format. Only
+                confirmed fill details.
+              </p>
+              <div class="sample-footer">
+                <span>Preview only · never posted</span
+                ><button id="copy" class="text-button">
+                  Copy message JSON ↗
+                </button>
+              </div>
+              <div class="principles">
+                <div>
+                  <span>01</span><strong>Trade as usual</strong>
+                  <p>Use the Webull app you already know.</p>
+                </div>
+                <div>
+                  <span>02</span><strong>Keep it accurate</strong>
+                  <p>Actual fills, prices and quantities.</p>
+                </div>
+                <div>
+                  <span>03</span><strong>Make it yours</strong>
+                  <p>Your name, format and presentation.</p>
+                </div>
+              </div>
+            </div>
+            <aside class="editor panel">
+              <p class="eyebrow">02 / YOUR SIGNATURE</p>
+              <h2>Make the alert yours.</h2>
+              <form id="settings-form">
+                <label for="display_name">Display name</label
+                ><input
+                  id="display_name"
+                  maxlength="40"
+                  value="Your trades"
+                  required
+                /><label for="format">Message format</label
+                ><select id="format">
+                  <option value="homebrew">Homebrew original · Markdown</option>
+                  <option value="card">Discord rich card</option>
+                  <option value="text">Compact plain text</option>
+                  <option value="echo">Echo entry text · BTO only</option>
+                </select>
+                <div class="two-fields">
+                  <div>
+                    <label for="color">Accent</label
+                    ><input id="color" type="color" value="#62d9ad" />
+                  </div>
+                  <div>
+                    <label for="timezone">Time zone</label
+                    ><select id="timezone">
+                      <option value="America/Chicago">Chicago</option>
+                      <option value="America/New_York">New York</option>
+                      <option value="America/Los_Angeles">Los Angeles</option>
+                      <option value="UTC">UTC</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="toggles">
+                  <label class="switch"
+                    ><span>Show quantity</span
+                    ><input type="checkbox" id="show_quantity" checked /></label
+                  ><label class="switch"
+                    ><span>Show fill time</span
+                    ><input type="checkbox" id="show_time" checked /></label
+                  ><label class="switch"
+                    ><span>Pause delivery</span
+                    ><input type="checkbox" id="paused"
+                  /></label>
+                </div>
+                <button class="primary full" type="submit">
+                  Save presentation <span aria-hidden="true">↗</span>
+                </button>
+                <p class="fine">
+                  Applies to new alerts. Queued messages keep their original
+                  presentation.
+                </p>
+              </form>
+            </aside>
+          </section>
+          <section id="activity" class="view" hidden>
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">THE PAPER TRAIL</p>
+                <h2>Every fill has a story.</h2>
+              </div>
+              <button id="refresh" class="secondary">Refresh</button>
+            </div>
+            <div id="history" class="history"></div>
+          </section>
+          <section id="connections" class="view" hidden>
+            <p class="eyebrow">THE CONNECTIONS</p>
+            <h2>Your desk, connected.</h2>
+            <div class="connection-grid">
+              <article class="panel">
+                <span class="connection-icon">W</span>
+                <h3>Webull</h3>
+                <p id="broker-state">Not connected</p>
+                <p class="fine">
+                  The server observes your account while you trade on iPhone. It
+                  does not watch your screen.
+                </p>
+              </article>
+              <article class="panel">
+                <span class="connection-icon">#</span>
+                <h3>Discord</h3>
+                <p id="discord-state">Not configured</p>
+                <p class="fine">
+                  Webhook credentials live on your server. Samples never enter
+                  the delivery queue.
+                </p>
+              </article>
+              <article class="panel">
+                <span class="connection-icon">◷</span>
+                <h3>Delivery</h3>
+                <p id="delivery-state">Preview only</p>
+                <p id="review-state" class="fine"></p>
+              </article>
+            </div>
+            <div class="setup-note panel">
+              <h3>Before going live</h3>
+              <p>
+                Configure Webull credentials on the server and verify that
+                manual iPhone trades appear in its API. Confirm cumulative fill
+                pricing, then enable delivery. The observer starts in
+                capture-only mode.
+              </p>
+              <p>
+                Open this console over HTTPS in Safari, then use Share → Add to
+                Home Screen. The service needs to remain online.
+              </p>
+              <p class="fine">
+                First release: US stocks and unambiguous single-leg option
+                events. History export assists reconciliation; automatic history
+                backfill is not enabled.
+              </p>
+            </div>
+          </section>
+          <footer>
+            <span>CRIER / A SENTINEL PROJECT</span
+            ><button id="lock" class="text-button">Lock console</button>
+          </footer>
+        </div>
+        <p id="notice" role="status" aria-live="polite"></p>
+      </main>
+    </div>
+  </body>
+</html>
