@@ -7,6 +7,7 @@ from typing import Literal
 
 import httpx
 from fastapi import FastAPI, Depends, Header, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -18,6 +19,8 @@ from .cards import render
 from .samples import sample
 from .delivery import deliver_once
 from .lock import single_process
+from .intake_routes import intake_router
+from .monitors import start_monitor, stop_monitor
 
 STATIC = Path(__file__).parent / "static"
 
@@ -46,19 +49,32 @@ def create_app(config=None):
             stop = asyncio.Event()
             task = asyncio.create_task(sender(stop)) if config.delivery_enabled else None
             app.state.sender = task
-            try: yield
+            app.state.monitor = None
+            try:
+                app.state.monitor = start_monitor(config)
+                yield
             finally:
                 stop.set()
+                await asyncio.to_thread(stop_monitor, app.state.monitor)
                 # Let an in-flight HTTP request settle before releasing ownership.
                 if task: await task
 
     app = FastAPI(title="Sentinel Crier", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
 
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request, exc):
+        # Do not reflect private receipts, tokens or account identifiers in errors.
+        return JSONResponse(status_code=422, content={"detail": [
+            {"loc": list(error["loc"]), "type": error["type"], "msg": error["msg"]}
+            for error in exc.errors()]})
+
     def auth(authorization: str = Header(default="")):
         expected = "Bearer " + config.token
         if not hmac.compare_digest(authorization.encode(), expected.encode()):
             raise HTTPException(401, "Unlock with your Crier access token")
+
+    app.include_router(intake_router(config, store, auth))
 
     @app.middleware("http")
     async def headers(request: Request, call_next):
@@ -86,6 +102,8 @@ def create_app(config=None):
         return {"mode": "live" if config.delivery_enabled else "preview", "delivery_enabled": config.delivery_enabled,
                 "sender_failed": bool(getattr(app.state, "sender", None) and app.state.sender.done()),
                 "discord_configured": bool(config.webhook), "webull_verified": config.webull_verified,
+                "monitor": {"selected": config.monitor, "running": bool(getattr(app.state, "monitor", None) and app.state.monitor.is_alive())},
+                "intake": {"configured": bool(config.intake_key), "verified": config.intake_verified},
                 "observer": observer, "review_count": store.review_count(), "paused": store.get_settings().paused}
 
     @app.get("/api/settings", dependencies=[Depends(auth)])

@@ -43,7 +43,7 @@ class Settings(BaseModel):
 class Snapshot(BaseModel):
     """One order's cumulative execution quantity and weighted average price."""
     model_config = ConfigDict(extra="forbid", frozen=True)
-    broker: Literal["webull"] = "webull"
+    broker: str = Field(default="webull", pattern=r"^[a-z][a-z0-9_-]{0,31}$")
     environment: Literal["sandbox", "production"] = "sandbox"
     account: str = Field(min_length=1, max_length=100)
     order_id: str = Field(min_length=1, max_length=100)
@@ -55,6 +55,22 @@ class Snapshot(BaseModel):
     average_price: Decimal = Field(gt=0, allow_inf_nan=False, max_digits=20, decimal_places=8)
     occurred_at: datetime
     status: Literal["PARTIAL", "FILLED"]
+    verification: Literal["broker_reported", "user_confirmed"] = "broker_reported"
+    time_basis: Literal["execution", "order_updated", "user_supplied"] = "execution"
+
+    @field_validator("account", "order_id")
+    @classmethod
+    def nonempty_identity(cls, value):
+        value = value.strip()
+        if not value or any(ord(char) < 32 for char in value):
+            raise ValueError("Identity must be nonempty and contain no control characters")
+        return value
+
+    @field_validator("symbol")
+    @classmethod
+    def canonical_symbol(cls, value):
+        match = OCC.fullmatch(value)
+        return "".join(match.groups()) if match else value
 
     @model_validator(mode="after")
     def validate_contract(self):

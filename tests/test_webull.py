@@ -55,3 +55,12 @@ def test_enrollment_requires_complete_matching_snapshot(tmp_path):
     manifest["complete_open_orders"] = True
     manifest["snapshots"] = [event().model_dump(mode="json")]
     with pytest.raises(ValueError): enroll(db, manifest)
+
+
+@pytest.mark.parametrize("changes", [{"broker":"tradier"},{"verification":"user_confirmed"}])
+def test_enrollment_rejects_non_webull_evidence(tmp_path,changes):
+    db=Store(tmp_path/'db')
+    snap=event(**changes)
+    manifest={"account":snap.account,"environment":"sandbox","captured_at":"2026-10-13T14:43:00Z",
+              "complete_open_orders":True,"snapshots":[snap.model_dump(mode="json")]}
+    with pytest.raises(ValueError): enroll(db,manifest)

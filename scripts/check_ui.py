@@ -1,22 +1,35 @@
+import argparse
+from urllib.parse import urlparse
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
 
 root = Path(__file__).resolve().parents[1]
-(root / 'data/ui-check').mkdir(parents=True, exist_ok=True)
-token = (root / 'data/access-token').read_text().strip()
+parser = argparse.ArgumentParser()
+parser.add_argument('--base-url', default='http://127.0.0.1:8765')
+parser.add_argument('--token-file', type=Path, default=root / 'data/access-token')
+parser.add_argument('--screenshots', type=Path, default=root / 'data/ui-check')
+args = parser.parse_args()
+assert urlparse(args.base_url).hostname in {'127.0.0.1', 'localhost', '::1'}, 'Use a local preview server'
+args.screenshots.mkdir(parents=True, exist_ok=True)
+token = args.token_file.read_text().strip()
 errors = []
 with sync_playwright() as p:
+    request = p.request.new_context(base_url=args.base_url, extra_http_headers={'Authorization': 'Bearer ' + token})
+    state = request.get('/api/status')
+    assert state.ok and not state.json()['delivery_enabled'], 'Use an isolated preview installation'
+    initial_history_count = len(request.get('/api/history').json())
+    request.dispose()
     browser = p.chromium.launch(channel='chrome', headless=True)
     page = browser.new_page(viewport={'width':390,'height':844}, device_scale_factor=1)
     page.on('pageerror', lambda e: errors.append(str(e)))
     page.on('console', lambda m: errors.append(m.text) if m.type == 'error' and '422 (Unprocessable Entity)' not in m.text else None)
-    page.goto('http://127.0.0.1:8765')
+    page.goto(args.base_url)
     page.wait_for_load_state('networkidle')
     print('initial buttons',page.get_by_role('button').all_text_contents())
     page.get_by_label('Access token',exact=True).fill(token)
     page.get_by_role('button',name='Unlock').click()
     expect(page.locator('#text-preview')).to_contain_text('SPY $600C')
-    page.screenshot(path=str(root / 'data/ui-check/crier-iphone.png'),full_page=True)
+    page.screenshot(path=str(args.screenshots / 'crier-iphone.png'),full_page=True)
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
     page.get_by_role('button',name='Sell',exact=True).click()
     expect(page.locator('#text-preview')).to_contain_text('SELL FILLED')
@@ -36,13 +49,13 @@ with sync_playwright() as p:
     page.get_by_role('button',name='Save presentation').click()
     expect(page.get_by_role('status')).to_contain_text('Presentation saved')
     page.get_by_role('button',name='Activity').click()
-    expect(page.locator('.empty')).to_be_visible()
+    expect(page.locator('.history-row')).to_have_count(initial_history_count)
     page.get_by_role('button',name='Connections',exact=True).click()
     expect(page.locator('#broker-state')).to_have_text('Not connected')
     page.get_by_role('button',name='Alert studio').click()
     page.set_viewport_size({'width':1440,'height':1100})
     page.locator('#notice').evaluate('(el) => el.textContent = ""')
-    page.screenshot(path=str(root / 'data/ui-check/crier-desktop.png'),full_page=True)
+    page.screenshot(path=str(args.screenshots / 'crier-desktop.png'),full_page=True)
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
     page.get_by_role('button',name='Lock console').click()
     expect(page.get_by_label('Access token',exact=True)).to_be_visible()

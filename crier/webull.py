@@ -74,6 +74,8 @@ def enroll(db, manifest):
     snapshots = [Snapshot.model_validate(s) for s in manifest["snapshots"]]
     keys = set()
     for snap in snapshots:
+        if snap.broker != "webull" or snap.verification != "broker_reported":
+            raise ValueError("Webull enrollment requires Webull broker evidence")
         if snap.account != account or snap.environment != environment: raise ValueError("Baseline scope mismatch")
         if snap.occurred_at > stamp: raise ValueError("Baseline cannot include fills after capture time")
         if order_key(snap) in keys: raise ValueError("Duplicate order in baseline")
@@ -93,6 +95,12 @@ def enroll(db, manifest):
 
 
 def observe(config):
+    from .lock import single_process
+    with single_process(config.data_dir / "observer.lock"):
+        _observe(config)
+
+
+def _observe(config):
     from webull.trade.events.types import EVENT_TYPE_ORDER, EVENT_TYPE_OPTION
     from webull.trade.events import events_pb2 as pb
     key, secret, account = credentials()
@@ -110,7 +118,7 @@ def observe(config):
 
     def state(value):
         with db.connect() as con:
-            con.execute("INSERT OR REPLACE INTO config VALUES ('observer',?)", (json.dumps({"state": value, "updated": time.time(), "verified": verified, "environment": env}),))
+            con.execute("INSERT OR REPLACE INTO config VALUES ('observer',?)", (json.dumps({"broker": "webull", "state": value, "updated": time.time(), "verified": verified, "environment": env}),))
 
     def heartbeat(event_type):
         if event_type in (pb.AuthError, pb.SubscribeExpired, pb.NumOfConnExceed): state("error")

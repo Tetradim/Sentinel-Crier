@@ -8,10 +8,12 @@ def main():
     parser.add_argument("command", choices=["serve", "watch", "export-history", "enroll"], nargs="?", default="serve")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", default=8765, type=int)
+    parser.add_argument("--monitor", choices=["none", "webull", "tradier"], help="Start a read-only monitor with the console")
     parser.add_argument("--output", default="data/webull-history.json")
     parser.add_argument("--baseline", help="Path to a complete verified baseline JSON manifest")
     args = parser.parse_args()
     config = Config.from_env()
+    if args.monitor is not None: config.monitor = args.monitor
     if args.command == "serve":
         import uvicorn
         from .app import create_app
@@ -19,8 +21,9 @@ def main():
         print("Access token: CRIER_ACCESS_TOKEN environment variable or data/access-token. Keep it private.")
         uvicorn.run(create_app(config), host=args.host, port=args.port, access_log=False)
     elif args.command == "watch":
-        from .webull import observe
-        observe(config)
+        from .monitors import run_monitor
+        if config.monitor == "none": config.monitor = "webull"
+        run_monitor(config)
     elif args.command == "enroll":
         if not args.baseline: parser.error("enroll requires --baseline")
         import json

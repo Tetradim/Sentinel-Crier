@@ -3,6 +3,10 @@ from contextlib import contextmanager
 import os
 
 
+class AlreadyRunningError(RuntimeError):
+    pass
+
+
 @contextmanager
 def single_process(path):
     with open(path, "a+b") as handle:
@@ -19,7 +23,7 @@ def single_process(path):
                 import fcntl
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
-            raise RuntimeError("Another Crier console is already using this data directory") from None
+            raise AlreadyRunningError("Another Crier process owns this console or observer lock") from None
         try: yield
         finally:
             handle.seek(0)

@@ -20,6 +20,11 @@ def render(fill: dict, settings: Settings) -> dict:
     action = "Bought" if side == "BUY" else "Sold"
     headline = f"{action} · Filled {amount}@ ${price}"
     status = "Partial order fill" if fill["status"] == "PARTIAL" else "Order filled"
+    broker = fill.get("broker", "webull").replace("_", " ").replace("-", " ").title()
+    provenance = "User-confirmed" if fill.get("verification") == "user_confirmed" else "Broker-reported"
+    time_label = {"execution": "Executed", "order_updated": "Order updated",
+                  "user_supplied": "User-supplied time"}[fill.get("time_basis", "execution")]
+    source = f"{broker} · {fill.get('environment', 'sandbox')} · {provenance}"
     if settings.format == "homebrew":
         # Formatting adapted from the user's AlertBot_CardKit/cards.py.
         # Preserve the full year and never fabricate its optional P/L/peak ledger.
@@ -34,19 +39,22 @@ def render(fill: dict, settings: Settings) -> dict:
             ledger += "\n" + "-" * (25 if settings.show_quantity else 17)
             ledger += f"\n{'sell':<7}{('$' + price):>10}" + (f"{qty:>8}" if settings.show_quantity else "")
             lines.append(f"```\n{ledger}\n```")
-        meta = status + " · Webull " + fill.get("environment", "sandbox")
-        if settings.show_time: meta += " · " + time
+        meta = status + " · " + source
+        if settings.show_time: meta += " · " + time_label + " " + time
         lines.extend([meta, "Ref " + fill.get("reference", "preview")])
         return {"content": "\n".join(lines), "allowed_mentions": {"parse": []}}
     if settings.format == "echo":
+        if fill.get("verification") == "user_confirmed":
+            raise ValueError("User-confirmed receipts require an informational template, not Echo execution text")
         if fill.get("intent") != "OPEN" or side != "BUY" or not expiry:
             raise ValueError("Echo template currently supports verified option buy-to-open fills only; use Homebrew or plain text for other events")
         m = OCC.fullmatch(fill["symbol"])
         exp = datetime.strptime(expiry, "%Y-%m-%d").strftime("%m/%d/%Y")
         content = f"BTO {qty} {m[1]} {number(Decimal(m[4]) / 1000)}{m[3]} {exp} @ {price}"
         return {"content": content, "allowed_mentions": {"parse": []}}
-    lines = [title, f"{settings.display_name} · {headline}", status]
-    if settings.show_time: lines.append(time)
+    lines = [title, f"{settings.display_name} · {headline}", status, source]
+    if settings.show_time: lines.append(time_label + " " + time)
+    lines.append("Ref " + fill.get("reference", "preview"))
     if settings.format == "text":
         return {"content": "\n".join(lines), "allowed_mentions": {"parse": []}}
     # A compact ledger follows Homebrew's visual grammar, without fabricated P/L.
@@ -56,8 +64,8 @@ def render(fill: dict, settings: Settings) -> dict:
               {"name": "Status", "value": status, "inline": True}]
     if settings.show_quantity:
         fields.append({"name": "Order filled so far", "value": f"{number(fill['cumulative_qty'])} {unit}", "inline": True})
-    if settings.show_time: fields.append({"name": "Time", "value": time, "inline": False})
+    if settings.show_time: fields.append({"name": time_label, "value": time, "inline": False})
     return {"embeds": [{"author": {"name": f"Sentinel Crier · {settings.display_name}"},
         "title": title, "description": headline, "color": int(settings.color[1:], 16),
-        "fields": fields, "footer": {"text": "Webull · " + fill.get("environment", "sandbox").title() + " · " + fill.get("reference", "preview")}}],
+        "fields": fields, "footer": {"text": source + " · " + fill.get("reference", "preview")}}],
         "allowed_mentions": {"parse": []}}

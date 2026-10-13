@@ -60,7 +60,7 @@
           <nav class="tabs" aria-label="Console sections">
             <button class="tab active" data-panel="studio" aria-current="page">
               Alert studio</button
-            ><button class="tab" data-panel="activity">
+            ><button class="tab" data-panel="capture">Capture inbox</button><button class="tab" data-panel="activity">
               Activity <span id="activity-count">0</span></button
             ><button class="tab" data-panel="connections">Connections</button>
           </nav>
@@ -106,8 +106,7 @@
                 </div>
               </div>
               <p class="preview-note">
-                <span aria-hidden="true">◈</span> Homebrew CardKit format. Only
-                confirmed fill details.
+                <span aria-hidden="true">◈</span> Homebrew CardKit format. Source and verification are labeled on alerts.
               </p>
               <div class="sample-footer">
                 <span>Preview only · never posted</span
@@ -118,7 +117,7 @@
               <div class="principles">
                 <div>
                   <span>01</span><strong>Trade as usual</strong>
-                  <p>Use the Webull app you already know.</p>
+                  <p>Use your usual brokerage app.</p>
                 </div>
                 <div>
                   <span>02</span><strong>Keep it accurate</strong>
@@ -167,7 +166,7 @@
                     ><span>Show quantity</span
                     ><input type="checkbox" id="show_quantity" checked /></label
                   ><label class="switch"
-                    ><span>Show fill time</span
+                    ><span>Show event time</span
                     ><input type="checkbox" id="show_time" checked /></label
                   ><label class="switch"
                     ><span>Pause delivery</span
@@ -183,6 +182,34 @@
                 </p>
               </form>
             </aside>
+          </section>
+          <section id="capture" class="view" hidden>
+            <div class="section-heading"><div><p class="eyebrow">MANUAL RECEIPT CAPTURE</p><h2>Review first. Announce second.</h2></div></div>
+            <p class="capture-intro">Paste a receipt from your brokerage, then verify every field. This is manual capture, not automatic iPhone notification or Robinhood monitoring. Alerts are labeled user-confirmed.</p>
+            <p id="capture-delivery" class="delivery-note"></p>
+            <div class="capture-grid">
+              <div><form id="receipt-form" class="panel">
+                <h3>1. Save the evidence</h3>
+                <div class="review-fields"><div><label for="receipt-broker">Broker slug</label><input id="receipt-broker" value="robinhood" pattern="[a-z][a-z0-9_-]*" required maxlength="32" /></div>
+                <div><label for="receipt-environment">Account environment</label><select id="receipt-environment"><option value="sandbox">Sandbox / test</option><option value="production">Production / real</option></select></div></div>
+                <label for="receipt-text">Receipt text</label><textarea id="receipt-text" rows="9" required maxlength="12000" placeholder="Paste your receipt here. Incomplete details must be supplied during review."></textarea>
+                <p class="fine">Private evidence stays in this console. Pasting or choosing a sample never queues an alert.</p>
+                <div class="capture-actions"><button type="submit">Save for review</button><button type="button" id="receipt-sample" class="secondary">Use synthetic sample</button></div>
+              </form>
+              <div class="section-heading inbox-heading"><h3>Saved receipts</h3><button id="receipt-refresh" class="text-button">Refresh inbox</button></div>
+              <div id="receipt-list"></div></div>
+              <article class="panel receipt-detail"><p class="eyebrow">2. CHECK THE DETAILS</p><h3>Receipt review</h3>
+                <p id="receipt-result" role="status">Select a saved receipt to review.</p>
+                <pre id="receipt-source"></pre><ul id="receipt-warnings" class="fine"></ul>
+                <form id="receipt-review" hidden>
+                  <p class="fine">Supply every field explicitly. Use a stable account alias and original order ID to prevent duplicate alerts. Quantities and prices are cumulative for this order.</p>
+                  <div id="review-fields" class="review-fields"></div>
+                  <p class="fine">Options require a full OCC symbol, including the expiration year. Time requires the full date, year, and UTC offset (for example 2026-10-13T14:30:00-05:00). Choose Unknown if opening/closing intent is unknown.</p>
+                  <p class="fine">This queues a user-confirmed alert. It does not verify the trade with a broker. Receipt alerts cannot use Echo execution text.</p>
+                  <div class="capture-actions"><button type="submit">Queue user-confirmed alert</button><button id="receipt-reject" type="button" class="secondary">Reject receipt</button></div>
+                </form>
+              </article>
+            </div>
           </section>
           <section id="activity" class="view" hidden>
             <div class="section-heading">
@@ -200,11 +227,11 @@
             <div class="connection-grid">
               <article class="panel">
                 <span class="connection-icon">W</span>
-                <h3>Webull</h3>
+                <h3>Account monitor</h3>
                 <p id="broker-state">Not connected</p>
+                <p id="observer-details" class="fine"></p>
                 <p class="fine">
-                  The server observes your account while you trade on iPhone. It
-                  does not watch your screen.
+                  <span id="monitor-state">No monitor selected</span>
                 </p>
               </article>
               <article class="panel">
@@ -212,8 +239,7 @@
                 <h3>Discord</h3>
                 <p id="discord-state">Not configured</p>
                 <p class="fine">
-                  Webhook credentials live on your server. Samples never enter
-                  the delivery queue.
+                  Webhook credentials live on your server. Studio previews never enter the queue. Synthetic receipts queue only after confirmation.
                 </p>
               </article>
               <article class="panel">
@@ -223,13 +249,11 @@
                 <p id="review-state" class="fine"></p>
               </article>
             </div>
+            <div id="capabilities" class="connection-grid"></div><p id="intake-state" class="fine"></p>
             <div class="setup-note panel">
               <h3>Before going live</h3>
               <p>
-                Configure Webull credentials on the server and verify that
-                manual iPhone trades appear in its API. Confirm cumulative fill
-                pricing, then enable delivery. The observer starts in
-                capture-only mode.
+                Configure a supported account monitor on the server and verify its fill coverage before enabling delivery. Manual receipt capture remains available for other brokers. No connection places or manages trades.
               </p>
               <p>
                 Open this console over HTTPS in Safari, then use Share → Add to

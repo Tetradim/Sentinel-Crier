@@ -12,6 +12,10 @@ class Config:
     webhook: str = ""
     delivery_enabled: bool = False
     webull_verified: bool = False
+    publisher_verified: bool = False
+    intake_key: str = ""
+    intake_verified: bool = False
+    monitor: str = "none"
 
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
@@ -25,13 +29,23 @@ class Config:
             except FileExistsError: pass
             self.token = path.read_text(encoding="utf-8").strip()
         if len(self.token) < 32: raise ValueError("CRIER_ACCESS_TOKEN must contain at least 32 characters")
+        if self.monitor not in ("none", "webull", "tradier"):
+            raise ValueError("CRIER_MONITOR must be none, webull or tradier")
+        if self.intake_key and (len(self.intake_key) < 32 or self.intake_key == self.token):
+            raise ValueError("CRIER_INTAKE_KEY must be a separate key with at least 32 characters")
+        if self.intake_verified and not self.intake_key:
+            raise ValueError("Verified intake requires CRIER_INTAKE_KEY")
         if self.webhook: validate_webhook(self.webhook)
-        if self.delivery_enabled and (not self.webhook or not self.webull_verified):
-            raise ValueError("Delivery requires a Discord webhook and CRIER_WEBULL_VERIFIED=true after manual-app coverage and fill semantics checks")
+        if self.delivery_enabled and (not self.webhook or not (self.publisher_verified or self.webull_verified)):
+            raise ValueError("Delivery requires a Discord webhook and CRIER_PUBLISHER_VERIFIED=true after reviewing destination and queued alerts")
 
     @classmethod
     def from_env(cls):
         return cls(data_dir=Path(os.getenv("CRIER_DATA_DIR", "data")), token=os.getenv("CRIER_ACCESS_TOKEN", ""),
             webhook=os.getenv("DISCORD_WEBHOOK_URL", ""),
             delivery_enabled=os.getenv("CRIER_DELIVERY_ENABLED", "false").lower() == "true",
-            webull_verified=os.getenv("CRIER_WEBULL_VERIFIED", "false").lower() == "true")
+            webull_verified=os.getenv("CRIER_WEBULL_VERIFIED", "false").lower() == "true",
+            publisher_verified=os.getenv("CRIER_PUBLISHER_VERIFIED", "false").lower() == "true",
+            intake_key=os.getenv("CRIER_INTAKE_KEY", ""),
+            intake_verified=os.getenv("CRIER_INTAKE_VERIFIED", "false").lower() == "true",
+            monitor=os.getenv("CRIER_MONITOR", "none").lower())

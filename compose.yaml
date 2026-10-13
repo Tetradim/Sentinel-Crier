@@ -7,13 +7,5 @@ services:
       - "127.0.0.1:8765:8765"
     volumes:
       - crier-data:/app/data
-  observer:
-    build: .
-    profiles: [observer]
-    restart: unless-stopped
-    env_file: .env
-    command: [python, -m, crier, watch]
-    volumes:
-      - crier-data:/app/data
 volumes:
   crier-data:
