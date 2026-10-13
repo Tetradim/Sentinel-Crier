@@ -1,0 +1,17 @@
+{
+  "name": "Sentinel Crier",
+  "short_name": "Crier",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#101a18",
+  "theme_color": "#101a18",
+  "icons": [
+    {
+      "src": "/static/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
