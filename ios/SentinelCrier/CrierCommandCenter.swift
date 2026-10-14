@@ -34,6 +34,14 @@ struct CrierObservation: Decodable, Identifiable {
     }
 }
 
+struct CrierPreviewResponse: Decodable {
+    let sample: Bool
+    let payload: PreviewPayload
+    struct PreviewPayload: Decodable {
+        let content: String?
+    }
+}
+
 struct CrierPreferences: Codable {
     var display_name = "Your trades"
     var format = "homebrew"
@@ -52,6 +60,8 @@ final class CrierDashboardModel: ObservableObject {
     @Published var preferences = CrierPreferences()
     @Published var error: String?
     @Published var loading = false
+    @Published var lastUpdated: Date?
+    @Published var preview: CrierPreviewResponse?
 
     private func endpoint(_ path: String, method: String = "GET", body: Data? = nil) throws -> URLRequest {
         guard let raw = UserDefaults.standard.string(forKey: "crier.backendURL"),
@@ -90,11 +100,33 @@ final class CrierDashboardModel: ObservableObject {
             activity = newActivity
             observations = newObservations
             preferences = newPreferences
+            await refreshPreview()
+            lastUpdated = Date()
             error = nil
         } catch {
             status = nil
             self.error = "Unable to refresh. Check your server connection and access token."
         }
+    }
+
+    func refreshPreview() async {
+        do {
+            let encoder = JSONEncoder()
+            let body = try encoder.encode(PreviewRequest(settings: preferences))
+            let (data, response) = try await URLSession.shared.data(
+                for: endpoint("api/preview", method: "POST", body: body))
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                throw CrierStatusClient.ClientError.invalidResponse
+            }
+            preview = try JSONDecoder().decode(CrierPreviewResponse.self, from: data)
+        } catch {
+            preview = nil
+        }
+    }
+
+    private struct PreviewRequest: Encodable {
+        let scenario = "option_buy"
+        let settings: CrierPreferences
     }
 
     func savePreferences() async {
@@ -107,6 +139,7 @@ final class CrierDashboardModel: ObservableObject {
             }
             preferences = try JSONDecoder().decode(CrierPreferences.self, from: data)
             error = nil
+            await refreshPreview()
         } catch {
             error = "Could not save preferences. Check the connection and display name."
         }
@@ -176,6 +209,10 @@ struct CrierCommandCenter: View {
                     Text("A configured upload key does not mean broadcasting is active.")
                         .font(.caption).foregroundStyle(.secondary)
                     ReplayKitPicker().frame(height: 54)
+                }
+                if let updated = model.lastUpdated {
+                    Text("Last refreshed \(updated.formatted(date: .omitted, time: .shortened)) · Showing up to 100 recent records")
+                        .font(.caption2).foregroundStyle(.secondary)
                 }
                 HStack(spacing: 9) {
                     CrierMetric(title: "Observations", value: "\(model.observations.count)", tint: CrierTheme.blue)
@@ -274,7 +311,7 @@ struct CrierCommandCenter: View {
             Section("Illustrative preview — not a real alert") {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("🟢 SPY $600C · 10/16/2026").font(.headline)
-                    Text("BUY · 4 contracts · Filled @ $1.25")
+                    Text(model.preview?.payload.content ?? "Sample preview unavailable for this format.")
                     Text(model.preferences.display_name).foregroundStyle(.secondary)
                     Text("SAMPLE · NOT SENT").font(.caption.bold()).foregroundStyle(CrierTheme.amber)
                 }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
