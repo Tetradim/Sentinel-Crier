@@ -28,6 +28,8 @@ enum BrokerScreenTemplate {
         // Strictly require the word FILLED or EXECUTED; reject partial, previews
         // and order submission pages until broker-specific semantics are verified.
         guard !text.contains("PARTIALLY FILLED"), !text.contains("PARTIAL FILL"),
+              !text.contains("NOT FILLED"), !text.contains("UNFILLED"),
+              !text.contains("0 FILLED"),
               !text.contains("ORDER PREVIEW"), !text.contains("ORDER PLACED"),
               !text.contains("ORDER SUBMITTED") else { return .noFill }
         return TradeRecognition.parse(lines: lines, broker: broker, at: observedAt)
