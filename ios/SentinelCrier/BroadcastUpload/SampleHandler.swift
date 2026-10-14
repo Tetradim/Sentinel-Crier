@@ -15,19 +15,20 @@ final class SampleHandler: RPBroadcastSampleHandler {
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
         queue.async { [weak self] in
             self?.lastSampleAt = 0
+            self?.deduplicator.reset()
             self?.flushEvidence()
         }
     }
 
     override func broadcastPaused() {
         queue.async { [weak self] in
-            self?.deduplicator.screenChanged()
+            self?.deduplicator.reset()
         }
     }
 
     override func broadcastResumed() {
         queue.async { [weak self] in
-            self?.deduplicator.screenChanged()
+            self?.deduplicator.reset()
             self?.lastSampleAt = 0
             self?.flushEvidence()
         }
