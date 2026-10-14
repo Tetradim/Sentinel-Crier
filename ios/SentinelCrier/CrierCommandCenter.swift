@@ -110,6 +110,9 @@ final class CrierDashboardModel: ObservableObject {
             error = nil
         } catch {
             status = nil
+            activity = []
+            observations = []
+            lastUpdated = nil
             self.error = "Unable to refresh. Check your server connection and access token."
         }
     }
@@ -202,11 +205,18 @@ struct CrierCommandCenter: View {
         .tint(CrierTheme.blue)
         .preferredColorScheme(.dark)
         .task { await model.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            Task { await model.refresh() }
+        }
     }
 
     private var dashboard: some View {
         ScrollView {
             VStack(spacing: 14) {
+                if model.status == nil {
+                    NavigationLink("Set up your secure server connection") { SetupView() }
+                        .buttonStyle(.borderedProminent)
+                }
                 CrierPanel(title: "Monitoring overview") {
                     Label("Screen broadcasting requires explicit iPhone permission",
                           systemImage: "iphone.gen3.radiowaves.left.and.right")
