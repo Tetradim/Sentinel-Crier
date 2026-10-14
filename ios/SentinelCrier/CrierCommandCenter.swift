@@ -102,6 +102,7 @@ final class CrierDashboardModel: ObservableObject {
             let newPreferences = try await fetch("api/settings", as: CrierPreferences.self)
             status = newStatus
             preferences = newPreferences
+            error = nil
             do {
                 activity = try await fetch("api/history", as: [CrierActivity].self)
             } catch {
