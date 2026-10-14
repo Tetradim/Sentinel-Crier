@@ -2,7 +2,7 @@
 
 Free, open-source brokerage fill alerts for the Sentinel family. Trade in your brokerage app; an always-on Crier service turns account events into compact Discord messages. Configure presentation from an iPhone-friendly browser console or a PC browser.
 
-**Status: self-hosted monitor and Discord publisher, with experimental Webull and Tradier adapters.** One command starts the console, selected account monitor and publisher. Receipt capture and a versioned event interface support other sources. Automated broker coverage still needs account-specific validation. Crier never places, changes or cancels trades. It is not a native iOS app, a hosted customer platform, or an iPhone screen reader.
+**Status: self-hosted monitor and Discord publisher, with experimental Webull and Tradier adapters.** One command starts the console, selected account monitor and publisher. Receipt capture and a versioned event interface support other sources. Automated broker coverage still needs account-specific validation. Crier never places, changes or cancels trades. A separate experimental native iOS ReplayKit companion now exists; it is not a hosted customer platform or a validated unattended iPhone screen reader.
 
 ## What works
 
@@ -95,6 +95,18 @@ Run `python -m crier serve --monitor webull` for the unified application, or set
 For Tradier, configure its token, account and environment, then run `python -m crier serve --monitor tradier`. See [Tradier validation](docs/tradier-validation.md). Capture-only is the default; `CRIER_TRADIER_VERIFIED=true` enables baseline enrollment and subsequent fill jobs. Publisher enablement is independent.
 
 Individual Webull API access and its sandbox environment are broker-controlled. An unfunded real account can help test authentication/account visibility, but it is not automatically a sandbox and may have no fills to observe. Crier never submits a trade for testing.
+
+## Native iPhone companion (experimental)
+
+The `ios/` XcodeGen project includes a SwiftUI onboarding app, a ReplayKit broadcast upload extension, local Vision OCR, conservative Webull options recognition, a persistent observation queue, and a dedicated authenticated HTTPS upload route.
+
+**Critical distinction:** screen OCR creates **pending-review observations only**. It does not prove an actual broker execution, does not enter the verified-fill intake, and cannot trigger Discord publishing on its own. Automatic Discord alerts require an independently verified broker event source or a separately reviewed, explicitly confirmed receipt. The iPhone user must actively authorize ReplayKit broadcasting; iOS does not allow continuous invisible monitoring of Webull.
+
+To configure the observation path, set a unique `CRIER_SCREEN_UPLOAD_KEY` (32+ characters, distinct from both admin and verified-fill credentials) on the server. In the iOS app, enter an HTTPS backend URL and the dedicated screen-upload key. The app and extension need correctly provisioned App Group and shared Keychain entitlements. Uploads are disabled on the backend when this key is absent. Disabling upload in the app removes the shared credential and queued observations.
+
+The observation queue is bounded to 100 JSON records and retries while broadcasting. A continuously visible receipt is coalesced; the same trade fields can generate another observation after the receipt disappears and reappears. **Neither mechanism identifies broker execution IDs.** A stopped broadcast does not provide guaranteed delivery or background catch-up.
+
+See [iOS build instructions](ios/BUILD.md), [screen upload and security setup](docs/webull-screen-upload.md), and [redacted Webull sample guide](docs/webull-sample-data-guide.md). The native app has not been verified on a physical iPhone or released to customers.
 
 ## iPhone and PC
 
