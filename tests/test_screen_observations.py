@@ -14,7 +14,7 @@ def test_screen_observation_is_quarantined_and_idempotent():
     with TemporaryDirectory() as tmp:
         store = Store(Path(tmp) / "crier.db")
         app = FastAPI()
-        app.include_router(screen_observation_router(store, lambda: None))
+        app.include_router(screen_observation_router(store, lambda: None, "u" * 40))
         client = TestClient(app)
         evidence = {
             "schema": "crier.screen-observation.v1",
@@ -25,7 +25,7 @@ def test_screen_observation_is_quarantined_and_idempotent():
             "observedAt": datetime.now(timezone.utc).isoformat(),
             "evidenceId": "a7a5eae0-b1d2-4e3c-b4c5-f99979c45d23",
         }
-        first = client.post("/api/screen-observations", json=evidence)
+        first = client.post("/api/screen-observations", headers={"Authorization": "Bearer " + "u" * 40}, json=evidence)
         assert first.status_code == 202, first.text
         assert first.json()["discord_published"] is False
         assert client.post("/api/screen-observations", json=evidence).status_code == 202
@@ -53,3 +53,13 @@ def test_screen_observation_rejects_invalid_broker_and_price():
             "evidenceId": "a7a5eae0-b1d2-4e3c-b4c5-f99979c45d23",
         }
         assert client.post("/api/screen-observations", json=evidence).status_code == 422
+
+def test_screen_upload_authentication_is_separate_from_admin():
+    with TemporaryDirectory() as tmp:
+        store = Store(Path(tmp) / "crier.db")
+        app = FastAPI()
+        app.include_router(screen_observation_router(store, lambda: None, "u" * 40))
+        client = TestClient(app)
+        assert client.post("/api/screen-observations", json={}).status_code == 401
+        assert client.post("/api/screen-observations",
+                           headers={"Authorization": "Bearer wrong"}, json={}).status_code == 401
