@@ -17,5 +17,7 @@ jobs:
         run: brew install xcodegen
       - name: Generate Xcode project
         run: cd ios && xcodegen generate
+      - name: Validate generated schemes
+        run: xcodebuild -list -project ios/SentinelCrier.xcodeproj
       - name: Build for iOS Simulator without signing
         run: xcodebuild -project ios/SentinelCrier.xcodeproj -scheme SentinelCrier -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
