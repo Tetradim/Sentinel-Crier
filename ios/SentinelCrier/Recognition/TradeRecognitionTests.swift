@@ -44,4 +44,20 @@ final class TradeRecognitionTests: XCTestCase {
     func testNoOrderSubmission() {
         XCTAssertEqual(BrokerScreenTemplate(name: "webull").recognize(lines: receipt + ["ORDER SUBMITTED"]), .noFill)
     }
+    func testUnfilledWebullOrderRejected() {
+        XCTAssertEqual(BrokerScreenTemplate(name: "webull").recognize(lines: receipt + ["NOT FILLED"]), .noFill)
+        XCTAssertEqual(BrokerScreenTemplate(name: "webull").recognize(lines: receipt + ["0 FILLED"]), .noFill)
+    }
+
+    func testDistinctIdenticalExecutionsAreNotSuppressedForever() {
+        guard case .candidate(let trade) = BrokerScreenTemplate(name: "webull").recognize(lines: receipt) else {
+            return XCTFail("Missing candidate")
+        }
+        let dedup = ScreenObservationDeduplicator()
+        let start = Date(timeIntervalSince1970: 1_000)
+        XCTAssertTrue(dedup.shouldAccept(trade, at: start))
+        XCTAssertFalse(dedup.shouldAccept(trade, at: start.addingTimeInterval(1)))
+        XCTAssertTrue(dedup.shouldAccept(trade, at: start.addingTimeInterval(4)))
+    }
+
 }
