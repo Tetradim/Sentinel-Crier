@@ -1,7 +1,7 @@
 """Quarantined, authenticated screen observations. Never feed OCR into fill intake."""
 import json
 import time
-from datetime import datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Literal
 from uuid import UUID
@@ -29,8 +29,14 @@ class ScreenObservation(BaseModel):
     @field_validator("expiration")
     @classmethod
     def valid_expiration(cls, value):
-        from datetime import date
         date.fromisoformat(value)
+        return value
+
+    @field_validator("observedAt")
+    @classmethod
+    def valid_observation_time(cls, value):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("Observation time must include timezone")
         return value
 
     @field_validator("strike", "fillPrice")
