@@ -21,6 +21,7 @@ struct CrierActivity: Decodable, Identifiable {
         let quantity: String?
         let price: String?
         let broker: String?
+        let verification: String?
     }
 }
 
@@ -274,9 +275,9 @@ struct CrierCommandCenter: View {
                     statusLine("Screen broadcast", value: model.broadcastStatus,
                                color: model.broadcastStatus.hasPrefix("Recently") ? CrierTheme.green : CrierTheme.amber)
                 }
-                CrierPanel(title: "Recent verified-fill activity") {
+                CrierPanel(title: "Recent delivery activity") {
                     if model.activity.isEmpty {
-                        Text("No verified fills in history.").foregroundStyle(.secondary)
+                        Text("No delivery records in history.").foregroundStyle(.secondary)
                     }
                     ForEach(model.activity.prefix(4)) { item in activityRow(item) }
                 }
@@ -308,6 +309,8 @@ struct CrierCommandCenter: View {
                 Text(item.fill.contract ?? "Unknown contract").font(.subheadline.bold())
                 Text("\(item.fill.side ?? "—") · \(item.fill.quantity ?? "—") @ \(item.fill.price ?? "—")")
                     .font(.caption).foregroundStyle(.secondary)
+                Text(item.fill.verification == "broker_reported" ? "Broker-reported fill" : (item.fill.verification == "manual_confirmed" ? "Manually confirmed receipt" : "Verification not established"))
+                    .font(.caption2).foregroundStyle(item.fill.verification == "broker_reported" ? CrierTheme.green : CrierTheme.amber)
             }
             Spacer()
             Text(item.status.capitalized).font(.caption.bold())
@@ -317,7 +320,7 @@ struct CrierCommandCenter: View {
 
     private var activity: some View {
         List {
-            Section("Verified-fill delivery history") {
+            Section("Delivery history · provenance shown") {
                 if model.activity.isEmpty { Text("No delivery records.").foregroundStyle(.secondary) }
                 ForEach(model.activity) { activityRow($0) }
             }
@@ -414,6 +417,10 @@ struct CrierCommandCenter: View {
             }
             Section("Observation queue") {
                 Text("Pending local observations: \(ScreenEvidenceQueue()?.pendingCount() ?? 0) of 100")
+                if let failure = UserDefaults(suiteName: "group.com.tetradim.sentinelcrier")?.double(forKey: "lastQueueWriteFailureAt"), failure > 0 {
+                    Text("Observation storage failed at \(Date(timeIntervalSince1970: failure).formatted(date: .abbreviated, time: .shortened)). Some evidence may be missing.")
+                        .foregroundStyle(.red)
+                }
                 if let overflow = UserDefaults(suiteName: "group.com.tetradim.sentinelcrier")?.double(forKey: "lastQueueOverflowAt"), overflow > 0 {
                     Text("Queue was full: \(Date(timeIntervalSince1970: overflow).formatted(date: .abbreviated, time: .shortened)). Some new observations may have been missed.")
                         .foregroundStyle(CrierTheme.amber)
