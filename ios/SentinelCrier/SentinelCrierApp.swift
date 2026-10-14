@@ -27,6 +27,11 @@ struct SetupView: View {
                         .keyboardType(.URL)
                         .autocorrectionDisabled()
                     SecureField("Crier access token", text: $token)
+                    Button("Forget saved token", role: .destructive) {
+                        CrierCredentials.clear()
+                        token = ""
+                        connectionMessage = "Saved token removed."
+                    }
                     Button(checkingConnection ? "Checking…" : "Check connection") {
                         Task { await checkConnection() }
                     }
@@ -49,6 +54,7 @@ struct SetupView: View {
                 }
             }
             .navigationTitle("Sentinel Crier")
+            .onAppear { token = CrierCredentials.load() ?? "" }
             .alert("Monitoring modes", isPresented: $showHelp) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -66,6 +72,10 @@ struct SetupView: View {
         defer { checkingConnection = false }
         do {
             let status = try await CrierStatusClient(baseURL: url, accessToken: token).status()
+            guard CrierCredentials.save(token) else {
+                connectionMessage = "Connected, but could not securely save the token."
+                return
+            }
             connectionMessage = status.delivery_enabled
                 ? "Connected · Discord delivery enabled"
                 : "Connected · preview mode"
