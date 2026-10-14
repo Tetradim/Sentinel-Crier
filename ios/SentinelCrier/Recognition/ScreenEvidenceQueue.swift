@@ -15,6 +15,16 @@ final class ScreenEvidenceQueue {
         } catch { return nil }
     }
 
+    func pendingCount() -> Int {
+        ((try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension == "json" }.count
+    }
+
+    func clear() {
+        guard let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else { return }
+        for file in files where file.pathExtension == "json" { try? FileManager.default.removeItem(at: file) }
+    }
+
     func enqueue(_ evidence: ScreenEvidence) {
         guard let data = try? JSONEncoder().encode(evidence) else { return }
         let file = folder.appendingPathComponent(evidence.evidenceId + ".json")
