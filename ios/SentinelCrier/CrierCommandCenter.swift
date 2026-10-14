@@ -1,5 +1,6 @@
 import SwiftUI
 import ReplayKit
+import UIKit
 
 private enum CrierTheme {
     static let background = Color(red: 0.035, green: 0.07, blue: 0.11)
@@ -98,16 +99,23 @@ final class CrierDashboardModel: ObservableObject {
         defer { loading = false }
         do {
             let newStatus = try await fetch("api/status", as: CrierStatusClient.Status.self)
-            let newActivity = try await fetch("api/history", as: [CrierActivity].self)
-            let newObservations = try await fetch("api/screen-observations", as: [CrierObservation].self)
             let newPreferences = try await fetch("api/settings", as: CrierPreferences.self)
             status = newStatus
-            activity = newActivity
-            observations = newObservations
             preferences = newPreferences
+            do {
+                activity = try await fetch("api/history", as: [CrierActivity].self)
+            } catch {
+                activity = []
+                self.error = "Delivery history is unavailable."
+            }
+            do {
+                observations = try await fetch("api/screen-observations", as: [CrierObservation].self)
+            } catch {
+                observations = []
+                self.error = "Screen observation history is unavailable."
+            }
             await refreshPreview()
             lastUpdated = Date()
-            error = nil
         } catch {
             status = nil
             activity = []
