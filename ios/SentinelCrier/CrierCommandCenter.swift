@@ -24,13 +24,14 @@ struct CrierActivity: Decodable, Identifiable {
 }
 
 struct CrierObservation: Decodable, Identifiable {
-    let evidence_id: String
+    let id: String
     let status: String
-    let symbol: String
-    let side: String
-    let quantity: Int
-    let fill_price: String?
-    var id: String { evidence_id }
+    let evidence: Evidence
+    struct Evidence: Decodable {
+        let symbol: String
+        let side: String
+        let quantity: Int
+    }
 }
 
 struct CrierPreferences: Codable {
@@ -237,8 +238,8 @@ struct CrierCommandCenter: View {
                 ForEach(model.observations) { item in
                     HStack {
                         VStack(alignment: .leading) {
-                            Text(item.symbol).font(.headline)
-                            Text("\(item.side) · \(item.quantity) contracts").font(.caption)
+                            Text(item.evidence.symbol).font(.headline)
+                            Text("\(item.evidence.side) · \(item.evidence.quantity) contracts").font(.caption)
                         }
                         Spacer()
                         Text("Pending review").font(.caption).foregroundStyle(CrierTheme.amber)
