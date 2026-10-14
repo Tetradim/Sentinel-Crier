@@ -382,6 +382,10 @@ struct CrierCommandCenter: View {
             }
             Section("Observation queue") {
                 Text("Pending local observations: \(ScreenEvidenceQueue()?.pendingCount() ?? 0) of 100")
+                if let overflow = UserDefaults(suiteName: "group.com.tetradim.sentinelcrier")?.double(forKey: "lastQueueOverflowAt"), overflow > 0 {
+                    Text("Queue was full: \(Date(timeIntervalSince1970: overflow).formatted(date: .abbreviated, time: .shortened)). Some new observations may have been missed.")
+                        .foregroundStyle(CrierTheme.amber)
+                }
                 Text("When the queue is full, new observations are not stored until earlier evidence is uploaded. The broadcast extension retries only while active.")
                     .font(.caption).foregroundStyle(.secondary)
             }
