@@ -40,3 +40,14 @@ Stage 3 source hardening now includes a three-frame OCR-absence threshold to avo
 Stage 4 CI now checks backend tests on Python 3.11 and 3.12, compiles Python modules, and exposes simulator runtime diagnostics in the iOS build job. This is a **source implementation completion checkpoint, not an executed test result**.
 
 **Unresolved acceptance criteria:** an upload already in flight cannot be guaranteed to be revoked at the remote server by locally clearing credentials; rotate/revoke the server upload key to enforce remote denial. ReplayKit extension execution and App Group/Keychain sharing still require signed device testing. The backend must be checked for independently verified Webull execution coverage. A passing CI result and signed installable build are still required before declaring Stage 3 verified or Stage 4 complete.
+
+
+## Integration pass — 2026-10-14
+
+- On successful HTTPS authentication, the companion retains the authenticated server URL; forgetting the admin token clears its remembered URL.
+- The ReplayKit extension publishes an App Group heartbeat and lifecycle state. The dashboard shows **recent activity**, not an absolute guarantee that broadcasting is currently live. A stale heartbeat is explicitly treated as inactive.
+- Evidence flush now sends the oldest queued files first, not UUID filename order.
+- The upload-disable UI warns that revocation of an in-flight request requires server-side key rotation.
+- The current backend source requires an explicitly verified fill intake key before accepting broker fill events, and screen observations use a separate quarantined endpoint.
+
+**Release sign-off is still blocked.** No macOS/Xcode build or live GitHub Actions result was available to this coding environment, and the container cannot resolve github.com for local clone/test execution. A signed app and genuine redacted Webull receipt fixtures are not available. These are external verification and evidence dependencies, not items that can responsibly be marked passed from source inspection.
