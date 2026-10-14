@@ -80,19 +80,30 @@ enum TradeRecognition {
     }
 }
 
-/// Treat a continuous visible confirmation as one observation, regardless of
-/// broadcast duration. An intervening non-candidate frame re-arms recognition.
-/// This is screen-state coalescing, not broker execution deduplication.
+/// Coalesce continuous OCR sightings. One missing frame does not re-arm
+/// the same receipt; a sustained absence or a changed candidate does.
 final class ScreenObservationDeduplicator {
     private var visibleFingerprint: String?
+    private var missingFrames = 0
+    private let missingFrameThreshold = 3
 
     func shouldAccept(_ candidate: ScreenTradeCandidate, at now: Date = Date()) -> Bool {
+        missingFrames = 0
         guard visibleFingerprint != candidate.fingerprint else { return false }
         visibleFingerprint = candidate.fingerprint
         return true
     }
 
     func screenChanged() {
+        missingFrames += 1
+        if missingFrames >= missingFrameThreshold {
+            visibleFingerprint = nil
+            missingFrames = 0
+        }
+    }
+
+    func reset() {
         visibleFingerprint = nil
+        missingFrames = 0
     }
 }
