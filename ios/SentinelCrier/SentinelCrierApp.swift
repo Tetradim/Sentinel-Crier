@@ -12,6 +12,8 @@ struct SetupView: View {
     @AppStorage("crier.backendURL") private var backendURL = ""
     @State private var showHelp = false
     @State private var token = ""
+    @State private var uploadToken = ""
+    @State private var uploadMessage = "Screen upload not configured"
     @State private var connectionMessage = "Not connected"
     @State private var checkingConnection = false
 
@@ -40,7 +42,27 @@ struct SetupView: View {
                     Text("Use a private HTTPS Crier server. Never paste brokerage passwords or Discord webhooks here.")
                         .font(.footnote)
                 }
-                Section("2 · Start screen monitoring") {
+                Section("2 · Configure Webull screen upload") {
+                    SecureField("Dedicated screen upload token", text: $uploadToken)
+                    Button("Enable secure screen upload") {
+                        guard let url = URL(string: backendURL),
+                              ScreenUploadConfiguration.configure(baseURL: url, token: uploadToken) else {
+                            uploadMessage = "Unable to save upload configuration. Check HTTPS and signing entitlements."
+                            return
+                        }
+                        uploadToken = ""
+                        uploadMessage = "Screen upload configured. OCR observations are held for review."
+                    }
+                    Button("Disable screen upload", role: .destructive) {
+                        ScreenUploadConfiguration.clear()
+                        uploadToken = ""
+                        uploadMessage = "Screen upload disabled."
+                    }
+                    Text(uploadMessage).font(.footnote)
+                    Text("Use CRIER_SCREEN_UPLOAD_KEY, not your main Crier access token. Configure this on the server first.")
+                        .font(.footnote)
+                }
+                Section("3 · Start screen monitoring") {
                     Text("iOS asks for your permission to share the screen. The broadcast extension must be bundled with this app and configured in Xcode.")
                     ReplayKitPicker()
                         .frame(height: 54)
@@ -48,7 +70,7 @@ struct SetupView: View {
                     Text("Only visible confirmations can be detected. An order preview is not a confirmed fill.")
                         .font(.footnote)
                 }
-                Section("3 · Check alerts") {
+                Section("4 · Check alerts") {
                     Text("Discord publishing requires an authenticated Crier backend. Screen capture alone does not send alerts.")
                     Button("How monitoring works") { showHelp = true }
                 }
