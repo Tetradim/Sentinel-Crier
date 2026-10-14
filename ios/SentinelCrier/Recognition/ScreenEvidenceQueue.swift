@@ -25,11 +25,13 @@ final class ScreenEvidenceQueue {
 
     func flush() async {
         guard let (base, token) = ScreenUploadConfiguration.load() else { return }
+        guard base.scheme?.lowercased() == "https", base.host != nil, base.user == nil, base.password == nil else { return }
         let endpoint = base.appendingPathComponent("api/screen-observations")
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: folder, includingPropertiesForKeys: nil
         ) else { return }
         for file in files.filter({ $0.pathExtension == "json" }).sorted(by: { $0.lastPathComponent < $1.lastPathComponent }).prefix(12) {
+            guard ScreenUploadConfiguration.load() != nil else { break }
             guard let data = try? Data(contentsOf: file) else { continue }
             var request = URLRequest(url: endpoint)
             request.httpMethod = "POST"
