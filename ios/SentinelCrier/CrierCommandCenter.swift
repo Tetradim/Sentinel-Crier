@@ -69,6 +69,7 @@ final class CrierDashboardModel: ObservableObject {
     @Published var lastUpdated: Date?
     @Published var preview: CrierPreviewResponse?
     @Published var broadcastStatus = "Not recently active"
+    @Published var previewError: String?
 
     func refreshBroadcastStatus() {
         let defaults = UserDefaults(suiteName: "group.com.tetradim.sentinelcrier")
@@ -152,8 +153,10 @@ final class CrierDashboardModel: ObservableObject {
                 throw CrierStatusClient.ClientError.invalidResponse
             }
             preview = try JSONDecoder().decode(CrierPreviewResponse.self, from: data)
+            previewError = nil
         } catch {
             preview = nil
+            previewError = "Preview unavailable. Check your connection and alert settings."
         }
     }
 
@@ -263,8 +266,11 @@ struct CrierCommandCenter: View {
                     statusLine("Crier server", value: model.status == nil ? "Not verified" : "Online",
                                color: model.status == nil ? CrierTheme.amber : CrierTheme.green)
                     statusLine("Discord publisher",
-                               value: model.status?.delivery_enabled == true ? "Enabled" : "Not enabled",
-                               color: model.status?.delivery_enabled == true ? CrierTheme.green : CrierTheme.amber)
+                               value: model.status?.sender_failed == true ? "Sender failed" : (model.status?.delivery_enabled == true ? "Enabled" : "Not enabled"),
+                               color: model.status?.sender_failed == true ? .red : (model.status?.delivery_enabled == true ? CrierTheme.green : CrierTheme.amber))
+                    statusLine("Broker fill intake",
+                               value: model.status?.intake.verified == true ? "Verified intake enabled" : "Not verified",
+                               color: model.status?.intake.verified == true ? CrierTheme.green : CrierTheme.amber)
                     statusLine("Screen broadcast", value: model.broadcastStatus,
                                color: model.broadcastStatus.hasPrefix("Recently") ? CrierTheme.green : CrierTheme.amber)
                 }
@@ -359,6 +365,9 @@ struct CrierCommandCenter: View {
                     }
                     Text(model.preferences.display_name).foregroundStyle(.secondary)
                     Text("SAMPLE · NOT SENT").font(.caption.bold()).foregroundStyle(CrierTheme.amber)
+                    if let previewError = model.previewError {
+                        Text(previewError).font(.caption).foregroundStyle(CrierTheme.amber)
+                    }
                 }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
                     .background(CrierTheme.surface, in: RoundedRectangle(cornerRadius: 12))
             }
@@ -377,6 +386,10 @@ struct CrierCommandCenter: View {
                 CrierPanel(title: "Discord") {
                     statusLine("Webhook", value: model.status?.discord_configured == true ? "Configured" : "Not configured",
                                color: model.status?.discord_configured == true ? CrierTheme.green : CrierTheme.amber)
+                    if model.status?.sender_failed == true {
+                        Text("The Discord sender has stopped unexpectedly. Check backend logs before relying on alerts.")
+                            .font(.caption).foregroundStyle(.red)
+                    }
                 }
                 CrierPanel(title: "Webull screen observation") {
                     Text("Screen OCR observations remain pending review and never automatically publish to Discord.")
