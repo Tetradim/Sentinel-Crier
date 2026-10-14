@@ -14,6 +14,7 @@ class Config:
     webull_verified: bool = False
     publisher_verified: bool = False
     intake_key: str = ""
+    screen_upload_key: str = ""
     intake_verified: bool = False
     monitor: str = "none"
 
@@ -33,6 +34,8 @@ class Config:
             raise ValueError("CRIER_MONITOR must be none, webull or tradier")
         if self.intake_key and (len(self.intake_key) < 32 or self.intake_key == self.token):
             raise ValueError("CRIER_INTAKE_KEY must be a separate key with at least 32 characters")
+        if self.screen_upload_key and (len(self.screen_upload_key) < 32 or self.screen_upload_key in (self.token, self.intake_key)):
+            raise ValueError("CRIER_SCREEN_UPLOAD_KEY must be unique and contain at least 32 characters")
         if self.intake_verified and not self.intake_key:
             raise ValueError("Verified intake requires CRIER_INTAKE_KEY")
         if self.webhook: validate_webhook(self.webhook)
@@ -47,5 +50,6 @@ class Config:
             webull_verified=os.getenv("CRIER_WEBULL_VERIFIED", "false").lower() == "true",
             publisher_verified=os.getenv("CRIER_PUBLISHER_VERIFIED", "false").lower() == "true",
             intake_key=os.getenv("CRIER_INTAKE_KEY", ""),
+            screen_upload_key=os.getenv("CRIER_SCREEN_UPLOAD_KEY", ""),
             intake_verified=os.getenv("CRIER_INTAKE_VERIFIED", "false").lower() == "true",
             monitor=os.getenv("CRIER_MONITOR", "none").lower())
