@@ -77,9 +77,9 @@ final class StandaloneAlertStore {
             record.note = "Delivery may have occurred; do not automatically retry"
             guard write(record) else { break }
             let e = record.evidence
-            let message = "⚠️ UNVERIFIED SCREEN OBSERVATION — NOT A BROKER-CONFIRMED FILL\\n" +
-                "\\(e.broker) · \\(e.symbol) \\(e.expiration) \\(e.strike)\\(e.right) · " +
-                "\\(e.side) \\(e.quantity) @ $\\(e.fillPrice)\\n" +
+            let message = "⚠️ UNVERIFIED SCREEN OBSERVATION — NOT A BROKER-CONFIRMED FILL\n" +
+                "\(e.broker) · \(e.symbol) \(e.expiration) \(e.strike)\(e.right) · " +
+                "\(e.side) \(e.quantity) @ $\(e.fillPrice)\n" +
                 "Observed via user-authorized iPhone screen OCR. Verify against broker records."
             var request = URLRequest(url: webhook)
             request.httpMethod = "POST"
@@ -102,7 +102,7 @@ final class StandaloneAlertStore {
                     _ = write(record)
                     break
                 } else {
-                    record.note = "Discord returned HTTP \\(http.statusCode); delivery uncertain"
+                    record.note = "Discord returned HTTP \(http.statusCode); delivery uncertain"
                     _ = write(record)
                     break
                 }
