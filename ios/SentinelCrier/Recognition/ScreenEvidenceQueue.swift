@@ -32,7 +32,7 @@ final class ScreenEvidenceQueue {
         // Do not silently discard the oldest evidence during an outage.
         // Once full, retain existing receipts until they can be delivered.
         guard FileManager.default.fileExists(atPath: file.path) || pendingCount() < limit else { return }
-        try? data.write(to: file, options: .atomic)
+        try? data.write(to: file, options: [.atomic, .completeFileProtectionUnlessOpen])
     }
 
     func flush() async {
