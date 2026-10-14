@@ -9,7 +9,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
     private var lastSampleAt: TimeInterval = 0
     private let interval: TimeInterval = 1.0
     private let deduplicator = ScreenObservationDeduplicator()
-    private let evidenceQueue = ScreenEvidenceQueue()
+    private let alertStore = StandaloneAlertStore()
     private var flushInProgress = false
     // A single retained video buffer at most, even when Vision OCR is slow.
     private let frameGate = DispatchSemaphore(value: 1)
@@ -76,8 +76,8 @@ final class SampleHandler: RPBroadcastSampleHandler {
                 // Candidate detection is advisory until validated against actual Webull receipts.
                 let recognition = BrokerScreenTemplate(name: "webull").recognize(lines: lines)
                 if case .candidate(let candidate) = recognition {
-                    if ScreenUploadConfiguration.load() != nil && self.deduplicator.shouldAccept(candidate) {
-                        self.evidenceQueue?.enqueue(ScreenEvidence(candidate: candidate))
+                    if self.deduplicator.shouldAccept(candidate) {
+                        self.alertStore?.append(ScreenEvidence(candidate: candidate))
                     }
                 } else {
                     self.deduplicator.screenChanged()
@@ -92,10 +92,10 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
     /// Called only from the serial OCR queue.
     private func flushEvidence() {
-        guard !flushInProgress, let evidenceQueue = evidenceQueue else { return }
+        guard !flushInProgress, let alertStore = alertStore else { return }
         flushInProgress = true
         Task { [weak self] in
-            await evidenceQueue.flush()
+            await alertStore.sendPending()
             self?.queue.async { [weak self] in self?.flushInProgress = false }
         }
     }
