@@ -98,7 +98,7 @@ Individual Webull API access and its sandbox environment are broker-controlled. 
 
 ## Native iPhone companion (experimental)
 
-The `ios/` XcodeGen project includes a SwiftUI onboarding app, a ReplayKit broadcast upload extension, local Vision OCR, conservative Webull options recognition, a persistent observation queue, and a dedicated authenticated HTTPS upload route.
+The `ios/` XcodeGen project includes a dark SwiftUI five-tab command center (Dashboard, Activity, Alerts, Connections, Settings), a separate onboarding screen, a ReplayKit broadcast upload extension, local Vision OCR, conservative Webull options recognition, a persistent observation queue, and a dedicated authenticated HTTPS upload route.
 
 **Critical distinction:** screen OCR creates **pending-review observations only**. It does not prove an actual broker execution, does not enter the verified-fill intake, and cannot trigger Discord publishing on its own. Automatic Discord alerts require an independently verified broker event source or a separately reviewed, explicitly confirmed receipt. The iPhone user must actively authorize ReplayKit broadcasting; iOS does not allow continuous invisible monitoring of Webull.
 
@@ -106,7 +106,7 @@ To configure the observation path, set a unique `CRIER_SCREEN_UPLOAD_KEY` (32+ c
 
 The observation queue is bounded to 100 JSON records and retries while broadcasting. A continuously visible receipt is coalesced; the same trade fields can generate another observation after the receipt disappears and reappears. **Neither mechanism identifies broker execution IDs.** A stopped broadcast does not provide guaranteed delivery or background catch-up.
 
-See [iOS build instructions](ios/BUILD.md), [screen upload and security setup](docs/webull-screen-upload.md), and [redacted Webull sample guide](docs/webull-sample-data-guide.md). The native app has not been verified on a physical iPhone or released to customers.
+See [iOS build instructions](ios/BUILD.md), [screen upload and security setup](docs/webull-screen-upload.md), and [redacted Webull sample guide](docs/webull-sample-data-guide.md). The Stage 2 UI now reads authenticated backend status, delivery history, pending-review observations, and message preferences. Its alert designer saves the supported backend presentation settings and shows a clearly marked illustrative preview; it does not yet provide server-rendered preview parity. Counters reflect the latest fetched history (up to 100 records), not necessarily today’s totals. The native app has not been compiled in Xcode, verified on a physical iPhone, or released to customers.
 
 ## iPhone and PC
 
