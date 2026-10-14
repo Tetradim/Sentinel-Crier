@@ -1,0 +1,21 @@
+name: iOS build
+on:
+  push:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-build.yml'
+  pull_request:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-build.yml'
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: cd ios && xcodegen generate
+      - name: Build for iOS Simulator without signing
+        run: xcodebuild -project ios/SentinelCrier.xcodeproj -scheme SentinelCrier -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
