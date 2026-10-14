@@ -43,9 +43,14 @@ final class ScreenEvidenceQueue {
         guard base.scheme?.lowercased() == "https", base.host != nil, base.user == nil, base.password == nil else { return }
         let endpoint = base.appendingPathComponent("api/screen-observations")
         guard let files = try? FileManager.default.contentsOfDirectory(
-            at: folder, includingPropertiesForKeys: nil
+            at: folder, includingPropertiesForKeys: [.creationDateKey]
         ) else { return }
-        for file in files.filter({ $0.pathExtension == "json" }).sorted(by: { $0.lastPathComponent < $1.lastPathComponent }).prefix(12) {
+        let ordered = files.filter { $0.pathExtension == "json" }.sorted {
+            let left = (try? $0.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
+            let right = (try? $1.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
+            return left == right ? $0.lastPathComponent < $1.lastPathComponent : left < right
+        }
+        for file in ordered.prefix(12) {
             guard let current = ScreenUploadConfiguration.load(),
                   current.0 == base, current.1 == token else { break }
             guard let data = try? Data(contentsOf: file) else { continue }
