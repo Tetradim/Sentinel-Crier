@@ -39,6 +39,11 @@ struct CrierPreviewResponse: Decodable {
     let payload: PreviewPayload
     struct PreviewPayload: Decodable {
         let content: String?
+        let embeds: [Embed]?
+        struct Embed: Decodable {
+            let title: String?
+            let description: String?
+        }
     }
 }
 
@@ -311,7 +316,11 @@ struct CrierCommandCenter: View {
             Section("Illustrative preview — not a real alert") {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("🟢 SPY $600C · 10/16/2026").font(.headline)
-                    Text(model.preview?.payload.content ?? "Sample preview unavailable for this format.")
+                    Text(model.preview?.payload.content ?? model.preview?.payload.embeds?.first?.title ?? "Preview unavailable for this format.")
+                        .font(.subheadline)
+                    if let description = model.preview?.payload.embeds?.first?.description {
+                        Text(description).font(.caption).foregroundStyle(.secondary)
+                    }
                     Text(model.preferences.display_name).foregroundStyle(.secondary)
                     Text("SAMPLE · NOT SENT").font(.caption.bold()).foregroundStyle(CrierTheme.amber)
                 }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
@@ -319,6 +328,7 @@ struct CrierCommandCenter: View {
             }
             if let error = model.error { Text(error).foregroundStyle(CrierTheme.amber) }
         }.navigationTitle("Alert Designer")
+            .task { await model.refreshPreview() }
     }
 
     private var connections: some View {
