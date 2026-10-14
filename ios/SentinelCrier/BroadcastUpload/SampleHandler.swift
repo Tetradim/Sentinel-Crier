@@ -11,6 +11,8 @@ final class SampleHandler: RPBroadcastSampleHandler {
     private let deduplicator = ScreenObservationDeduplicator()
     private let evidenceQueue = ScreenEvidenceQueue()
     private var flushInProgress = false
+    // A single retained video buffer at most, even when Vision OCR is slow.
+    private let frameGate = DispatchSemaphore(value: 1)
     private let shared = UserDefaults(suiteName: "group.com.tetradim.sentinelcrier")
 
     private func broadcastState(_ state: String) {
@@ -53,8 +55,10 @@ final class SampleHandler: RPBroadcastSampleHandler {
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer,
                                       with sampleBufferType: RPSampleBufferType) {
         guard sampleBufferType == .video else { return }
-        // Capturing sampleBuffer retains it until OCR finishes.
+        // Drop incoming frames before retaining them in the OCR work queue.
+        guard frameGate.wait(timeout: .now()) == .success else { return }
         queue.async { [weak self] in
+            defer { self?.frameGate.signal() }
             guard let self = self,
                   let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
             let now = ProcessInfo.processInfo.systemUptime
