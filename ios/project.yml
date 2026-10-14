@@ -15,6 +15,7 @@ targets:
       - path: SentinelCrier/SentinelCrierApp.swift
       - path: SentinelCrier/CrierStatusClient.swift
       - path: SentinelCrier/CrierCredentials.swift
+      - path: SentinelCrier/ScreenUploadConfiguration.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier
@@ -22,6 +23,7 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: Sentinel Crier
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: SentinelCrier.entitlements
     dependencies:
       - target: BroadcastUpload
         embed: true
@@ -33,12 +35,14 @@ targets:
       - path: SentinelCrier/Recognition/TradeRecognition.swift
       - path: SentinelCrier/Recognition/BrokerTemplates.swift
       - path: SentinelCrier/Recognition/ScreenEvidence.swift
+      - path: SentinelCrier/ScreenUploadConfiguration.swift
     info:
       path: BroadcastUpload-Info.plist
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier.BroadcastUpload
         CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: BroadcastUpload.entitlements
         APPLICATION_EXTENSION_API_ONLY: YES
         SKIP_INSTALL: YES
 
