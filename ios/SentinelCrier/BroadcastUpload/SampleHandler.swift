@@ -19,6 +19,27 @@ final class SampleHandler: RPBroadcastSampleHandler {
         }
     }
 
+    override func broadcastPaused() {
+        queue.async { [weak self] in
+            self?.deduplicator.screenChanged()
+        }
+    }
+
+    override func broadcastResumed() {
+        queue.async { [weak self] in
+            self?.deduplicator.screenChanged()
+            self?.lastSampleAt = 0
+            self?.flushEvidence()
+        }
+    }
+
+    override func broadcastFinished() {
+        queue.async { [weak self] in
+            self?.deduplicator.screenChanged()
+            self?.lastSampleAt = 0
+        }
+    }
+
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer,
                                       with sampleBufferType: RPSampleBufferType) {
         guard sampleBufferType == .video else { return }
