@@ -177,7 +177,7 @@ final class CrierDashboardModel: ObservableObject {
             error = nil
             await refreshPreview()
         } catch {
-            error = "Could not save preferences. Check the connection and display name."
+            self.error = "Could not save preferences. Check the connection and display name."
         }
     }
 }
