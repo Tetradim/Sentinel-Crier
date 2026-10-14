@@ -35,6 +35,7 @@ targets:
       - path: SentinelCrier/Recognition/TradeRecognition.swift
       - path: SentinelCrier/Recognition/BrokerTemplates.swift
       - path: SentinelCrier/Recognition/ScreenEvidence.swift
+      - path: SentinelCrier/Recognition/ScreenEvidenceQueue.swift
       - path: SentinelCrier/ScreenUploadConfiguration.swift
     info:
       path: BroadcastUpload-Info.plist
