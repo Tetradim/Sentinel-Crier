@@ -57,7 +57,9 @@ final class TradeRecognitionTests: XCTestCase {
         let start = Date(timeIntervalSince1970: 1_000)
         XCTAssertTrue(dedup.shouldAccept(trade, at: start))
         XCTAssertFalse(dedup.shouldAccept(trade, at: start.addingTimeInterval(1)))
-        XCTAssertTrue(dedup.shouldAccept(trade, at: start.addingTimeInterval(4)))
+        XCTAssertFalse(dedup.shouldAccept(trade, at: start.addingTimeInterval(4)))
+        dedup.screenChanged()
+        XCTAssertTrue(dedup.shouldAccept(trade, at: start.addingTimeInterval(5)))
     }
 
 }
