@@ -1,5 +1,4 @@
 import XCTest
-@testable import BroadcastUpload
 
 final class TradeRecognitionTests: XCTestCase {
     private let receipt = ["WEBULL", "FILLED", "SPY 2026-10-16 C 600", "BUY", "QTY: 4", "FILL PRICE: $1.25"]
