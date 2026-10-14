@@ -11,6 +11,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
     private var lastSampleAt: TimeInterval = 0
     private let interval: TimeInterval = 1.0
     private var busy = false
+    private let deduplicator = ScreenObservationDeduplicator()
 
     override func broadcastStarted(withSetupInfo setupInfo: [String : NSObject]?) {
         lastSampleAt = 0
@@ -32,7 +33,12 @@ final class SampleHandler: RPBroadcastSampleHandler {
                 try VNImageRequestHandler(cvPixelBuffer: pixelBuffer).perform([request])
                 // Do not log or transmit recognized text: it can contain private account data.
                 // A broker-specific confirmed-fill parser is required before alert emission.
-                _ = request.results?.compactMap { $0.topCandidates(1).first?.string }
+                let lines = request.results?.compactMap { $0.topCandidates(1).first?.string } ?? []
+                // Prototype recognizes only explicit, single-contract filled receipts.
+                // No network delivery: a screen observation is not a verified API fill.
+                if case .candidate(let candidate) = TradeRecognition.parse(lines: lines, broker: "SCREEN") {
+                    _ = self?.deduplicator.shouldAccept(candidate)
+                }
             } catch {
                 // Capture must remain functional if one frame cannot be recognized.
             }
