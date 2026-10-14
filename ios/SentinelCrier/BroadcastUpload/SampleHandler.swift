@@ -9,9 +9,14 @@ final class SampleHandler: RPBroadcastSampleHandler {
     private var lastSampleAt: TimeInterval = 0
     private let interval: TimeInterval = 1.0
     private let deduplicator = ScreenObservationDeduplicator()
+    private let evidenceQueue = ScreenEvidenceQueue()
+    private var flushInProgress = false
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
-        queue.async { [weak self] in self?.lastSampleAt = 0 }
+        queue.async { [weak self] in
+            self?.lastSampleAt = 0
+            self?.flushEvidence()
+        }
     }
 
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer,
@@ -35,11 +40,24 @@ final class SampleHandler: RPBroadcastSampleHandler {
                 // Candidate detection is advisory until validated against actual Webull receipts.
                 if case .candidate(let candidate) =
                     BrokerScreenTemplate(name: "webull").recognize(lines: lines) {
-                    _ = self.deduplicator.shouldAccept(candidate)
+                    if self.deduplicator.shouldAccept(candidate) {
+                        self.evidenceQueue?.enqueue(ScreenEvidence(candidate: candidate))
+                    }
                 }
             } catch {
                 // A single failed OCR frame must not terminate screen capture.
             }
+            self.flushEvidence()
+        }
+    }
+
+    /// Called only from the serial OCR queue.
+    private func flushEvidence() {
+        guard !flushInProgress, let evidenceQueue = evidenceQueue else { return }
+        flushInProgress = true
+        Task { [weak self] in
+            await evidenceQueue.flush()
+            self?.queue.async { [weak self] in self?.flushInProgress = false }
         }
     }
 }
