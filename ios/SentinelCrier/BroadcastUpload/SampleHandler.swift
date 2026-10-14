@@ -40,7 +40,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
                 // Candidate detection is advisory until validated against actual Webull receipts.
                 if case .candidate(let candidate) =
                     BrokerScreenTemplate(name: "webull").recognize(lines: lines) {
-                    if self.deduplicator.shouldAccept(candidate) {
+                    if ScreenUploadConfiguration.load() != nil && self.deduplicator.shouldAccept(candidate) {
                         self.evidenceQueue?.enqueue(ScreenEvidence(candidate: candidate))
                     }
                 }
