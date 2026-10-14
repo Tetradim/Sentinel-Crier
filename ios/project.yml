@@ -1,0 +1,38 @@
+name: SentinelCrier
+options:
+  bundleIdPrefix: com.tetradim
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: "1"
+targets:
+  SentinelCrier:
+    type: application
+    platform: iOS
+    sources:
+      - path: SentinelCrier/SentinelCrierApp.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Sentinel Crier
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        CODE_SIGN_STYLE: Automatic
+    dependencies:
+      - target: BroadcastUpload
+        embed: true
+  BroadcastUpload:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: SentinelCrier/BroadcastUpload/SampleHandler.swift
+    info:
+      path: BroadcastUpload-Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier.BroadcastUpload
+        CODE_SIGN_STYLE: Automatic
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
