@@ -70,5 +70,10 @@ enum ScreenUploadConfiguration {
         ]
         SecItemDelete(query as CFDictionary)
         UserDefaults(suiteName: group)?.removeObject(forKey: "backendURL")
+        // Revocation also removes observations awaiting upload.
+        if let root = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group) {
+            let folder = root.appendingPathComponent("screen-observations", isDirectory: true)
+            try? FileManager.default.removeItem(at: folder)
+        }
     }
 }
