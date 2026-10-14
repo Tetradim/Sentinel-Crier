@@ -80,15 +80,19 @@ enum TradeRecognition {
     }
 }
 
-/// Coalesce adjacent OCR frames only (3 seconds by default). Never treat this\n/// fingerprint as a broker execution ID: two genuine fills can be identical.\n/// Cross-device/API reconciliation belongs on the backend.
+/// Treat a continuous visible confirmation as one observation, regardless of
+/// broadcast duration. An intervening non-candidate frame re-arms recognition.
+/// This is screen-state coalescing, not broker execution deduplication.
 final class ScreenObservationDeduplicator {
-    private var seen: [String: Date] = [:]
-    private let retention: TimeInterval
-    init(retention: TimeInterval = 3) { self.retention = retention }
+    private var visibleFingerprint: String?
+
     func shouldAccept(_ candidate: ScreenTradeCandidate, at now: Date = Date()) -> Bool {
-        seen = seen.filter { now.timeIntervalSince($0.value) < retention }
-        guard seen[candidate.fingerprint] == nil else { return false }
-        seen[candidate.fingerprint] = now
+        guard visibleFingerprint != candidate.fingerprint else { return false }
+        visibleFingerprint = candidate.fingerprint
         return true
+    }
+
+    func screenChanged() {
+        visibleFingerprint = nil
     }
 }
