@@ -38,14 +38,17 @@ final class SampleHandler: RPBroadcastSampleHandler {
                 let lines = request.results?.compactMap { $0.topCandidates(1).first?.string } ?? []
                 // No raw text, screenshots or brokerage credentials leave this extension.
                 // Candidate detection is advisory until validated against actual Webull receipts.
-                if case .candidate(let candidate) =
-                    BrokerScreenTemplate(name: "webull").recognize(lines: lines) {
+                let recognition = BrokerScreenTemplate(name: "webull").recognize(lines: lines)
+                if case .candidate(let candidate) = recognition {
                     if ScreenUploadConfiguration.load() != nil && self.deduplicator.shouldAccept(candidate) {
                         self.evidenceQueue?.enqueue(ScreenEvidence(candidate: candidate))
                     }
+                } else {
+                    self.deduplicator.screenChanged()
                 }
             } catch {
                 // A single failed OCR frame must not terminate screen capture.
+                self.deduplicator.screenChanged()
             }
             self.flushEvidence()
         }
