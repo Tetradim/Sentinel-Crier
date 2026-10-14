@@ -1,3 +1,29 @@
+# Standalone iPhone operation (current beta)
+
+The iOS app no longer needs a Python/PC server. Its five-tab interface stores local
+observations in the shared App Group; the user can paste a Discord channel webhook
+into **Connections** and explicitly enable **unverified OCR candidate alerts** in
+**Alerts**. The ReplayKit broadcast extension uses Vision OCR, records observations
+on the phone, and posts clearly labeled **UNVERIFIED** candidates directly to Discord
+over HTTPS. No brokerage login is collected.
+
+The user must manually start an iOS screen broadcast. Apple may stop the extension,
+and it is not a permanent background monitor. OCR is not authenticated Webull
+execution data. Repeated identical receipts are suppressed even across sessions;
+this may also suppress distinct identical trades. Ambiguous network outcomes are
+not automatically retried, to avoid duplicate Discord messages. These trade-offs
+need physical-iPhone testing with realistic screens and Discord.
+
+The Discord webhook is a secret stored in the shared Keychain access group. The
+App Group and Keychain Sharing entitlements must be signed for both targets.
+A signed iPhone build is still required for installation; a simulator build cannot
+be installed on a physical device.
+
+The Python backend remains in the repository as a **separate optional deployment**
+and is not needed by the standalone iOS app.
+
+---
+
 # Sentinel Crier iOS companion: build and testing
 
 The SwiftUI app, ReplayKit extension and recognition test target are declared in `project.yml` and generated using XcodeGen.
