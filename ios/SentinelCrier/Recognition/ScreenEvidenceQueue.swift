@@ -31,7 +31,10 @@ final class ScreenEvidenceQueue {
         let file = folder.appendingPathComponent(evidence.evidenceId + ".json")
         // Do not silently discard the oldest evidence during an outage.
         // Once full, retain existing receipts until they can be delivered.
-        guard FileManager.default.fileExists(atPath: file.path) || pendingCount() < limit else { return }
+        guard FileManager.default.fileExists(atPath: file.path) || pendingCount() < limit else {
+            UserDefaults(suiteName: "group.com.tetradim.sentinelcrier")?.set(Date().timeIntervalSince1970, forKey: "lastQueueOverflowAt")
+            return
+        }
         try? data.write(to: file, options: [.atomic, .completeFileProtectionUnlessOpen])
     }
 
