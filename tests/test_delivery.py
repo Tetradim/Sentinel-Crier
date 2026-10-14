@@ -60,3 +60,29 @@ def test_abandoned_delivery_is_not_reposted_after_restart(tmp_path):
     assert db.claim()
     db.recover()
     assert db.history()[0]["status"] == "uncertain" and db.claim() is None
+
+
+def test_connection_failure_retries_without_claiming_delivery(tmp_path):
+    db = prepared(tmp_path)
+    def disconnected(request):
+        raise httpx.ConnectError("cannot connect")
+    with httpx.Client(transport=httpx.MockTransport(disconnected)) as client:
+        assert deliver_once(db, URL, client)
+    assert db.history()[0]["status"] == "pending"
+    assert db.claim() is None
+
+
+def test_server_error_is_uncertain_and_not_automatically_retried(tmp_path):
+    db = prepared(tmp_path)
+    with httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(503))) as client:
+        assert deliver_once(db, URL, client)
+    assert db.history()[0]["status"] == "uncertain"
+    assert db.claim() is None
+
+
+def test_webhook_rejection_is_failed_without_reposting(tmp_path):
+    db = prepared(tmp_path)
+    with httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(403))) as client:
+        assert deliver_once(db, URL, client)
+    assert db.history()[0]["status"] == "failed"
+    assert db.claim() is None
