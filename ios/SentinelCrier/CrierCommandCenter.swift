@@ -68,6 +68,21 @@ final class CrierDashboardModel: ObservableObject {
     @Published var loading = false
     @Published var lastUpdated: Date?
     @Published var preview: CrierPreviewResponse?
+    @Published var broadcastStatus = "Not recently active"
+
+    func refreshBroadcastStatus() {
+        let defaults = UserDefaults(suiteName: "group.com.tetradim.sentinelcrier")
+        let heartbeat = defaults?.double(forKey: "broadcastHeartbeatAt") ?? 0
+        let state = defaults?.string(forKey: "broadcastState") ?? "unknown"
+        let age = Date().timeIntervalSince1970 - heartbeat
+        if state == "active" && age >= 0 && age < 12 {
+            broadcastStatus = "Recently active (on-device)"
+        } else if state == "paused" && age >= 0 && age < 60 {
+            broadcastStatus = "Paused"
+        } else {
+            broadcastStatus = "Not recently active"
+        }
+    }
 
     private func endpoint(_ path: String, method: String = "GET", body: Data? = nil) throws -> URLRequest {
         guard let raw = UserDefaults.standard.string(forKey: "crier.backendURL"),
@@ -96,6 +111,7 @@ final class CrierDashboardModel: ObservableObject {
     func refresh() async {
         guard !loading else { return }
         loading = true
+        refreshBroadcastStatus()
         defer { loading = false }
         do {
             let newStatus = try await fetch("api/status", as: CrierStatusClient.Status.self)
@@ -249,7 +265,8 @@ struct CrierCommandCenter: View {
                     statusLine("Discord publisher",
                                value: model.status?.delivery_enabled == true ? "Enabled" : "Not enabled",
                                color: model.status?.delivery_enabled == true ? CrierTheme.green : CrierTheme.amber)
-                    statusLine("Webull screen", value: "Broadcast state unverified", color: CrierTheme.amber)
+                    statusLine("Screen broadcast", value: model.broadcastStatus,
+                               color: model.broadcastStatus.hasPrefix("Recently") ? CrierTheme.green : CrierTheme.amber)
                 }
                 CrierPanel(title: "Recent verified-fill activity") {
                     if model.activity.isEmpty {
@@ -364,6 +381,8 @@ struct CrierCommandCenter: View {
                 CrierPanel(title: "Webull screen observation") {
                     Text("Screen OCR observations remain pending review and never automatically publish to Discord.")
                         .font(.footnote).foregroundStyle(.secondary)
+                    Text("Last known state: \(model.broadcastStatus)")
+                        .font(.caption).foregroundStyle(.secondary)
                     ReplayKitPicker().frame(height: 54)
                 }
                 NavigationLink("Configure server and upload credentials") { SetupView() }
