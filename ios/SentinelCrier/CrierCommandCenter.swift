@@ -2,222 +2,56 @@ import SwiftUI
 import ReplayKit
 import UIKit
 
-private enum CrierTheme {
-    static let background = Color(red: 0.035, green: 0.07, blue: 0.11)
-    static let surface = Color(red: 0.075, green: 0.12, blue: 0.18)
-    static let blue = Color(red: 0.13, green: 0.58, blue: 0.98)
-    static let green = Color(red: 0.25, green: 0.85, blue: 0.56)
-    static let amber = Color(red: 1, green: 0.74, blue: 0.26)
-}
-
-struct CrierActivity: Decodable, Identifiable {
-    let id: String
-    let status: String
-    let created: Double
-    let fill: Fill
-    struct Fill: Decodable {
-        let contract: String?
-        let side: String?
-        let quantity: String?
-        let price: String?
-        let broker: String?
-        let verification: String?
-    }
-}
-
-struct CrierObservation: Decodable, Identifiable {
-    let id: String
-    let status: String
-    let evidence: Evidence
-    struct Evidence: Decodable {
-        let symbol: String
-        let side: String
-        let quantity: Int
-    }
-}
-
-struct CrierPreviewResponse: Decodable {
-    let sample: Bool
-    let payload: PreviewPayload
-    struct PreviewPayload: Decodable {
-        let content: String?
-        let embeds: [Embed]?
-        struct Embed: Decodable {
-            let title: String?
-            let description: String?
-        }
-    }
-}
-
-struct CrierPreferences: Codable {
-    var display_name = "Your trades"
-    var format = "homebrew"
-    var color = "#62d9ad"
-    var timezone = "America/Chicago"
-    var show_quantity = true
-    var show_time = true
-    var paused = false
-}
-
 @MainActor
-final class CrierDashboardModel: ObservableObject {
-    @Published var status: CrierStatusClient.Status?
-    @Published var activity: [CrierActivity] = []
-    @Published var observations: [CrierObservation] = []
-    @Published var preferences = CrierPreferences()
-    @Published var error: String?
-    @Published var loading = false
-    @Published var lastUpdated: Date?
-    @Published var preview: CrierPreviewResponse?
-    @Published var broadcastStatus = "Not recently active"
-    @Published var previewError: String?
+final class StandaloneDashboard: ObservableObject {
+    @Published var records: [StandaloneAlertStore.Record] = []
+    @Published var enabled = StandaloneConfiguration.enabled
+    @Published var configured = StandaloneConfiguration.webhook() != nil
+    @Published var message: String?
+    @Published var broadcast = "Not active"
 
-    func refreshBroadcastStatus() {
-        let defaults = UserDefaults(suiteName: "group.com.tetradim.sentinelcrier")
-        let heartbeat = defaults?.double(forKey: "broadcastHeartbeatAt") ?? 0
-        let state = defaults?.string(forKey: "broadcastState") ?? "unknown"
-        let age = Date().timeIntervalSince1970 - heartbeat
-        if state == "active" && age >= 0 && age < 12 {
-            broadcastStatus = "Recently active (on-device)"
-        } else if state == "paused" && age >= 0 && age < 60 {
-            broadcastStatus = "Paused"
+    func refresh() {
+        records = StandaloneAlertStore()?.records() ?? []
+        enabled = StandaloneConfiguration.enabled
+        configured = StandaloneConfiguration.webhook() != nil
+        let defaults = UserDefaults(suiteName: StandaloneConfiguration.group)
+        let age = Date().timeIntervalSince1970 - (defaults?.double(forKey: "broadcastHeartbeatAt") ?? 0)
+        let state = defaults?.string(forKey: "broadcastState") ?? ""
+        broadcast = state == "active" && age >= 0 && age < 12 ? "Recently active" :
+            (state == "paused" && age >= 0 && age < 60 ? "Paused" : "Not active")
+    }
+
+    func setEnabled(_ value: Bool) {
+        StandaloneConfiguration.setEnabled(value)
+        refresh()
+    }
+
+    func save(_ webhook: String) {
+        if StandaloneConfiguration.saveWebhook(webhook) {
+            message = "Webhook securely saved on this iPhone."
         } else {
-            broadcastStatus = "Not recently active"
+            message = "Invalid Discord webhook or Keychain unavailable. Check app signing."
         }
+        refresh()
     }
 
-    private func endpoint(_ path: String, method: String = "GET", body: Data? = nil) throws -> URLRequest {
-        guard let raw = UserDefaults.standard.string(forKey: "crier.backendURL"),
-              let url = URL(string: raw), url.scheme?.lowercased() == "https",
-              url.host != nil, url.user == nil, url.password == nil,
-              let token = CrierCredentials.load(), !token.isEmpty else {
-            throw CrierStatusClient.ClientError.invalidURL
-        }
-        var request = URLRequest(url: url.appendingPathComponent(path))
-        request.httpMethod = method
-        request.timeoutInterval = 12
-        request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
-        if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
-        request.httpBody = body
-        return request
+    func clear() {
+        StandaloneConfiguration.clear()
+        message = "Discord delivery disabled and webhook deleted."
+        refresh()
     }
 
-    private func fetch<T: Decodable>(_ path: String, as type: T.Type) async throws -> T {
-        let (data, response) = try await URLSession.shared.data(for: endpoint(path))
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw CrierStatusClient.ClientError.invalidResponse
-        }
-        return try JSONDecoder().decode(type, from: data)
-    }
-
-    func refresh() async {
-        guard !loading else { return }
-        loading = true
-        refreshBroadcastStatus()
-        defer { loading = false }
-        do {
-            let newStatus = try await fetch("api/status", as: CrierStatusClient.Status.self)
-            let newPreferences = try await fetch("api/settings", as: CrierPreferences.self)
-            status = newStatus
-            preferences = newPreferences
-            error = nil
-            do {
-                activity = try await fetch("api/history", as: [CrierActivity].self)
-            } catch {
-                activity = []
-                self.error = "Delivery history is unavailable."
-            }
-            do {
-                observations = try await fetch("api/screen-observations", as: [CrierObservation].self)
-            } catch {
-                observations = []
-                self.error = "Screen observation history is unavailable."
-            }
-            await refreshPreview()
-            lastUpdated = Date()
-        } catch {
-            status = nil
-            activity = []
-            observations = []
-            lastUpdated = nil
-            self.error = "Unable to refresh. Check your server connection and access token."
-        }
-    }
-
-    func refreshPreview() async {
-        do {
-            let encoder = JSONEncoder()
-            let body = try encoder.encode(PreviewRequest(settings: preferences))
-            let (data, response) = try await URLSession.shared.data(
-                for: endpoint("api/preview", method: "POST", body: body))
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                throw CrierStatusClient.ClientError.invalidResponse
-            }
-            preview = try JSONDecoder().decode(CrierPreviewResponse.self, from: data)
-            previewError = nil
-        } catch {
-            preview = nil
-            previewError = "Preview unavailable. Check your connection and alert settings."
-        }
-    }
-
-    private struct PreviewRequest: Encodable {
-        let scenario = "option_buy"
-        let settings: CrierPreferences
-    }
-
-    func savePreferences() async {
-        do {
-            let body = try JSONEncoder().encode(preferences)
-            let (data, response) = try await URLSession.shared.data(
-                for: endpoint("api/settings", method: "PUT", body: body))
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                throw CrierStatusClient.ClientError.invalidResponse
-            }
-            preferences = try JSONDecoder().decode(CrierPreferences.self, from: data)
-            error = nil
-            await refreshPreview()
-        } catch {
-            self.error = "Could not save preferences. Check the connection and display name."
-        }
-    }
-}
-
-private struct CrierPanel<Content: View>: View {
-    let title: String
-    let content: Content
-    init(title: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.content = content()
-    }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title).font(.headline).foregroundStyle(.white)
-            content
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(CrierTheme.surface, in: RoundedRectangle(cornerRadius: 16))
-    }
-}
-
-private struct CrierMetric: View {
-    let title: String
-    let value: String
-    let tint: Color
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(value).font(.title.bold()).foregroundStyle(tint)
-            Text(title).font(.caption).foregroundStyle(.white.opacity(0.7))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(CrierTheme.surface, in: RoundedRectangle(cornerRadius: 14))
+    func retryPending() async {
+        await StandaloneAlertStore()?.sendPending()
+        refresh()
     }
 }
 
 struct CrierCommandCenter: View {
-    @StateObject private var model = CrierDashboardModel()
+    @StateObject private var model = StandaloneDashboard()
+    @State private var webhook = ""
+    @State private var showDisclosure = false
+
     var body: some View {
         TabView {
             NavigationStack { dashboard }
@@ -231,212 +65,120 @@ struct CrierCommandCenter: View {
             NavigationStack { settings }
                 .tabItem { Label("Settings", systemImage: "gearshape.fill") }
         }
-        .tint(CrierTheme.blue)
         .preferredColorScheme(.dark)
-        .task { await model.refresh() }
+        .task { model.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            Task { await model.refresh() }
+            model.refresh()
         }
     }
 
     private var dashboard: some View {
         ScrollView {
-            VStack(spacing: 14) {
-                if model.status == nil {
-                    NavigationLink("Set up your secure server connection") { SetupView() }
-                        .buttonStyle(.borderedProminent)
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Standalone iPhone monitoring").font(.title2.bold())
+                Label("No PC or Crier server required", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Text("Screen observation: \(model.broadcast)")
+                Text("Discord: \(model.configured ? "Configured" : "Not configured")")
+                Text("Candidate alerts: \(model.enabled ? "Enabled" : "Disabled")")
+                Text("Start monitoring while Webull is visible. iOS requires your permission for each screen broadcast.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                ReplayKitPicker().frame(height: 56)
+                Text("Recent observations").font(.headline)
+                if model.records.isEmpty {
+                    Text("No screen observations yet.").foregroundStyle(.secondary)
                 }
-                CrierPanel(title: "Monitoring overview") {
-                    Label("Screen broadcasting requires explicit iPhone permission",
-                          systemImage: "iphone.gen3.radiowaves.left.and.right")
-                        .foregroundStyle(CrierTheme.amber)
-                    Text("A configured upload key does not mean broadcasting is active.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    ReplayKitPicker().frame(height: 54)
-                }
-                if let updated = model.lastUpdated {
-                    Text("Last refreshed \(updated.formatted(date: .omitted, time: .shortened)) · Showing up to 100 recent records")
-                        .font(.caption2).foregroundStyle(.secondary)
-                }
-                HStack(spacing: 9) {
-                    CrierMetric(title: "Observations", value: "\(model.observations.count)", tint: CrierTheme.blue)
-                    CrierMetric(title: "Delivered", value: "\(model.activity.filter { $0.status == "sent" }.count)", tint: CrierTheme.green)
-                    CrierMetric(title: "Review", value: "\(model.observations.filter { $0.status == "pending_review" }.count)", tint: CrierTheme.amber)
-                }
-                CrierPanel(title: "Connection status") {
-                    statusLine("Crier server", value: model.status == nil ? "Not verified" : "Online",
-                               color: model.status == nil ? CrierTheme.amber : CrierTheme.green)
-                    statusLine("Discord publisher",
-                               value: model.status?.sender_failed == true ? "Sender failed" : (model.status?.delivery_enabled == true ? "Enabled" : "Not enabled"),
-                               color: model.status?.sender_failed == true ? .red : (model.status?.delivery_enabled == true ? CrierTheme.green : CrierTheme.amber))
-                    statusLine("Broker fill intake",
-                               value: model.status?.intake.verified == true ? "Verified intake enabled" : "Not verified",
-                               color: model.status?.intake.verified == true ? CrierTheme.green : CrierTheme.amber)
-                    statusLine("Screen broadcast", value: model.broadcastStatus,
-                               color: model.broadcastStatus.hasPrefix("Recently") ? CrierTheme.green : CrierTheme.amber)
-                }
-                CrierPanel(title: "Recent delivery activity") {
-                    if model.activity.isEmpty {
-                        Text("No delivery records in history.").foregroundStyle(.secondary)
-                    }
-                    ForEach(model.activity.prefix(4)) { item in activityRow(item) }
-                }
-                if let error = model.error {
-                    Text(error).font(.footnote).foregroundStyle(CrierTheme.amber)
-                }
+                ForEach(model.records.prefix(5)) { row($0) }
+                Button("Refresh") { model.refresh() }
             }.padding()
-        }
-        .background(CrierTheme.background)
-        .navigationTitle("Sentinel Crier")
-        .toolbar { Button { Task { await model.refresh() } } label: {
-            Image(systemName: "arrow.clockwise")
-        }.disabled(model.loading) }
-        .refreshable { await model.refresh() }
+        }.navigationTitle("Sentinel Crier")
+            .refreshable { model.refresh() }
     }
 
-    private func statusLine(_ title: String, value: String, color: Color) -> some View {
-        HStack {
-            Circle().fill(color).frame(width: 8, height: 8)
-            Text(title)
-            Spacer()
-            Text(value).font(.caption).foregroundStyle(color)
-        }
-    }
-
-    private func activityRow(_ item: CrierActivity) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(item.fill.contract ?? "Unknown contract").font(.subheadline.bold())
-                Text("\(item.fill.side ?? "—") · \(item.fill.quantity ?? "—") @ \(item.fill.price ?? "—")")
-                    .font(.caption).foregroundStyle(.secondary)
-                Text(item.fill.verification == "broker_reported" ? "Broker-reported fill" : (item.fill.verification == "manual_confirmed" ? "Manually confirmed receipt" : "Verification not established"))
-                    .font(.caption2).foregroundStyle(item.fill.verification == "broker_reported" ? CrierTheme.green : CrierTheme.amber)
-            }
-            Spacer()
-            Text(item.status.capitalized).font(.caption.bold())
-                .foregroundStyle(item.status == "sent" ? CrierTheme.green : CrierTheme.amber)
-        }.padding(.vertical, 5)
+    private func row(_ record: StandaloneAlertStore.Record) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("\(record.evidence.symbol) \(record.evidence.expiration) \(record.evidence.strike)\(record.evidence.right)")
+                .font(.headline)
+            Text("\(record.evidence.side) \(record.evidence.quantity) @ $\(record.evidence.fillPrice)")
+            Text("Unverified OCR candidate · \(record.state.capitalized)")
+                .font(.caption).foregroundStyle(.orange)
+            Text(record.note).font(.caption2).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(12)
+            .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var activity: some View {
         List {
-            Section("Delivery history · provenance shown") {
-                if model.activity.isEmpty { Text("No delivery records.").foregroundStyle(.secondary) }
-                ForEach(model.activity) { activityRow($0) }
+            Section("On-device observations — not broker-verified") {
+                if model.records.isEmpty { Text("No observations.") }
+                ForEach(model.records) { row($0) }
             }
-            Section("Untrusted screen observations — never auto-published") {
-                if model.observations.isEmpty { Text("No screen observations.").foregroundStyle(.secondary) }
-                ForEach(model.observations) { item in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(item.evidence.symbol).font(.headline)
-                            Text("\(item.evidence.side) · \(item.evidence.quantity) contracts").font(.caption)
-                        }
-                        Spacer()
-                        Text("Pending review").font(.caption).foregroundStyle(CrierTheme.amber)
-                    }
-                }
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .background(CrierTheme.background)
-        .navigationTitle("Activity")
-        .refreshable { await model.refresh() }
+        }.navigationTitle("Activity").refreshable { model.refresh() }
     }
 
     private var alerts: some View {
         Form {
-            Section("Message appearance") {
-                TextField("Display name", text: $model.preferences.display_name)
-                Picker("Format", selection: $model.preferences.format) {
-                    Text("Homebrew Markdown").tag("homebrew")
-                    Text("Discord rich card").tag("card")
-                    Text("Plain text").tag("text")
-                    Text("Echo BTO only").tag("echo")
-                }
-                Toggle("Show quantity", isOn: $model.preferences.show_quantity)
-                Toggle("Show time", isOn: $model.preferences.show_time)
-                Button("Save alert design") { Task { await model.savePreferences() } }
+            Section("Discord candidate alerts") {
+                Toggle("Send unverified OCR observations", isOn: Binding(
+                    get: { model.enabled },
+                    set: { model.setEnabled($0) }
+                )).disabled(!model.configured)
+                Text("Alerts are clearly marked UNVERIFIED. Screen OCR is not proof of a broker execution.")
+                    .font(.footnote)
+                Button("Retry pending alerts") { Task { await model.retryPending() } }
+                    .disabled(!model.enabled || !model.configured)
+                Text("Uncertain deliveries are never retried automatically, to avoid duplicate Discord posts.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Illustrative preview — not a real alert") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("🟢 SPY $600C · 10/16/2026").font(.headline)
-                    Text(model.preview?.payload.content ?? model.preview?.payload.embeds?.first?.title ?? "Preview unavailable for this format.")
-                        .font(.subheadline)
-                    if let description = model.preview?.payload.embeds?.first?.description {
-                        Text(description).font(.caption).foregroundStyle(.secondary)
-                    }
-                    Text(model.preferences.display_name).foregroundStyle(.secondary)
-                    Text("SAMPLE · NOT SENT").font(.caption.bold()).foregroundStyle(CrierTheme.amber)
-                    if let previewError = model.previewError {
-                        Text(previewError).font(.caption).foregroundStyle(CrierTheme.amber)
-                    }
-                }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(CrierTheme.surface, in: RoundedRectangle(cornerRadius: 12))
-            }
-            if let error = model.error { Text(error).foregroundStyle(CrierTheme.amber) }
-        }.navigationTitle("Alert Designer")
-            .task { await model.refreshPreview() }
+        }.navigationTitle("Alerts")
     }
 
     private var connections: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                CrierPanel(title: "Crier backend") {
-                    statusLine("Connection", value: model.status == nil ? "Not verified" : "Online",
-                               color: model.status == nil ? CrierTheme.amber : CrierTheme.green)
+        Form {
+            Section("Discord webhook — no server required") {
+                SecureField("Paste Discord webhook URL", text: $webhook)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button("Save webhook on iPhone") {
+                    model.save(webhook.trimmingCharacters(in: .whitespacesAndNewlines))
+                    webhook = ""
                 }
-                CrierPanel(title: "Discord") {
-                    statusLine("Webhook", value: model.status?.discord_configured == true ? "Configured" : "Not configured",
-                               color: model.status?.discord_configured == true ? CrierTheme.green : CrierTheme.amber)
-                    if model.status?.sender_failed == true {
-                        Text("The Discord sender has stopped unexpectedly. Check backend logs before relying on alerts.")
-                            .font(.caption).foregroundStyle(.red)
-                    }
-                }
-                CrierPanel(title: "Webull screen observation") {
-                    Text("Screen OCR observations remain pending review and never automatically publish to Discord.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                    Text("Last known state: \(model.broadcastStatus)")
-                        .font(.caption).foregroundStyle(.secondary)
-                    ReplayKitPicker().frame(height: 54)
-                }
-                NavigationLink("Configure server and upload credentials") { SetupView() }
-                    .buttonStyle(.borderedProminent)
-            }.padding()
-        }.background(CrierTheme.background).navigationTitle("Connections")
+                Text(model.configured ? "Webhook securely configured" : "Webhook not configured")
+                    .foregroundStyle(model.configured ? .green : .orange)
+                Button("Remove webhook", role: .destructive) { model.clear() }
+                if let message = model.message { Text(message).font(.caption) }
+                Text("Create a webhook in your Discord server's channel settings. The URL is a secret; do not share it.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Section("Screen capture") {
+                ReplayKitPicker().frame(height: 56)
+                Text("You must explicitly start broadcasting when you want Webull monitored.")
+                    .font(.footnote)
+            }
+        }.navigationTitle("Connections")
     }
 
     private var settings: some View {
         Form {
-            Section("Monitoring") {
-                Toggle("Pause Discord delivery", isOn: $model.preferences.paused)
-                Text("Pausing delivery does not stop observation capture.")
-                    .font(.caption).foregroundStyle(.secondary)
-                Button("Save monitoring preference") { Task { await model.savePreferences() } }
+            Section("Privacy and reliability") {
+                Text("No PC, backend URL, brokerage password, or remote Crier server is required.")
+                Text("Only structured observations are stored locally. Screenshots and raw OCR text are not retained.")
+                Text("Repeated identical receipts may be suppressed to avoid duplicate alerts.")
+                Text("iOS can stop the broadcast extension; this is not always-on background monitoring.")
             }
-            Section("Observation queue") {
-                Text("Pending local observations: \(ScreenEvidenceQueue()?.pendingCount() ?? 0) of 100")
-                if let failure = UserDefaults(suiteName: "group.com.tetradim.sentinelcrier")?.double(forKey: "lastQueueWriteFailureAt"), failure > 0 {
-                    Text("Observation storage failed at \(Date(timeIntervalSince1970: failure).formatted(date: .abbreviated, time: .shortened)). Some evidence may be missing.")
+            Section("Local history") {
+                Text("\(model.records.count) observations (up to 250 retained)")
+                Text("\(model.records.filter { $0.state == "uncertain" }.count) uncertain deliveries")
+                if let failed = UserDefaults(suiteName: StandaloneConfiguration.group)?
+                    .double(forKey: "standaloneWriteFailureAt"), failed > 0 {
+                    Text("A local storage write failed at \(Date(timeIntervalSince1970: failed).formatted()).")
                         .foregroundStyle(.red)
                 }
-                if let overflow = UserDefaults(suiteName: "group.com.tetradim.sentinelcrier")?.double(forKey: "lastQueueOverflowAt"), overflow > 0 {
-                    Text("Queue was full: \(Date(timeIntervalSince1970: overflow).formatted(date: .abbreviated, time: .shortened)). Some new observations may have been missed.")
-                        .foregroundStyle(CrierTheme.amber)
-                }
-                Text("When the queue is full, new observations are not stored until earlier evidence is uploaded. The broadcast extension retries only while active.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Section("Privacy and credentials") {
-                NavigationLink("Server credentials and screen upload") { SetupView() }
-                Text("Disabling screen upload in Connections erases queued observations on this device.")
-                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("About") {
-                Text("Sentinel Crier · Experimental iOS companion")
-                Text("OCR observations are untrusted evidence, not verified executions.")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text("Sentinel Crier · Standalone iPhone beta")
+                Text("Candidate alerts are not broker-verified fills.")
+                    .foregroundStyle(.orange)
             }
         }.navigationTitle("Settings")
     }
