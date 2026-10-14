@@ -20,6 +20,7 @@ from .samples import sample
 from .delivery import deliver_once
 from .lock import single_process
 from .intake_routes import intake_router
+from .screen_observations import screen_observation_router
 from .monitors import start_monitor, stop_monitor
 
 STATIC = Path(__file__).parent / "static"
@@ -75,6 +76,7 @@ def create_app(config=None):
             raise HTTPException(401, "Unlock with your Crier access token")
 
     app.include_router(intake_router(config, store, auth))
+    app.include_router(screen_observation_router(store, auth))
 
     @app.middleware("http")
     async def headers(request: Request, call_next):
