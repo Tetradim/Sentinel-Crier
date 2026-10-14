@@ -73,6 +73,18 @@ class Store:
         outcome, fill = "queued", None
         old_qty = Decimal(old["qty"]) if old else Decimal(0)
         old_price = Decimal(old["price"]) if old else Decimal(0)
+        # Reconcile exact broker evidence with an earlier manual receipt.
+        # Never emit a duplicate fill; disagreement still requires review.
+        manual_identity = json.dumps(identity_parts + ["manual_confirmed"])
+        if (old and snap.verification == "broker_reported"
+                and old["identity"] == manual_identity
+                and not db.execute("SELECT 1 FROM blocked_orders WHERE id=?", (key,)).fetchone()
+                and snap.cumulative_qty == old_qty
+                and snap.average_price == old_price):
+            db.execute("UPDATE orders SET identity=? WHERE id=?", (identity, key))
+            db.execute("INSERT INTO audit(time,outcome,data) VALUES (?,?,?)",
+                       (time.time(), "reconciled", json.dumps(data)))
+            return {"outcome": "reconciled", "fill": None}
         if db.execute("SELECT 1 FROM blocked_orders WHERE id=?", (key,)).fetchone(): outcome = "review"
         elif old and identity != old["identity"]: outcome = "review"
         elif snap.cumulative_qty < old_qty: outcome = "stale"
