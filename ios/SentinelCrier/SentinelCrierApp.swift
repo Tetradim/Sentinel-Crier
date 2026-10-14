@@ -4,7 +4,7 @@ import ReplayKit
 @main
 struct SentinelCrierApp: App {
     var body: some Scene {
-        WindowGroup { SetupView() }
+        WindowGroup { CrierCommandCenter() }
     }
 }
 
