@@ -380,6 +380,11 @@ struct CrierCommandCenter: View {
                     .font(.caption).foregroundStyle(.secondary)
                 Button("Save monitoring preference") { Task { await model.savePreferences() } }
             }
+            Section("Observation queue") {
+                Text("Pending local observations: \(ScreenEvidenceQueue()?.pendingCount() ?? 0) of 100")
+                Text("When the queue is full, new observations are not stored until earlier evidence is uploaded. The broadcast extension retries only while active.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("Privacy and credentials") {
                 NavigationLink("Server credentials and screen upload") { SetupView() }
                 Text("Disabling screen upload in Connections erases queued observations on this device.")
