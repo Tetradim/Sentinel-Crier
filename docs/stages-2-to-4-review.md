@@ -31,3 +31,12 @@ Open release blockers: no confirmed passing Xcode build, XCTest, or current back
 ## Final code review disposition
 
 **Feature implementation: advanced, with unresolved verification gates.** The repository now contains the intended UI and supporting infrastructure, but no claim is made that the complete bot is installed, running or fully automatic. Before using the nearby physical iPhone, first obtain a passing macOS build and a signed development or TestFlight build. Refer to the linked release checklist for acceptance criteria.
+
+
+## Follow-up implementation pass (2026-10-14)
+
+Stage 3 source hardening now includes a three-frame OCR-absence threshold to avoid duplicate receipts caused by a single failed recognition frame; lifecycle resets are explicit and XCTest covers both behaviors. The on-device evidence queue preserves existing records on overflow, exposes an overflow warning, applies iOS file protection, and verifies that credentials have not changed before processing or deleting a submitted record. Discord regression tests cover connection failures, HTTP 503 ambiguous outcomes, permanent HTTP 403 failures, rate limiting, and restart recovery.
+
+Stage 4 CI now checks backend tests on Python 3.11 and 3.12, compiles Python modules, and exposes simulator runtime diagnostics in the iOS build job. This is a **source implementation completion checkpoint, not an executed test result**.
+
+**Unresolved acceptance criteria:** an upload already in flight cannot be guaranteed to be revoked at the remote server by locally clearing credentials; rotate/revoke the server upload key to enforce remote denial. ReplayKit extension execution and App Group/Keychain sharing still require signed device testing. The backend must be checked for independently verified Webull execution coverage. A passing CI result and signed installable build are still required before declaring Stage 3 verified or Stage 4 complete.
