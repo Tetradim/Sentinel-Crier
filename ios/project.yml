@@ -29,6 +29,8 @@ targets:
     sources:
       - path: SentinelCrier/BroadcastUpload/SampleHandler.swift
       - path: SentinelCrier/Recognition/TradeRecognition.swift
+      - path: SentinelCrier/Recognition/BrokerTemplates.swift
+      - path: SentinelCrier/Recognition/ScreenEvidence.swift
     info:
       path: BroadcastUpload-Info.plist
     settings:
@@ -37,3 +39,16 @@ targets:
         CODE_SIGN_STYLE: Automatic
         APPLICATION_EXTENSION_API_ONLY: YES
         SKIP_INSTALL: YES
+
+  RecognitionTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: SentinelCrier/Recognition/TradeRecognitionTests.swift
+    dependencies:
+      - target: BroadcastUpload
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier.RecognitionTests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
