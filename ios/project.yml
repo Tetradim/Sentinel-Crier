@@ -28,6 +28,7 @@ targets:
     platform: iOS
     sources:
       - path: SentinelCrier/BroadcastUpload/SampleHandler.swift
+      - path: SentinelCrier/Recognition/TradeRecognition.swift
     info:
       path: BroadcastUpload-Info.plist
     settings:
