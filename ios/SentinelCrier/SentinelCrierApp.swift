@@ -31,6 +31,7 @@ struct SetupView: View {
                     SecureField("Crier access token", text: $token)
                     Button("Forget saved token", role: .destructive) {
                         CrierCredentials.clear()
+                        backendURL = ""
                         token = ""
                         connectionMessage = "Saved token removed."
                     }
@@ -56,7 +57,7 @@ struct SetupView: View {
                     Button("Disable screen upload", role: .destructive) {
                         ScreenUploadConfiguration.clear()
                         uploadToken = ""
-                        uploadMessage = "Screen upload disabled."
+                        uploadMessage = "Screen upload disabled. Revoke the upload key on the server to reject any in-flight requests."
                     }
                     Text(uploadMessage).font(.footnote)
                     Text("Use CRIER_SCREEN_UPLOAD_KEY, not your main Crier access token. Configure this on the server first.")
@@ -101,6 +102,7 @@ struct SetupView: View {
             connectionMessage = status.delivery_enabled
                 ? "Connected · Discord delivery enabled"
                 : "Connected · preview mode"
+            backendURL = url.absoluteString
         } catch {
             connectionMessage = "Connection failed. Check the server URL and access token."
         }
