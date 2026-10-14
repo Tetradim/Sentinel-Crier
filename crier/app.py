@@ -76,7 +76,7 @@ def create_app(config=None):
             raise HTTPException(401, "Unlock with your Crier access token")
 
     app.include_router(intake_router(config, store, auth))
-    app.include_router(screen_observation_router(store, auth))
+    app.include_router(screen_observation_router(store, auth, config.screen_upload_key))
 
     @app.middleware("http")
     async def headers(request: Request, call_next):
