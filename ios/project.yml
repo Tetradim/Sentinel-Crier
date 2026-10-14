@@ -17,6 +17,9 @@ targets:
       - path: SentinelCrier/CrierStatusClient.swift
       - path: SentinelCrier/CrierCredentials.swift
       - path: SentinelCrier/ScreenUploadConfiguration.swift
+      - path: SentinelCrier/Recognition/ScreenEvidenceQueue.swift
+      - path: SentinelCrier/Recognition/ScreenEvidence.swift
+      - path: SentinelCrier/Recognition/TradeRecognition.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier
