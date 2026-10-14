@@ -11,6 +11,9 @@ struct SentinelCrierApp: App {
 struct SetupView: View {
     @AppStorage("crier.backendURL") private var backendURL = ""
     @State private var showHelp = false
+    @State private var token = ""
+    @State private var connectionMessage = "Not connected"
+    @State private var checkingConnection = false
 
     var body: some View {
         NavigationStack {
@@ -23,6 +26,12 @@ struct SetupView: View {
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
                         .autocorrectionDisabled()
+                    SecureField("Crier access token", text: $token)
+                    Button(checkingConnection ? "Checking…" : "Check connection") {
+                        Task { await checkConnection() }
+                    }
+                    .disabled(checkingConnection)
+                    Text(connectionMessage).font(.footnote)
                     Text("Use a private HTTPS Crier server. Never paste brokerage passwords or Discord webhooks here.")
                         .font(.footnote)
                 }
@@ -45,6 +54,23 @@ struct SetupView: View {
             } message: {
                 Text("API monitoring is hosted. Screen monitoring requires an active, user-authorized capture session. Neither method places trades.")
             }
+        }
+    }
+    @MainActor
+    private func checkConnection() async {
+        guard let url = URL(string: backendURL) else {
+            connectionMessage = "Enter a valid HTTPS server URL."
+            return
+        }
+        checkingConnection = true
+        defer { checkingConnection = false }
+        do {
+            let status = try await CrierStatusClient(baseURL: url, accessToken: token).status()
+            connectionMessage = status.delivery_enabled
+                ? "Connected · Discord delivery enabled"
+                : "Connected · preview mode"
+        } catch {
+            connectionMessage = "Connection failed. Check the server URL and access token."
         }
     }
 }
