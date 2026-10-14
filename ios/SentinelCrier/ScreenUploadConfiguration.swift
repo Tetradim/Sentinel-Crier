@@ -7,15 +7,23 @@ enum ScreenUploadConfiguration {
     private static let group = "group.com.tetradim.sentinelcrier"
     private static let service = "com.tetradim.sentinelcrier.screen-upload"
 
+    private static var sharedKeychainGroup: String? {
+        guard let group = Bundle.main.object(forInfoDictionaryKey: "CrierSharedKeychainGroup") as? String,
+              !group.isEmpty, !group.contains("$(") else { return nil }
+        return group
+    }
+
     static func configure(baseURL: URL, token: String) -> Bool {
         guard baseURL.scheme?.lowercased() == "https",
               baseURL.host != nil, baseURL.user == nil, baseURL.password == nil,
               !token.isEmpty, let bytes = token.data(using: .utf8),
+              let accessGroup = sharedKeychainGroup,
               let defaults = UserDefaults(suiteName: group) else { return false }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: "upload"
+            kSecAttrAccount as String: "upload",
+            kSecAttrAccessGroup as String: accessGroup
         ]
         var attributes = query
         attributes[kSecValueData as String] = bytes
@@ -31,7 +39,8 @@ enum ScreenUploadConfiguration {
     }
 
     static func load() -> (URL, String)? {
-        guard let defaults = UserDefaults(suiteName: group),
+        guard let accessGroup = sharedKeychainGroup,
+              let defaults = UserDefaults(suiteName: group),
               let rawURL = defaults.string(forKey: "backendURL"),
               let url = URL(string: rawURL),
               url.scheme?.lowercased() == "https", url.host != nil,
@@ -40,6 +49,7 @@ enum ScreenUploadConfiguration {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: "upload",
+            kSecAttrAccessGroup as String: accessGroup,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
@@ -51,6 +61,7 @@ enum ScreenUploadConfiguration {
     }
 
     static func clear() {
+        guard let accessGroup = sharedKeychainGroup else { return }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
