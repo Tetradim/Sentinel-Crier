@@ -80,11 +80,11 @@ enum TradeRecognition {
     }
 }
 
-/// Local frame deduplication only; cross-device/API reconciliation belongs on the backend.
+/// Coalesce adjacent OCR frames only (3 seconds by default). Never treat this\n/// fingerprint as a broker execution ID: two genuine fills can be identical.\n/// Cross-device/API reconciliation belongs on the backend.
 final class ScreenObservationDeduplicator {
     private var seen: [String: Date] = [:]
     private let retention: TimeInterval
-    init(retention: TimeInterval = 300) { self.retention = retention }
+    init(retention: TimeInterval = 3) { self.retention = retention }
     func shouldAccept(_ candidate: ScreenTradeCandidate, at now: Date = Date()) -> Bool {
         seen = seen.filter { now.timeIntervalSince($0.value) < retention }
         guard seen[candidate.fingerprint] == nil else { return false }
