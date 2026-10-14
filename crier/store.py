@@ -75,7 +75,7 @@ class Store:
         old_price = Decimal(old["price"]) if old else Decimal(0)
         # Reconcile exact broker evidence with an earlier manual receipt.
         # Never emit a duplicate fill; disagreement still requires review.
-        manual_identity = json.dumps(identity_parts + ["manual_confirmed"])
+        manual_identity = json.dumps(identity_parts + ["user_confirmed"])
         if (old and snap.verification == "broker_reported"
                 and old["identity"] == manual_identity
                 and not db.execute("SELECT 1 FROM blocked_orders WHERE id=?", (key,)).fetchone()
