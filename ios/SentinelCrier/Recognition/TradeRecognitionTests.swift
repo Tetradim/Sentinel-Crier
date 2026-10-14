@@ -41,6 +41,18 @@ final class TradeRecognitionTests: XCTestCase {
         XCTAssertFalse(dedup.shouldAccept(trade))
     }
 
+    func testSingleMissedFrameDoesNotDuplicateReceipt() {
+        guard case .candidate(let trade) = BrokerScreenTemplate(name: "webull").recognize(lines: receipt) else {
+            return XCTFail("Missing candidate")
+        }
+        let dedup = ScreenObservationDeduplicator()
+        XCTAssertTrue(dedup.shouldAccept(trade))
+        dedup.screenChanged()
+        XCTAssertFalse(dedup.shouldAccept(trade))
+        dedup.reset()
+        XCTAssertTrue(dedup.shouldAccept(trade))
+    }
+
     func testNoOrderSubmission() {
         XCTAssertEqual(BrokerScreenTemplate(name: "webull").recognize(lines: receipt + ["ORDER SUBMITTED"]), .noFill)
     }
@@ -59,7 +71,11 @@ final class TradeRecognitionTests: XCTestCase {
         XCTAssertFalse(dedup.shouldAccept(trade, at: start.addingTimeInterval(1)))
         XCTAssertFalse(dedup.shouldAccept(trade, at: start.addingTimeInterval(4)))
         dedup.screenChanged()
-        XCTAssertTrue(dedup.shouldAccept(trade, at: start.addingTimeInterval(5)))
+        XCTAssertFalse(dedup.shouldAccept(trade, at: start.addingTimeInterval(5)))
+        dedup.screenChanged()
+        dedup.screenChanged()
+        dedup.screenChanged()
+        XCTAssertTrue(dedup.shouldAccept(trade, at: start.addingTimeInterval(8)))
     }
 
 }
