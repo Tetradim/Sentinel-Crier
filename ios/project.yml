@@ -13,6 +13,8 @@ targets:
     platform: iOS
     sources:
       - path: SentinelCrier/SentinelCrierApp.swift
+      - path: SentinelCrier/StandaloneConfiguration.swift
+      - path: SentinelCrier/StandaloneAlertStore.swift
       - path: SentinelCrier/CrierCommandCenter.swift
       - path: SentinelCrier/CrierStatusClient.swift
       - path: SentinelCrier/CrierCredentials.swift
@@ -37,6 +39,8 @@ targets:
     platform: iOS
     sources:
       - path: SentinelCrier/BroadcastUpload/SampleHandler.swift
+      - path: SentinelCrier/StandaloneConfiguration.swift
+      - path: SentinelCrier/StandaloneAlertStore.swift
       - path: SentinelCrier/Recognition/TradeRecognition.swift
       - path: SentinelCrier/Recognition/BrokerTemplates.swift
       - path: SentinelCrier/Recognition/ScreenEvidence.swift
