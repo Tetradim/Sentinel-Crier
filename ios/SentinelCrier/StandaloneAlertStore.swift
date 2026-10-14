@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// Durable, on-device observations. The broadcast extension is short-lived, so
 /// network ambiguity is kept as "uncertain" rather than blindly resending.
@@ -67,6 +68,13 @@ final class StandaloneAlertStore {
     }
 
     func sendPending() async {
+        // Prevent the app and ReplayKit extension from sending the same record concurrently.
+        let lockPath = folder.appendingPathComponent("delivery.lock").path
+        let fd = open(lockPath, O_CREAT | O_RDWR, mode_t(0o600))
+        guard fd >= 0 else { return }
+        defer { close(fd) }
+        guard flock(fd, LOCK_EX | LOCK_NB) == 0 else { return }
+        defer { flock(fd, LOCK_UN) }
         guard StandaloneConfiguration.enabled,
               let webhook = StandaloneConfiguration.webhook() else { return }
         for var record in records().reversed().filter({ $0.state == "pending" }).prefix(10) {
