@@ -58,8 +58,9 @@ def test_upload_and_read_have_separate_credentials(tmp_path):
 def test_replayed_evidence_cannot_create_delivery(tmp_path):
     client, store = make_client(tmp_path)
     upload = {"Authorization": "Bearer " + "u" * 40}
+    original = evidence()
     for _ in range(3):
-        assert client.post("/api/screen-observations", headers=upload, json=evidence()).status_code == 202
+        assert client.post("/api/screen-observations", headers=upload, json=original).status_code == 202
     assert store.history() == []
     rows = client.get("/api/screen-observations",
                       headers={"Authorization": "Bearer " + "a" * 40}).json()
