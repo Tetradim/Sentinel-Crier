@@ -122,7 +122,7 @@ final class StandaloneAlertStore {
                     }
                 } else if http.statusCode == 429 {
                     let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-                    let bodyDelay = (object?["retry_after"] as? NSNumber)?.doubleValue
+                    let bodyDelay = (object?["retry_after"] as? NSNumber)?.doubleValue ?? Double(object?["retry_after"] as? String ?? "")
                     let headerDelay = Double(http.value(forHTTPHeaderField: "Retry-After") ?? "")
                     let delay = bodyDelay ?? headerDelay ?? 60
                     let boundedDelay = delay.isFinite && delay > 0 ? min(delay, 86400) : 60
