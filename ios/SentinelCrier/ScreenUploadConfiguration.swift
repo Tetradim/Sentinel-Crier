@@ -6,7 +6,6 @@ import Security
 enum ScreenUploadConfiguration {
     private static let group = "group.com.tetradim.sentinelcrier"
     private static let service = "com.tetradim.sentinelcrier.screen-upload"
-    private static let accessGroup = "com.tetradim.sentinelcrier.shared"
 
     static func configure(baseURL: URL, token: String) -> Bool {
         guard baseURL.scheme?.lowercased() == "https",
@@ -16,8 +15,7 @@ enum ScreenUploadConfiguration {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: "upload",
-            kSecAttrAccessGroup as String: accessGroup
+            kSecAttrAccount as String: "upload"
         ]
         var attributes = query
         attributes[kSecValueData as String] = bytes
@@ -42,7 +40,6 @@ enum ScreenUploadConfiguration {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: "upload",
-            kSecAttrAccessGroup as String: accessGroup,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
