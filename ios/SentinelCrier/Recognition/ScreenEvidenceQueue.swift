@@ -27,6 +27,13 @@ final class ScreenEvidenceQueue {
     }
 
     func enqueue(_ evidence: ScreenEvidence) {
+        // Configuration.clear() may remove the directory while the extension is running.
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        } catch {
+            recordQueueFailure()
+            return
+        }
         guard let data = try? JSONEncoder().encode(evidence) else { return }
         let file = folder.appendingPathComponent(evidence.evidenceId + ".json")
         // Do not silently discard the oldest evidence during an outage.
@@ -35,7 +42,16 @@ final class ScreenEvidenceQueue {
             UserDefaults(suiteName: "group.com.tetradim.sentinelcrier")?.set(Date().timeIntervalSince1970, forKey: "lastQueueOverflowAt")
             return
         }
-        try? data.write(to: file, options: [.atomic, .completeFileProtectionUnlessOpen])
+        do {
+            try data.write(to: file, options: [.atomic, .completeFileProtectionUnlessOpen])
+        } catch {
+            recordQueueFailure()
+        }
+    }
+
+    private func recordQueueFailure() {
+        UserDefaults(suiteName: "group.com.tetradim.sentinelcrier")?.set(
+            Date().timeIntervalSince1970, forKey: "lastQueueWriteFailureAt")
     }
 
     func flush() async {
