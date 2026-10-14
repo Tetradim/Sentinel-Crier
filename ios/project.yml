@@ -47,8 +47,8 @@ targets:
     platform: iOS
     sources:
       - path: SentinelCrier/Recognition/TradeRecognitionTests.swift
-    dependencies:
-      - target: BroadcastUpload
+      - path: SentinelCrier/Recognition/TradeRecognition.swift
+      - path: SentinelCrier/Recognition/BrokerTemplates.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier.RecognitionTests
