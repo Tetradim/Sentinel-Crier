@@ -16,13 +16,11 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer,
                                       with sampleBufferType: RPSampleBufferType) {
-        guard sampleBufferType == .video,
-              let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        // Keep the frame alive while Vision runs asynchronously.
-        CVPixelBufferRetain(pixelBuffer)
+        guard sampleBufferType == .video else { return }
+        // Capturing sampleBuffer retains it until OCR finishes.
         queue.async { [weak self] in
-            defer { CVPixelBufferRelease(pixelBuffer) }
-            guard let self = self else { return }
+            guard let self = self,
+                  let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
             let now = ProcessInfo.processInfo.systemUptime
             guard now - self.lastSampleAt >= self.interval else { return }
             self.lastSampleAt = now
