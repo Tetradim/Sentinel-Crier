@@ -33,5 +33,12 @@ struct CrierStatusClient {
         let delivery_enabled: Bool
         let discord_configured: Bool
         let paused: Bool
+        let sender_failed: Bool
+        let webull_verified: Bool
+        let intake: Intake
+        struct Intake: Decodable {
+            let configured: Bool
+            let verified: Bool
+        }
     }
 }
