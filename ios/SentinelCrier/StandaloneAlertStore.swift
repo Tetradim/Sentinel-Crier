@@ -10,6 +10,7 @@ final class StandaloneAlertStore {
         var state: String
         var note: String
         var createdAt: Date
+        var discordMessageId: String? = nil
     }
 
     private let folder: URL
@@ -75,10 +76,13 @@ final class StandaloneAlertStore {
         defer { close(fd) }
         guard flock(fd, LOCK_EX | LOCK_NB) == 0 else { return }
         defer { flock(fd, LOCK_UN) }
+        let shared = UserDefaults(suiteName: StandaloneConfiguration.group)
+        guard (shared?.double(forKey: "discordRetryAt") ?? 0) <= Date().timeIntervalSince1970 else { return }
         guard StandaloneConfiguration.enabled,
               let webhook = StandaloneConfiguration.webhook() else { return }
         for var record in records().reversed().filter({ $0.state == "pending" }).prefix(10) {
-            guard StandaloneConfiguration.enabled,
+            guard (shared?.double(forKey: "discordRetryAt") ?? 0) <= Date().timeIntervalSince1970,
+                  StandaloneConfiguration.enabled,
                   StandaloneConfiguration.webhook() == webhook else { break }
             // Mark uncertain BEFORE the request. A crash or timeout must not duplicate a message.
             record.state = "uncertain"
@@ -89,7 +93,10 @@ final class StandaloneAlertStore {
                 "\(e.broker) · \(e.symbol) \(e.expiration) \(e.strike)\(e.right) · " +
                 "\(e.side) \(e.quantity) @ $\(e.fillPrice)\n" +
                 "Observed via user-authorized iPhone screen OCR. Verify against broker records."
-            var request = URLRequest(url: webhook)
+            guard var parts = URLComponents(url: webhook, resolvingAgainstBaseURL: false) else { break }
+            parts.queryItems = [URLQueryItem(name: "wait", value: "true")]
+            guard let confirmedURL = parts.url else { break }
+            var request = URLRequest(url: confirmedURL)
             request.httpMethod = "POST"
             request.timeoutInterval = 10
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -97,16 +104,31 @@ final class StandaloneAlertStore {
                 "content": message, "allowed_mentions": ["parse": []]
             ])
             do {
-                let (_, response) = try await URLSession.shared.data(for: request)
+                let (data, response) = try await URLSession.shared.data(for: request)
                 guard let http = response as? HTTPURLResponse else { break }
-                if (200..<300).contains(http.statusCode) {
-                    record.state = "sent"
-                    record.note = "Discord accepted unverified observation"
-                    _ = write(record)
+                if http.statusCode == 200 {
+                    // wait=true must return a created Discord message with a real ID.
+                    if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let messageId = object["id"] as? String,
+                       !messageId.isEmpty, messageId.allSatisfy({ $0.isNumber }) {
+                        record.discordMessageId = messageId
+                        record.state = "sent"
+                        record.note = "Discord message confirmed: " + messageId
+                        _ = write(record)
+                    } else {
+                        record.note = "Discord response lacked a confirmed message ID; delivery uncertain"
+                        _ = write(record)
+                        break
+                    }
                 } else if http.statusCode == 429 {
-                    // Discord explicitly refused this attempt; leave it queued for a later session.
+                    let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+                    let bodyDelay = (object?["retry_after"] as? NSNumber)?.doubleValue
+                    let headerDelay = Double(http.value(forHTTPHeaderField: "Retry-After") ?? "")
+                    let delay = bodyDelay ?? headerDelay ?? 60
+                    let boundedDelay = delay.isFinite && delay > 0 ? min(delay, 86400) : 60
+                    shared?.set(Date().timeIntervalSince1970 + boundedDelay, forKey: "discordRetryAt")
                     record.state = "pending"
-                    record.note = "Rate limited; waiting for next retry"
+                    record.note = "Discord rate limit; retry after " + String(boundedDelay) + " seconds"
                     _ = write(record)
                     break
                 } else {
