@@ -4,6 +4,7 @@ import Foundation
 /// Files are in the app-group container and use a bounded retention limit.
 final class ScreenEvidenceQueue {
     private let folder: URL
+    private let limit = 100
 
     init?() {
         guard let root = FileManager.default.containerURL(
@@ -28,9 +29,10 @@ final class ScreenEvidenceQueue {
     func enqueue(_ evidence: ScreenEvidence) {
         guard let data = try? JSONEncoder().encode(evidence) else { return }
         let file = folder.appendingPathComponent(evidence.evidenceId + ".json")
-        // Evidence UUID remains stable across retries.
+        // Do not silently discard the oldest evidence during an outage.
+        // Once full, retain existing receipts until they can be delivered.
+        guard FileManager.default.fileExists(atPath: file.path) || pendingCount() < limit else { return }
         try? data.write(to: file, options: .atomic)
-        prune()
     }
 
     func flush() async {
@@ -41,7 +43,8 @@ final class ScreenEvidenceQueue {
             at: folder, includingPropertiesForKeys: nil
         ) else { return }
         for file in files.filter({ $0.pathExtension == "json" }).sorted(by: { $0.lastPathComponent < $1.lastPathComponent }).prefix(12) {
-            guard ScreenUploadConfiguration.load() != nil else { break }
+            guard let current = ScreenUploadConfiguration.load(),
+                  current.0 == base, current.1 == token else { break }
             guard let data = try? Data(contentsOf: file) else { continue }
             var request = URLRequest(url: endpoint)
             request.httpMethod = "POST"
@@ -53,7 +56,11 @@ final class ScreenEvidenceQueue {
                 let (_, response) = try await URLSession.shared.data(for: request)
                 guard let http = response as? HTTPURLResponse else { break }
                 if http.statusCode == 202 {
-                    try? FileManager.default.removeItem(at: file)
+                    // Do not erase evidence if upload configuration changed mid-request.
+                    if let current = ScreenUploadConfiguration.load(),
+                       current.0 == base, current.1 == token {
+                        try? FileManager.default.removeItem(at: file)
+                    }
                 } else if http.statusCode == 401 || http.statusCode == 403 ||
                           http.statusCode == 413 || http.statusCode == 422 {
                     // Bad credentials or evidence: stop; do not spin/retry aggressively.
@@ -65,16 +72,4 @@ final class ScreenEvidenceQueue {
         }
     }
 
-    private func prune() {
-        guard let files = try? FileManager.default.contentsOfDirectory(
-            at: folder, includingPropertiesForKeys: [.contentModificationDateKey]
-        ) else { return }
-        // Bound on-device storage even during prolonged network outages.
-        let sorted = files.filter { $0.pathExtension == "json" }.sorted {
-            let a = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            let b = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            return a > b
-        }
-        for file in sorted.dropFirst(100) { try? FileManager.default.removeItem(at: file) }
-    }
 }
