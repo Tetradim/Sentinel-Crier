@@ -1,0 +1,5 @@
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+DerivedData/
+SentinelCrier.xcodeproj/
