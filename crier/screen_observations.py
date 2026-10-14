@@ -6,7 +6,8 @@ from decimal import Decimal, InvalidOperation
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+import hmac
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -44,10 +45,18 @@ class ScreenObservation(BaseModel):
         return value
 
 
-def screen_observation_router(store, auth):
-    router = APIRouter(prefix="/api", dependencies=[Depends(auth)])
+def screen_observation_router(store, auth, upload_key=""):
+    router = APIRouter(prefix="/api")
 
-    @router.post("/screen-observations", status_code=202)
+    def upload_auth(authorization: str = Header(default="")):
+        if not upload_key:
+            raise HTTPException(503, "Screen uploads are disabled")
+        expected = "Bearer " + upload_key
+        if not hmac.compare_digest(authorization.encode(), expected.encode()):
+            raise HTTPException(401, "Invalid screen upload credential")
+
+
+    @router.post("/screen-observations", status_code=202, dependencies=[Depends(upload_auth)])
     def capture(value: ScreenObservation):
         payload = value.model_dump(mode="json", by_alias=True)
         with store.connect() as db:
@@ -58,7 +67,6 @@ def screen_observation_router(store, auth):
             existing = db.execute("SELECT evidence FROM screen_observations WHERE id=?", (key,)).fetchone()
             serialized = json.dumps(payload, sort_keys=True)
             if existing and existing["evidence"] != serialized:
-                from fastapi import HTTPException
                 raise HTTPException(409, "Evidence ID already used with different content")
             if not existing:
                 db.execute("INSERT INTO screen_observations(id,received,evidence) VALUES (?,?,?)",
@@ -66,7 +74,7 @@ def screen_observation_router(store, auth):
         return {"accepted": True, "status": "pending_review", "evidence_id": key,
                 "discord_published": False}
 
-    @router.get("/screen-observations")
+    @router.get("/screen-observations", dependencies=[Depends(auth)])
     def list_observations():
         with store.connect() as db:
             db.execute("""CREATE TABLE IF NOT EXISTS screen_observations
