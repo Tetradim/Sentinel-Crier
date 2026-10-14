@@ -1,0 +1,61 @@
+import SwiftUI
+import ReplayKit
+
+@main
+struct SentinelCrierApp: App {
+    var body: some Scene {
+        WindowGroup { SetupView() }
+    }
+}
+
+struct SetupView: View {
+    @AppStorage("crier.backendURL") private var backendURL = ""
+    @State private var showHelp = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Welcome to Sentinel Crier") {
+                    Text("Connect your Crier service, then start screen monitoring when you trade. Broker API monitoring, when configured on the server, continues independently.")
+                }
+                Section("1 · Connect") {
+                    TextField("https://your-crier-server.example", text: $backendURL)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                        .autocorrectionDisabled()
+                    Text("Use a private HTTPS Crier server. Never paste brokerage passwords or Discord webhooks here.")
+                        .font(.footnote)
+                }
+                Section("2 · Start screen monitoring") {
+                    Text("iOS asks for your permission to share the screen. The broadcast extension must be bundled with this app and configured in Xcode.")
+                    ReplayKitPicker()
+                        .frame(height: 54)
+                        .accessibilityLabel("Start screen monitoring")
+                    Text("Only visible confirmations can be detected. An order preview is not a confirmed fill.")
+                        .font(.footnote)
+                }
+                Section("3 · Check alerts") {
+                    Text("Discord publishing requires an authenticated Crier backend. Screen capture alone does not send alerts.")
+                    Button("How monitoring works") { showHelp = true }
+                }
+            }
+            .navigationTitle("Sentinel Crier")
+            .alert("Monitoring modes", isPresented: $showHelp) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("API monitoring is hosted. Screen monitoring requires an active, user-authorized capture session. Neither method places trades.")
+            }
+        }
+    }
+}
+
+struct ReplayKitPicker: UIViewRepresentable {
+    func makeUIView(context: Context) -> RPSystemBroadcastPickerView {
+        let picker = RPSystemBroadcastPickerView(frame: .zero)
+        picker.preferredExtension = "com.tetradim.sentinelcrier.BroadcastUpload"
+        picker.showsMicrophoneButton = false
+        return picker
+    }
+
+    func updateUIView(_ uiView: RPSystemBroadcastPickerView, context: Context) {}
+}
