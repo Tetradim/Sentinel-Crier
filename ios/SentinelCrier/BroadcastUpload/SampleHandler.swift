@@ -11,11 +11,18 @@ final class SampleHandler: RPBroadcastSampleHandler {
     private let deduplicator = ScreenObservationDeduplicator()
     private let evidenceQueue = ScreenEvidenceQueue()
     private var flushInProgress = false
+    private let shared = UserDefaults(suiteName: "group.com.tetradim.sentinelcrier")
+
+    private func broadcastState(_ state: String) {
+        shared?.set(state, forKey: "broadcastState")
+        shared?.set(Date().timeIntervalSince1970, forKey: "broadcastHeartbeatAt")
+    }
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
         queue.async { [weak self] in
             self?.lastSampleAt = 0
             self?.deduplicator.reset()
+            self?.broadcastState("active")
             self?.flushEvidence()
         }
     }
@@ -23,6 +30,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
     override func broadcastPaused() {
         queue.async { [weak self] in
             self?.deduplicator.reset()
+            self?.broadcastState("paused")
         }
     }
 
@@ -30,6 +38,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
         queue.async { [weak self] in
             self?.deduplicator.reset()
             self?.lastSampleAt = 0
+            self?.broadcastState("active")
             self?.flushEvidence()
         }
     }
@@ -51,6 +60,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
             let now = ProcessInfo.processInfo.systemUptime
             guard now - self.lastSampleAt >= self.interval else { return }
             self.lastSampleAt = now
+            self.broadcastState("active")
 
             let request = VNRecognizeTextRequest()
             request.recognitionLevel = .accurate
