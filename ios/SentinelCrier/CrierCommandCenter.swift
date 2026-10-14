@@ -115,7 +115,7 @@ final class CrierDashboardModel: ObservableObject {
 
 private struct CrierPanel<Content: View>: View {
     let title: String
-    @ViewBuilder var content: Content
+    let content: Content
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title).font(.headline).foregroundStyle(.white)
