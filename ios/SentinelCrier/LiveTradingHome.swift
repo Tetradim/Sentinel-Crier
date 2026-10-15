@@ -1,37 +1,47 @@
 import SwiftUI
 
-/// Live brokerage workspace. No invented quotes, balances, positions, or fills.
-/// Connections and order entry remain unavailable until approved API adapters exist.
+/// Real-account interface: empty states are truthful until approved API access
+/// is provisioned. No fabricated prices, balances, trades or order controls.
 struct LiveTradingHome: View {
+    @State private var symbol = ""
+    @State private var expiration = Date()
+    @State private var selectedTab = 0
+
     var body: some View {
         NavigationStack {
             List {
-                Section("Brokerage accounts") {
-                    Label("No authorized brokerage connected", systemImage: "building.columns")
-                        .foregroundStyle(.secondary)
-                    Text("Trading requires an approved, official broker API connection. Account authorization is not configured in this build.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                Section("Account") {
+                    Label("Connect an authorized brokerage", systemImage: "building.columns")
+                        .font(.headline)
+                    Text("No brokerage authorization has been configured. Balances, positions and live orders will appear only after an official API connection is established.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
-                Section("Markets and options") {
-                    Label("Live option chains unavailable", systemImage: "chart.xyaxis.line")
+                Section("Markets") {
+                    TextField("Ticker symbol", text: $symbol)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                    DatePicker("Option expiration", selection: $expiration, displayedComponents: .date)
+                    Label("Live market data connection required", systemImage: "chart.xyaxis.line")
                         .foregroundStyle(.secondary)
-                    Text("Contract selection and quotes will be shown only when provided by a connected brokerage or licensed market-data service.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    Text("Quotes and option contracts are never estimated or populated with demonstration prices.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
-                Section("Place an order") {
-                    Label("Live order entry unavailable", systemImage: "lock.shield")
+                Section("Live order ticket") {
+                    Label("Unavailable until broker authorization", systemImage: "lock.shield")
                         .foregroundStyle(.orange)
-                    Text("No order can be placed until account authorization, broker capability checks, an order preview, and explicit confirmation are implemented.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    Text("An order must use a broker-resolved contract, a current broker preview and a separate explicit customer confirmation. Submission cannot be enabled by selecting a ticker alone.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
-                Section("Discord execution alerts") {
-                    Label("Broker-confirmed fills only", systemImage: "checkmark.seal")
-                    Text("Order submission is not a fill. Execution alerts require a broker execution identifier, actual quantity, and actual execution price.")
-                        .font(.footnote)
+                Section("Positions and orders") {
+                    Label("No connected account", systemImage: "list.bullet.rectangle")
                         .foregroundStyle(.secondary)
+                    Text("Live positions and order status are retrieved from the connected broker; local assumptions cannot substitute for broker records.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("Discord") {
+                    Label("Broker-confirmed executions only", systemImage: "checkmark.seal")
+                    Text("A submitted order is not a fill. Alerts require actual execution IDs, incremental quantities and execution prices.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("Trade")
