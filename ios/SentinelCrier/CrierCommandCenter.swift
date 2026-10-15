@@ -94,6 +94,9 @@ struct CrierConnectionsView: View {
                 Text("Official broker authorization requires developer approval and a secure cloud backend. Brokerage passwords are never entered into Crier.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
+            Section("Preferences") {
+                NavigationLink("Trading settings", destination: CrierSettingsView())
+            }
             Section("Discord webhook") {
                 SecureField("Discord webhook URL", text: $webhook)
                     .textInputAutocapitalization(.never)
@@ -126,9 +129,9 @@ struct CrierSettingsView: View {
     var body: some View {
         Form {
             Section("Optional trading controls") {
-                Toggle("Automatic stop orders", isOn: $autoStops)
-                Toggle("Automatic take-profit orders", isOn: $autoTakeProfit)
-                Toggle("Discord-triggered automatic trading", isOn: $automatedDiscord)
+                Toggle("Automatic stop orders", isOn: $autoStops).disabled(true)
+                Toggle("Automatic take-profit orders", isOn: $autoTakeProfit).disabled(true)
+                Toggle("Discord-triggered automatic trading", isOn: $automatedDiscord).disabled(true)
                 Text("These are preference placeholders only. No automation is active or connected to a broker in this build. All optional controls default to off.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
