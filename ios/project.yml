@@ -17,6 +17,8 @@ targets:
       - path: SentinelCrier/StandaloneAlertStore.swift
       - path: SentinelCrier/CrierCommandCenter.swift
       - path: SentinelCrier/LiveTradingModels.swift
+      - path: SentinelCrier/TradingPreferences.swift
+      - path: SentinelCrier/BrokerageOverview.swift
       - path: SentinelCrier/LiveBrokerGateway.swift
       - path: SentinelCrier/MultiBrokerAllocation.swift
       - path: SentinelCrier/MultiBrokerTradeGroups.swift
