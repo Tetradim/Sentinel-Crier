@@ -1,63 +1,73 @@
 import SwiftUI
 
-/// Real-account interface: empty states are truthful until approved API access
-/// is provisioned. No fabricated prices, balances, trades or order controls.
+/// A live-only order ticket. Until broker discovery, live contract resolution,
+/// server-side preview, and authorization are active, submission stays absent.
 struct LiveTradingHome: View {
     @State private var symbol = ""
     @State private var expiration = Date()
-    @State private var quantityMode: MultiBrokerQuantityMode = .perBroker
-    @State private var contractQuantity = 10
+    @State private var limitText = ""
+    @State private var selectedAction: LiveOrderAction = .buyToOpen
+    @AppStorage(TradingPreferences.quantityModeKey) private var savedMode = MultiBrokerQuantityMode.perBroker.rawValue
+    @AppStorage(TradingPreferences.contractQuantityKey) private var contractQuantity = 1
+
+    private var mode: Binding<MultiBrokerQuantityMode> {
+        Binding(
+            get: { TradingPreferences.mode(rawValue: savedMode) },
+            set: { savedMode = $0.rawValue }
+        )
+    }
 
     var body: some View {
         NavigationStack {
-            List {
-                Section("Account") {
-                    Label("Connect an authorized brokerage", systemImage: "building.columns")
-                        .font(.headline)
-                    Text("No brokerage authorization has been configured. Balances, positions and live orders will appear only after an official API connection is established.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                Section("Markets") {
-                    TextField("Ticker symbol", text: $symbol)
+            Form {
+                Section("Option") {
+                    TextField("Underlying symbol", text: $symbol)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
-                    DatePicker("Option expiration", selection: $expiration, displayedComponents: .date)
-                    Label("Live market data connection required", systemImage: "chart.xyaxis.line")
-                        .foregroundStyle(.secondary)
-                    Text("Quotes and option contracts are never estimated or populated with demonstration prices.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    DatePicker("Expiration", selection: $expiration, displayedComponents: .date)
+                    Label("Choose a live contract from the options chain", systemImage: "magnifyingglass")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
-                Section("Multi-broker quantity") {
-                    Picker("Buying method", selection: $quantityMode) {
-                        ForEach(MultiBrokerQuantityMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
+                Section("Order") {
+                    Picker("Action", selection: $selectedAction) {
+                        Text("Buy to Open").tag(LiveOrderAction.buyToOpen)
+                        Text("Sell to Close").tag(LiveOrderAction.sellToClose)
+                        Text("Sell to Open").tag(LiveOrderAction.sellToOpen)
+                        Text("Buy to Close").tag(LiveOrderAction.buyToClose)
+                    }
+                    Picker("Quantity", selection: mode) {
+                        ForEach(MultiBrokerQuantityMode.allCases) { option in
+                            Text(option.title).tag(option)
                         }
                     }
                     .pickerStyle(.segmented)
-                    Stepper("Contracts: \\(contractQuantity)", value: $contractQuantity, in: 1...1000)
-                    Text(quantityMode == .perBroker
-                         ? "Each selected brokerage receives this quantity. Two accounts at 10 means 20 contracts total."
-                         : "This quantity is split across selected brokerages. Two accounts at 10 means 5 each.")
+                    Stepper("Contracts: \(contractQuantity)", value: $contractQuantity, in: 1...1000)
+                    HStack {
+                        Text("Limit price")
+                        Spacer()
+                        TextField("Required", text: $limitText)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: 110)
+                    }
+                    Text(mode.wrappedValue == .perBroker
+                        ? "The entered quantity applies to every selected account."
+                        : "The entered quantity is split across the selected accounts.")
                         .font(.footnote).foregroundStyle(.secondary)
-                    Text("Orders remain unavailable until authorized brokerage accounts and live previews are connected.")
-                        .font(.caption).foregroundStyle(.orange)
                 }
-                Section("Live order ticket") {
-                    Label("Unavailable until broker authorization", systemImage: "lock.shield")
-                        .foregroundStyle(.orange)
-                    Text("An order must use a broker-resolved contract, a current broker preview and a separate explicit customer confirmation. Submission cannot be enabled by selecting a ticker alone.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                Section("Positions and orders") {
-                    Label("No connected account", systemImage: "list.bullet.rectangle")
+                Section("Brokerage selection") {
+                    Label("No authorized accounts available", systemImage: "building.columns")
                         .foregroundStyle(.secondary)
-                    Text("Live positions and order status are retrieved from the connected broker; local assumptions cannot substitute for broker records.")
+                    Text("Each selected account must receive a separate broker-resolved contract and current order preview.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-                Section("Discord") {
-                    Label("Broker-confirmed executions only", systemImage: "checkmark.seal")
-                    Text("A submitted order is not a fill. Alerts require actual execution IDs, incremental quantities and execution prices.")
+                Section("Combined order review") {
+                    Label("Not ready to submit", systemImage: "lock.shield")
+                        .foregroundStyle(.orange)
+                    Text("Submission is disabled until official brokerage authorization, durable server-side idempotency, broker previews and a final customer confirmation are available.")
                         .font(.footnote).foregroundStyle(.secondary)
+                    Text("No quotes or estimated fills are invented.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("Trade")
