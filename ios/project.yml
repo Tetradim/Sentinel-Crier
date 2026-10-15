@@ -17,6 +17,8 @@ targets:
       - path: SentinelCrier/StandaloneAlertStore.swift
       - path: SentinelCrier/CrierCommandCenter.swift
       - path: SentinelCrier/LiveTradingModels.swift
+      - path: SentinelCrier/VerifiedExecutionOutbox.swift
+      - path: SentinelCrier/VerifiedExecutionDiscordPublisher.swift
       - path: SentinelCrier/LiveTradingHome.swift
       - path: SentinelCrier/CrierStatusClient.swift
       - path: SentinelCrier/CrierCredentials.swift
