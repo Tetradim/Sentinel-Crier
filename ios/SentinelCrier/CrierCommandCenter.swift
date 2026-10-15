@@ -1,187 +1,103 @@
 import SwiftUI
-import ReplayKit
-import UIKit
 
-@MainActor
-final class StandaloneDashboard: ObservableObject {
-    @Published var records: [StandaloneAlertStore.Record] = []
-    @Published var enabled = StandaloneConfiguration.enabled
-    @Published var configured = StandaloneConfiguration.webhook() != nil
-    @Published var message: String?
-    @Published var broadcast = "Not active"
-
-    func refresh() {
-        records = StandaloneAlertStore()?.records() ?? []
-        enabled = StandaloneConfiguration.enabled
-        configured = StandaloneConfiguration.webhook() != nil
-        let defaults = UserDefaults(suiteName: StandaloneConfiguration.group)
-        let age = Date().timeIntervalSince1970 - (defaults?.double(forKey: "broadcastHeartbeatAt") ?? 0)
-        let state = defaults?.string(forKey: "broadcastState") ?? ""
-        broadcast = state == "active" && age >= 0 && age < 12 ? "Recently active" :
-            (state == "paused" && age >= 0 && age < 60 ? "Paused" : "Not active")
-    }
-
-    func setEnabled(_ value: Bool) {
-        StandaloneConfiguration.setEnabled(value)
-        refresh()
-    }
-
-    func save(_ webhook: String) {
-        if StandaloneConfiguration.saveWebhook(webhook) {
-            message = "Webhook securely saved on this iPhone."
-        } else {
-            message = "Invalid Discord webhook or Keychain unavailable. Check app signing."
-        }
-        refresh()
-    }
-
-    func clear() {
-        StandaloneConfiguration.clear()
-        message = "Discord delivery disabled and webhook deleted."
-        refresh()
-    }
-
-    func retryPending() async {
-        await StandaloneAlertStore()?.sendPending()
-        refresh()
-    }
-}
-
+/// Customer-facing live brokerage shell. Legacy screen observations are not
+/// presented as trades and cannot be used as execution evidence.
 struct CrierCommandCenter: View {
-    @StateObject private var model = StandaloneDashboard()
     @State private var webhook = ""
-    @State private var showDisclosure = false
+    @State private var webhookConfigured = StandaloneConfiguration.webhook() != nil
+    @State private var statusMessage: String?
+    @State private var executions: [VerifiedExecutionOutbox.Entry] = []
 
     var body: some View {
         TabView {
-            NavigationStack { dashboard }
-                .tabItem { Label("Dashboard", systemImage: "house.fill") }
             LiveTradingHome()
                 .tabItem { Label("Trade", systemImage: "chart.line.uptrend.xyaxis") }
-            NavigationStack { activity }
-                .tabItem { Label("Activity", systemImage: "list.bullet.rectangle") }
+            NavigationStack { positions }
+                .tabItem { Label("Positions", systemImage: "square.stack.3d.up") }
             NavigationStack { alerts }
-                .tabItem { Label("Alerts", systemImage: "bell.badge") }
+                .tabItem { Label("Executions", systemImage: "checkmark.seal") }
             NavigationStack { connections }
                 .tabItem { Label("Connections", systemImage: "link") }
-            NavigationStack { settings }
-                .tabItem { Label("Settings", systemImage: "gearshape.fill") }
         }
         .preferredColorScheme(.dark)
-        .task { model.refresh() }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            model.refresh()
-        }
+        .task { await refreshExecutions() }
     }
 
-    private var dashboard: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Standalone iPhone monitoring").font(.title2.bold())
-                Label("No PC or Crier server required", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                Text("Screen observation: \(model.broadcast)")
-                Text("Discord: \(model.configured ? "Configured" : "Not configured")")
-                Text("Candidate alerts: \(model.enabled ? "Enabled" : "Disabled")")
-                Text("Start monitoring while Webull is visible. iOS requires your permission for each screen broadcast.")
-                    .font(.footnote).foregroundStyle(.secondary)
-                ReplayKitPicker().frame(height: 56)
-                Text("Recent observations").font(.headline)
-                if model.records.isEmpty {
-                    Text("No screen observations yet.").foregroundStyle(.secondary)
-                }
-                ForEach(model.records.prefix(5)) { row($0) }
-                Button("Refresh") { model.refresh() }
-            }.padding()
-        }.navigationTitle("Sentinel Crier")
-            .refreshable { model.refresh() }
-    }
-
-    private func row(_ record: StandaloneAlertStore.Record) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("\(record.evidence.symbol) \(record.evidence.expiration) \(record.evidence.strike)\(record.evidence.right)")
-                .font(.headline)
-            Text("\(record.evidence.side) \(record.evidence.quantity) @ $\(record.evidence.fillPrice)")
-            Text("Unverified OCR candidate · \(record.state.capitalized)")
-                .font(.caption).foregroundStyle(.orange)
-            Text(record.note).font(.caption2).foregroundStyle(.secondary)
-        }.frame(maxWidth: .infinity, alignment: .leading).padding(12)
-            .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var activity: some View {
+    private var positions: some View {
         List {
-            Section("On-device observations — not broker-verified") {
-                if model.records.isEmpty { Text("No observations.") }
-                ForEach(model.records) { row($0) }
+            Section("Live accounts") {
+                Label("No authorized brokerage connected", systemImage: "building.columns")
+                Text("Positions and open orders will load directly from the connected brokerage. No locally invented positions are shown.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
-        }.navigationTitle("Activity").refreshable { model.refresh() }
+        }
+        .navigationTitle("Positions")
     }
 
     private var alerts: some View {
-        Form {
-            Section("Discord candidate alerts") {
-                Toggle("Send unverified OCR observations", isOn: Binding(
-                    get: { model.enabled },
-                    set: { model.setEnabled($0) }
-                )).disabled(!model.configured)
-                Text("Alerts are clearly marked UNVERIFIED. Screen OCR is not proof of a broker execution.")
-                    .font(.footnote)
-                Button("Retry pending alerts") { Task { await model.retryPending() } }
-                    .disabled(!model.enabled || !model.configured)
-                Text("Uncertain deliveries are never retried automatically, to avoid duplicate Discord posts.")
-                    .font(.caption).foregroundStyle(.secondary)
+        List {
+            Section("Broker-confirmed executions") {
+                if executions.isEmpty {
+                    Text("No broker-confirmed executions recorded.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(executions) { entry in
+                    VStack(alignment: .leading, spacing: 5) {
+                        let e = entry.execution
+                        Text("\(e.contract.underlying) \(e.contract.expiration) \(e.contract.strike)\(e.contract.right)")
+                            .font(.headline)
+                        Text("\(e.action.rawValue) · \(e.incrementalQuantity) @ $\(e.executionPrice)")
+                        Text("\(e.brokerId) · \(entry.state.rawValue)")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
             }
-        }.navigationTitle("Alerts")
+            Section("Delivery policy") {
+                Text("Only broker-confirmed incremental fills qualify. Ambiguous Discord deliveries are never automatically resent.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        .navigationTitle("Executions")
+        .refreshable { await refreshExecutions() }
     }
 
     private var connections: some View {
         Form {
-            Section("Discord webhook — no server required") {
-                SecureField("Paste Discord webhook URL", text: $webhook)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                Button("Save webhook on iPhone") {
-                    model.save(webhook.trimmingCharacters(in: .whitespacesAndNewlines))
-                    webhook = ""
-                }
-                Text(model.configured ? "Webhook securely configured" : "Webhook not configured")
-                    .foregroundStyle(model.configured ? .green : .orange)
-                Button("Remove webhook", role: .destructive) { model.clear() }
-                if let message = model.message { Text(message).font(.caption) }
-                Text("Create a webhook in your Discord server's channel settings. The URL is a secret; do not share it.")
+            Section("Brokerage APIs") {
+                Label("Webull — authorization required", systemImage: "lock.shield")
+                Label("Alpaca — authorization required", systemImage: "lock.shield")
+                Label("Tradier — authorization required", systemImage: "lock.shield")
+                Text("Official brokerage credentials and any required developer approvals must be provisioned before live orders can be enabled. The app does not request brokerage passwords.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
-            Section("Screen capture") {
-                ReplayKitPicker().frame(height: 56)
-                Text("You must explicitly start broadcasting when you want Webull monitored.")
-                    .font(.footnote)
+            Section("Discord execution destination") {
+                SecureField("Discord webhook URL", text: $webhook)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button("Save Discord webhook") {
+                    webhookConfigured = StandaloneConfiguration.saveWebhook(
+                        webhook.trimmingCharacters(in: .whitespacesAndNewlines))
+                    statusMessage = webhookConfigured ? "Webhook saved in Keychain." : "Invalid webhook or Keychain unavailable."
+                    webhook = ""
+                }
+                Text(webhookConfigured ? "Configured" : "Not configured")
+                    .foregroundStyle(webhookConfigured ? .green : .orange)
+                Button("Remove Discord webhook", role: .destructive) {
+                    StandaloneConfiguration.clear()
+                    webhookConfigured = false
+                    statusMessage = "Webhook removed."
+                }
+                if let statusMessage { Text(statusMessage).font(.footnote) }
+                Text("Discord publishing starts only when a connected brokerage supplies verified execution events.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
-        }.navigationTitle("Connections")
+        }
+        .navigationTitle("Connections")
     }
 
-    private var settings: some View {
-        Form {
-            Section("Privacy and reliability") {
-                Text("No PC, backend URL, brokerage password, or remote Crier server is required.")
-                Text("Only structured observations are stored locally. Screenshots and raw OCR text are not retained.")
-                Text("Repeated identical receipts may be suppressed to avoid duplicate alerts.")
-                Text("iOS can stop the broadcast extension; this is not always-on background monitoring.")
-            }
-            Section("Local history") {
-                Text("\(model.records.count) observations (up to 250 retained)")
-                Text("\(model.records.filter { $0.state == "uncertain" }.count) uncertain deliveries")
-                if let failed = UserDefaults(suiteName: StandaloneConfiguration.group)?
-                    .double(forKey: "standaloneWriteFailureAt"), failed > 0 {
-                    Text("A local storage write failed at \(Date(timeIntervalSince1970: failed).formatted()).")
-                        .foregroundStyle(.red)
-                }
-            }
-            Section("About") {
-                Text("Sentinel Crier · Standalone iPhone beta")
-                Text("Candidate alerts are not broker-verified fills.")
-                    .foregroundStyle(.orange)
-            }
-        }.navigationTitle("Settings")
+    @MainActor
+    private func refreshExecutions() async {
+        guard let outbox = VerifiedExecutionOutbox() else { return }
+        executions = await outbox.entries().reversed()
     }
 }
