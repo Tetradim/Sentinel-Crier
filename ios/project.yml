@@ -79,3 +79,15 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier.RecognitionTests
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_STYLE: Automatic
+
+  TradingTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: SentinelCrier/MultiBrokerTradingTests.swift
+    dependencies:
+      - target: SentinelCrier
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier.TradingTests
+        GENERATE_INFOPLIST_FILE: YES
