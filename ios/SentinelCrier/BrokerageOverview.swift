@@ -49,6 +49,17 @@ struct BrokerageOverview: View {
                 }
             }
             .navigationTitle("Home")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        NavigationLink("Connections", destination: CrierConnectionsView())
+                        NavigationLink("Settings", destination: CrierSettingsView())
+                    } label: {
+                        Image(systemName: "person.crop.circle")
+                    }
+                    .accessibilityLabel("Account menu")
+                }
+            }
         }
     }
 }
