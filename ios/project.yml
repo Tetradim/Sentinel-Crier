@@ -16,6 +16,8 @@ targets:
       - path: SentinelCrier/StandaloneConfiguration.swift
       - path: SentinelCrier/StandaloneAlertStore.swift
       - path: SentinelCrier/CrierCommandCenter.swift
+      - path: SentinelCrier/LiveTradingModels.swift
+      - path: SentinelCrier/LiveTradingHome.swift
       - path: SentinelCrier/CrierStatusClient.swift
       - path: SentinelCrier/CrierCredentials.swift
       - path: SentinelCrier/ScreenUploadConfiguration.swift
