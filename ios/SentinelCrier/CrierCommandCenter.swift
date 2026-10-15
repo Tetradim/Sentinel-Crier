@@ -56,6 +56,8 @@ struct CrierCommandCenter: View {
         TabView {
             NavigationStack { dashboard }
                 .tabItem { Label("Dashboard", systemImage: "house.fill") }
+            LiveTradingHome()
+                .tabItem { Label("Trade", systemImage: "chart.line.uptrend.xyaxis") }
             NavigationStack { activity }
                 .tabItem { Label("Activity", systemImage: "list.bullet.rectangle") }
             NavigationStack { alerts }
