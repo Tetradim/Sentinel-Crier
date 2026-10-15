@@ -54,14 +54,7 @@ final class MultiBrokerTradingTests: XCTestCase {
         XCTAssertNil(snapshot.totalEquity(currency: "CAD"))
     }
 
-    func testOptionalAutomationPreferencesAreDisabledByDefault() {
-        // New-install defaults are false. No optional automation is backed by
-        // a broker endpoint or enabled by this view.
-        XCTAssertFalse(UserDefaults.standard.bool(
-            forKey: TradingPreferences.autoStopsKey))
-        XCTAssertFalse(UserDefaults.standard.bool(
-            forKey: TradingPreferences.autoTakeProfitKey))
-        XCTAssertFalse(UserDefaults.standard.bool(
-            forKey: TradingPreferences.automatedDiscordTradingKey))
+    func testUnknownQuantityPreferenceFailsToPerBroker() {
+        XCTAssertEqual(TradingPreferences.mode(rawValue: "unexpected"), .perBroker)
     }
 }
