@@ -18,6 +18,7 @@ targets:
       - path: SentinelCrier/CrierCommandCenter.swift
       - path: SentinelCrier/LiveTradingModels.swift
       - path: SentinelCrier/LiveBrokerGateway.swift
+      - path: SentinelCrier/MultiBrokerAllocation.swift
       - path: SentinelCrier/VerifiedExecutionOutbox.swift
       - path: SentinelCrier/VerifiedExecutionDiscordPublisher.swift
       - path: SentinelCrier/LiveTradingHome.swift
