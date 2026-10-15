@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 /// Separate from OCR candidate alerts. Only broker-sourced execution events belong here.
 /// File protection and atomic writes preserve execution IDs across app restarts.
@@ -27,11 +28,8 @@ actor VerifiedExecutionOutbox {
 
     private func file(for key: String) -> URL {
         // Keys are broker-provided and cannot be used directly as filenames.
-        let bytes = Array(key.utf8)
-        let encoded = Data(bytes).base64Encoded()
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "=", with: "")
+        let encoded = SHA256.hash(data: Data(key.utf8))
+            .map { String(format: "%02x", $0) }.joined()
         return folder.appendingPathComponent(encoded + ".json")
     }
 
