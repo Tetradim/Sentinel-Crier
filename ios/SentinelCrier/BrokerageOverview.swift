@@ -50,14 +50,11 @@ struct BrokerageOverview: View {
             }
             .navigationTitle("Home")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        NavigationLink("Connections", destination: CrierConnectionsView())
-                        NavigationLink("Settings", destination: CrierSettingsView())
-                    } label: {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NavigationLink(destination: CrierConnectionsView()) {
                         Image(systemName: "person.crop.circle")
                     }
-                    .accessibilityLabel("Account menu")
+                    .accessibilityLabel("Connections and settings")
                 }
             }
         }
