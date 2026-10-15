@@ -5,7 +5,8 @@ import SwiftUI
 struct LiveTradingHome: View {
     @State private var symbol = ""
     @State private var expiration = Date()
-    @State private var selectedTab = 0
+    @State private var quantityMode: MultiBrokerQuantityMode = .perBroker
+    @State private var contractQuantity = 10
 
     var body: some View {
         NavigationStack {
@@ -25,6 +26,21 @@ struct LiveTradingHome: View {
                         .foregroundStyle(.secondary)
                     Text("Quotes and option contracts are never estimated or populated with demonstration prices.")
                         .font(.caption).foregroundStyle(.secondary)
+                }
+                Section("Multi-broker quantity") {
+                    Picker("Buying method", selection: $quantityMode) {
+                        ForEach(MultiBrokerQuantityMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Stepper("Contracts: \\(contractQuantity)", value: $contractQuantity, in: 1...1000)
+                    Text(quantityMode == .perBroker
+                         ? "Each selected brokerage receives this quantity. Two accounts at 10 means 20 contracts total."
+                         : "This quantity is split across selected brokerages. Two accounts at 10 means 5 each.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Text("Orders remain unavailable until authorized brokerage accounts and live previews are connected.")
+                        .font(.caption).foregroundStyle(.orange)
                 }
                 Section("Live order ticket") {
                     Label("Unavailable until broker authorization", systemImage: "lock.shield")
