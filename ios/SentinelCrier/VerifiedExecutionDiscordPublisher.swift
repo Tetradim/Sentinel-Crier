@@ -8,8 +8,7 @@ actor VerifiedExecutionDiscordPublisher {
     init(outbox: VerifiedExecutionOutbox) { self.outbox = outbox }
 
     func deliverNext() async throws {
-        guard StandaloneConfiguration.enabled,
-              let webhook = StandaloneConfiguration.webhook(),
+        guard let webhook = StandaloneConfiguration.webhook(),
               let entry = try await outbox.claimForDelivery() else { return }
 
         let e = entry.execution
