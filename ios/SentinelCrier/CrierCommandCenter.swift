@@ -98,6 +98,6 @@ struct CrierCommandCenter: View {
     @MainActor
     private func refreshExecutions() async {
         guard let outbox = VerifiedExecutionOutbox() else { return }
-        executions = await outbox.entries().reversed()
+        executions = Array(await outbox.entries().reversed())
     }
 }
