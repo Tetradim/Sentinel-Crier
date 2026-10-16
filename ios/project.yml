@@ -14,7 +14,6 @@ targets:
     sources:
       - path: SentinelCrier/SentinelCrierApp.swift
       - path: SentinelCrier/StandaloneConfiguration.swift
-      - path: SentinelCrier/StandaloneAlertStore.swift
       - path: SentinelCrier/CrierCommandCenter.swift
       - path: SentinelCrier/LiveTradingModels.swift
       - path: SentinelCrier/TradingPreferences.swift
@@ -26,60 +25,17 @@ targets:
       - path: SentinelCrier/VerifiedExecutionOutbox.swift
       - path: SentinelCrier/VerifiedExecutionDiscordPublisher.swift
       - path: SentinelCrier/LiveTradingHome.swift
-      - path: SentinelCrier/CrierStatusClient.swift
-      - path: SentinelCrier/CrierCredentials.swift
-      - path: SentinelCrier/ScreenUploadConfiguration.swift
-      - path: SentinelCrier/Recognition/ScreenEvidenceQueue.swift
-      - path: SentinelCrier/Recognition/ScreenEvidence.swift
-      - path: SentinelCrier/Recognition/TradeRecognition.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Sentinel Crier
-        INFOPLIST_KEY_CrierSharedKeychainGroup: "$(AppIdentifierPrefix)com.tetradim.sentinelcrier.shared"
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: SentinelCrier.entitlements
     dependencies:
       - target: BroadcastUpload
         embed: true
-  BroadcastUpload:
-    type: app-extension
-    platform: iOS
-    sources:
-      - path: SentinelCrier/BroadcastUpload/SampleHandler.swift
-      - path: SentinelCrier/StandaloneConfiguration.swift
-      - path: SentinelCrier/StandaloneAlertStore.swift
-      - path: SentinelCrier/Recognition/TradeRecognition.swift
-      - path: SentinelCrier/Recognition/BrokerTemplates.swift
-      - path: SentinelCrier/Recognition/ScreenEvidence.swift
-      - path: SentinelCrier/Recognition/ScreenEvidenceQueue.swift
-      - path: SentinelCrier/ScreenUploadConfiguration.swift
-    info:
-      path: BroadcastUpload-Info.plist
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier.BroadcastUpload
-        CODE_SIGN_STYLE: Automatic
-        CODE_SIGN_ENTITLEMENTS: BroadcastUpload.entitlements
-        INFOPLIST_KEY_CrierSharedKeychainGroup: "$(AppIdentifierPrefix)com.tetradim.sentinelcrier.shared"
-        APPLICATION_EXTENSION_API_ONLY: YES
-        SKIP_INSTALL: YES
-
-  RecognitionTests:
-    type: bundle.unit-test
-    platform: iOS
-    sources:
-      - path: SentinelCrier/Recognition/TradeRecognitionTests.swift
-      - path: SentinelCrier/Recognition/TradeRecognition.swift
-      - path: SentinelCrier/Recognition/BrokerTemplates.swift
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier.RecognitionTests
-        GENERATE_INFOPLIST_FILE: YES
-        CODE_SIGN_STYLE: Automatic
-
   TradingTests:
     type: bundle.unit-test
     platform: iOS
