@@ -30,6 +30,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Sentinel Crier
+        INFOPLIST_KEY_CrierSharedKeychainGroup: "$(AppIdentifierPrefix)com.tetradim.sentinelcrier.shared"
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: SentinelCrier.entitlements
