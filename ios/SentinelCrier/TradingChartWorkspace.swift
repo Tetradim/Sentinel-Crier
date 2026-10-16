@@ -134,7 +134,10 @@ struct TradingChartWorkspace: View {
 
     private func chartBody(height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let snapshot, !snapshot.candles.isEmpty,
+            if !showOption && TradingViewChartPolicy.commercialEmbedApproved {
+                TradingViewHostedChart(ticker: ticker, timeframe: timeframe)
+                    .frame(height: height)
+            } else if let snapshot, !snapshot.candles.isEmpty,
                snapshot.instrument == instrument && snapshot.timeframe == timeframe {
                 HStack {
                     Text(snapshot.instrument.title).font(.headline)
