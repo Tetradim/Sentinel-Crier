@@ -14,9 +14,9 @@ struct TradingChartWorkspace: View {
     @State private var fullscreen = false
     @State private var showIndicators = false
     @AppStorage("chart.timeframe") private var savedTimeframe = ChartTimeframe.oneMinute.rawValue
-    @AppStorage("chart.ema9") private var ema9 = true
+    @AppStorage("chart.ema5") private var ema5 = true
+    @AppStorage("chart.ema10") private var ema10 = true
     @AppStorage("chart.ema20") private var ema20 = true
-    @AppStorage("chart.ema50") private var ema50 = false
     @AppStorage("chart.volume") private var showVolume = true
 
     private var timeframe: ChartTimeframe {
@@ -25,9 +25,9 @@ struct TradingChartWorkspace: View {
 
     private var enabledEMAs: [Int] {
         var result: [Int] = []
-        if ema9 { result.append(9) }
+        if ema5 { result.append(5) }
+        if ema10 { result.append(10) }
         if ema20 { result.append(20) }
-        if ema50 { result.append(50) }
         return result
     }
 
@@ -183,9 +183,10 @@ struct TradingChartWorkspace: View {
 
     private func emaColor(_ period: Int) -> Color {
         switch period {
-        case 9: return .yellow
-        case 20: return .cyan
-        default: return .purple
+        case 5: return .yellow
+        case 10: return .cyan
+        case 20: return .purple
+        default: return .orange
         }
     }
 
@@ -193,10 +194,10 @@ struct TradingChartWorkspace: View {
         NavigationStack {
             Form {
                 Section("Moving averages") {
-                    Toggle("EMA 9", isOn: $ema9)
+                    Toggle("EMA 5", isOn: $ema5)
+                    Toggle("EMA 10", isOn: $ema10)
                     Toggle("EMA 20", isOn: $ema20)
-                    Toggle("EMA 50", isOn: $ema50)
-                    Text("EMA periods are configurable. The customer's final default preset is not yet selected.")
+                    Text("EMA 5, 10, and 20 are enabled by default. You can disable any of them.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Chart details") {
