@@ -62,28 +62,20 @@ struct BrokerageOverview: View {
 }
 
 struct CrierMarketsView: View {
-    @State private var symbol = ""
-    @AppStorage(TradingPreferences.advancedChartToolsKey) private var advancedTools = false
-
     var body: some View {
         NavigationStack {
-            List {
-                Section("Find a stock or option") {
-                    TextField("Search ticker", text: $symbol)
-                        .textInputAutocapitalization(.characters)
-                        .autocorrectionDisabled()
-                    Label("Live market data not connected", systemImage: "chart.line.uptrend.xyaxis")
-                        .foregroundStyle(.secondary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    TradingChartWorkspace()
+                    HStack {
+                        Image(systemName: "lock.shield")
+                            .foregroundStyle(.secondary)
+                        Text("Quotes, option chains and contracts will be shown only after live data licensing and broker APIs are connected.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                Section("Charts") {
-                    Toggle("Advanced chart tools", isOn: $advancedTools)
-                    Text("Price charts will load only for the selected instrument. Advanced indicators are optional and off by default.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                Section("Options chain") {
-                    Text("Select a supported brokerage connection to retrieve a live, broker-resolved options chain.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
+                .padding()
             }
             .navigationTitle("Markets")
         }
