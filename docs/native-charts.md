@@ -24,13 +24,13 @@ with touch crosshair, pinch zoom, bounded redraw window, volume, and EMA lines.
 - Stock / Option switch
 - Timeframes: 1m, 5m, 15m, 1h, 1D
 - Candlestick chart, volume, price inspection by dragging, pinch zoom
-- EMA 9/20 visible by default; EMA 50 optional and off by default
+- EMA 5/10/20 visible by default; each can be independently disabled
 - EMA overlays can all be disabled; no indicator may be forced on
 - Full-screen chart window
 - Preferences persisted locally
 
-The customer will decide the finalized default EMA preset later.
-Do not assume three EMAs must always be shown.
+The customer explicitly selected EMA 5, EMA 10 and EMA 20 as default overlays.
+The chart remains configurable and supports a clean view without overlays.
 
 ## Calculations
 
