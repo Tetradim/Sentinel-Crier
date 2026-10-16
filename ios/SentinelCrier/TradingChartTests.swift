@@ -26,9 +26,14 @@ final class TradingChartTests: XCTestCase {
         XCTAssertTrue(series.allSatisfy { $0 == nil })
     }
 
+    func testApprovedEMAsAreDefaults() {
+        XCTAssertEqual(ChartIndicatorSettings().periods, [5, 10, 20])
+    }
+
     func testNoIndicatorsIsAnAllowedPreference() {
-        var settings = ChartIndicatorSettings(periods: [9, 20])
-        settings.setPeriod(9, enabled: false)
+        var settings = ChartIndicatorSettings()
+        settings.setPeriod(5, enabled: false)
+        settings.setPeriod(10, enabled: false)
         settings.setPeriod(20, enabled: false)
         XCTAssertEqual(settings.periods, [])
     }
