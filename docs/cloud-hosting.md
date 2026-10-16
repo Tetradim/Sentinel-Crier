@@ -39,8 +39,12 @@ unmonitored, best-effort free hosting.
 ## Current secure cloud development endpoint
 
 `crier.cloud_gateway` is a **read-only, fail-closed bring-up service**.
-It returns service liveness, authenticated broker connection readiness, and
-explicitly unavailable account/positions/options/orders responses. It does
+It returns service liveness and authenticated broker connection readiness.
+When **explicit** operator-owned production Alpaca API credentials are available,
+read-only `/v1/accounts` and `/v1/positions` retrieve actual Alpaca account
+information from `https://api.alpaca.markets`. Without those credentials, they
+return HTTP 503; unsupported Webull/Tradier accounts and options/order data
+remain unavailable. Nothing routes orders or uploads broker secrets from users. It does
 not handle credentials, customer OAuth, account balances, order creation,
 or confirmed broker fills. No paper/demo order mode exists.
 
@@ -92,3 +96,19 @@ See: https://developer.webull.com/apis/docs/connect-api/about-connect-api/
 
 No application registration, VM allocation, DNS changes, broker credential
 provisioning, or live trade has been made by this repository change.
+
+### Optional first-party live Alpaca read-only verification
+
+For **the operator's own account only**, configure these secrets on the server
+through an appropriate host secret manager (never in Git or the iPhone binary):
+
+- `CRIER_ALPACA_LIVE_KEY_ID`
+- `CRIER_ALPACA_LIVE_SECRET_KEY`
+
+The adapter is hard-pinned to `https://api.alpaca.markets` and cannot switch
+to a paper or user-entered host. The operator-only `GET /v1/accounts` and
+`GET /v1/positions` routes then retrieve real broker information. This is
+**not an end-customer integration**; public launch requires approved Alpaca
+third-party OAuth or appropriate partner onboarding, scoped per-customer
+credentials and access control. No options chain or order placement routes
+have been enabled. Fetch failures are HTTP 503, not invented zero balances.
