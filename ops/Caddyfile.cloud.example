@@ -1,0 +1,16 @@
+# Replace crier.example.com with a domain you own that resolves to your VM.
+# Keep the Python gateway bound to 127.0.0.1:8876, not the public interface.
+# Set up a host firewall to allow SSH (restricted) and ports 80/443 only.
+crier.example.com {
+    encode zstd gzip
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+        -Server
+    }
+    @health path /health
+    reverse_proxy 127.0.0.1:8876 {
+        header_up -X-Forwarded-User
+    }
+}
