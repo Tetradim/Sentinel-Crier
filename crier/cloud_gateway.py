@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from .official_brokers import AlpacaLiveReadOnly, BrokerConnectionError
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,8 @@ class CloudSettings:
     """One-owner development deployment only; not customer multitenancy."""
 
     api_token: str
+    alpaca_key_id: str | None = None
+    alpaca_secret_key: str | None = None
 
     @classmethod
     def from_environment(cls) -> "CloudSettings":
@@ -32,7 +35,9 @@ class CloudSettings:
             raise RuntimeError(
                 "CRIER_CLOUD_OPERATOR_TOKEN must be a generated 48+ character secret"
             )
-        return cls(api_token=token)
+        return cls(api_token=token,
+                   alpaca_key_id=os.environ.get('CRIER_ALPACA_LIVE_KEY_ID') or None,
+                   alpaca_secret_key=os.environ.get('CRIER_ALPACA_LIVE_SECRET_KEY') or None)
 
 
 class BrokerReadiness(BaseModel):
@@ -104,18 +109,39 @@ def create_cloud_app(settings: CloudSettings | None = None) -> FastAPI:
         # An explicit capability absence, not pretend broker connectivity.
         return [
             BrokerReadiness(broker_id="webull", name="Webull"),
-            BrokerReadiness(broker_id="alpaca", name="Alpaca"),
+            BrokerReadiness(broker_id="alpaca", name="Alpaca",
+                connection_status="configured_unverified" if settings.alpaca_key_id and settings.alpaca_secret_key else "authorization_required",
+                reason="Live credentials configured; account connectivity not yet verified" if settings.alpaca_key_id and settings.alpaca_secret_key else "Official customer-facing broker authorization is not configured"),
             BrokerReadiness(broker_id="tradier", name="Tradier"),
         ]
 
+    def alpaca_adapter() -> AlpacaLiveReadOnly:
+        if not settings.alpaca_key_id or not settings.alpaca_secret_key:
+            raise HTTPException(status_code=503, detail="Live broker authorization unavailable")
+        return AlpacaLiveReadOnly(settings.alpaca_key_id, settings.alpaca_secret_key)
+
     @app.get("/v1/accounts", dependencies=[Depends(authorize)])
-    def accounts():
-        # 503, not 200 []: an unconfigured integration is not an empty account.
-        raise HTTPException(status_code=503, detail="Broker authorization unavailable")
+    async def accounts():
+        broker = alpaca_adapter()
+        try:
+            account = await broker.account()
+        except BrokerConnectionError:
+            raise HTTPException(status_code=503, detail="Live broker account unavailable")
+        return {"captured_at": datetime.now(timezone.utc).isoformat(),
+                "accounts": [account], "unavailable_brokers": ["webull", "tradier"]}
 
     @app.get("/v1/positions", dependencies=[Depends(authorize)])
-    def positions():
-        raise HTTPException(status_code=503, detail="Broker position retrieval unavailable")
+    async def positions():
+        broker = alpaca_adapter()
+        try:
+            account = await broker.account()
+            positions = await broker.positions()
+        except BrokerConnectionError:
+            raise HTTPException(status_code=503, detail="Live broker positions unavailable")
+        for position in positions:
+            position["account_id"] = account["account_id"]
+        return {"captured_at": datetime.now(timezone.utc).isoformat(),
+                "positions": positions, "unavailable_brokers": ["webull", "tradier"]}
 
     @app.get("/v1/options", dependencies=[Depends(authorize)])
     def options():
