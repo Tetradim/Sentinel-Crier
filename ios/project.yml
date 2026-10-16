@@ -34,9 +34,6 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: SentinelCrier.entitlements
-    dependencies:
-      - target: BroadcastUpload
-        embed: true
   TradingTests:
     type: bundle.unit-test
     platform: iOS
