@@ -21,6 +21,7 @@ targets:
       - path: SentinelCrier/TradingCharts.swift
       - path: SentinelCrier/TradingCandleCanvas.swift
       - path: SentinelCrier/TradingChartWorkspace.swift
+      - path: SentinelCrier/TradingViewHostedChart.swift
       - path: SentinelCrier/LiveBrokerGateway.swift
       - path: SentinelCrier/MultiBrokerAllocation.swift
       - path: SentinelCrier/MultiBrokerTradeGroups.swift
