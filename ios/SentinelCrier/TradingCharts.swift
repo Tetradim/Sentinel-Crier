@@ -108,9 +108,9 @@ enum ChartIndicatorMath {
     }
 }
 
-/// Shared defaults remain editable. Final customer EMA preset is undecided.
+/// Customer-approved chart defaults; each overlay remains optional.
 struct ChartIndicatorSettings {
-    var periods: [Int] = [9, 20]
+    var periods: [Int] = [5, 10, 20]
     var showVolume: Bool = true
 
     mutating func setPeriod(_ period: Int, enabled: Bool) {
