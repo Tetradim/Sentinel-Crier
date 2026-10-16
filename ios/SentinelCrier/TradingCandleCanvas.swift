@@ -9,9 +9,14 @@ struct TradingCandleCanvas: View {
 
     @State private var visibleCount = 80
     @State private var cursorFraction: CGFloat?
-    @State private var dragMagnification: CGFloat = 1
-
-    private let colors: [Color] = [.yellow, .cyan, .purple, .orange, .mint]
+    private func emaColor(_ period: Int) -> Color {
+        switch period {
+        case 9: return .yellow
+        case 20: return .cyan
+        case 50: return .purple
+        default: return .orange
+        }
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -85,7 +90,7 @@ struct TradingCandleCanvas: View {
                                 path.addLine(to: point)
                             }
                         }
-                        context.stroke(path, with: .color(colors[index % colors.count]), lineWidth: 1.7)
+                        context.stroke(path, with: .color(emaColor(emaPeriods[index])), lineWidth: 1.7)
                     }
                     if let cursorFraction {
                         let x = max(0, min(size.width, cursorFraction * size.width))
@@ -119,12 +124,10 @@ struct TradingCandleCanvas: View {
                 }
                 .onEnded { _ in cursorFraction = nil })
             .simultaneousGesture(MagnificationGesture()
-                .onChanged { dragMagnification = $0 }
                 .onEnded { factor in
                     guard factor.isFinite, factor > 0 else { return }
                     visibleCount = min(400, max(15,
                         Int(CGFloat(visibleCount) / factor)))
-                    dragMagnification = 1
                 })
             .accessibilityLabel("Live candlestick chart with \(candles.count) candles")
             .accessibilityHint("Drag to inspect price candles; pinch to zoom")
