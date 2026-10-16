@@ -1,0 +1,51 @@
+name: Crier live-trading safety checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend unit tests (no broker connections)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install -e ".[test]"
+      - run: python -m pytest -q
+
+  ios:
+    name: Native iOS compile and trading tests
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install project generator
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: |
+          cd ios
+          xcodegen generate --spec project.yml
+      - name: Build simulator app
+        run: |
+          xcodebuild -project ios/SentinelCrier.xcodeproj \
+            -scheme SentinelCrier \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build
+      - name: Run quantity and portfolio safety tests
+        run: |
+          xcodebuild -project ios/SentinelCrier.xcodeproj \
+            -scheme TradingTests \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            CODE_SIGNING_ALLOWED=NO test

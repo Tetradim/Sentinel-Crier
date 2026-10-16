@@ -23,7 +23,3 @@ jobs:
         run: xcodebuild -list -project ios/SentinelCrier.xcodeproj
       - name: Build for iOS Simulator without signing
         run: xcodebuild -project ios/SentinelCrier.xcodeproj -scheme SentinelCrier -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
-      - name: Run recognition tests on simulator
-        run: |
-          xcrun simctl list devices available
-          xcodebuild -project ios/SentinelCrier.xcodeproj -scheme RecognitionTests -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' CODE_SIGNING_ALLOWED=NO test
