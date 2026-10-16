@@ -1,5 +1,16 @@
 # Sentinel Crier
 
+> **Product transition (October 2026):** Sentinel Crier is being rebuilt as a native
+> SwiftUI, **real-money-only**, multi-broker trading application. The iOS feature
+> work and live-only order journal are under review in PR #2. The rest of this
+> README documents an **older self-hosted fill-monitor/Discord publisher**,
+> not the forthcoming customer-facing trading app. Its Python server and
+> legacy screens are NOT required customer components and must not be mistaken
+> for the approved cloud trading architecture. Do not use the old monitor's
+> preview or sandbox instructions as a Crier live-order workflow. No live
+> order-routing integration has been approved or enabled. See
+> [Live execution architecture](docs/live-execution-architecture.md).
+>
 Free, open-source brokerage fill alerts for the Sentinel family. Trade in your brokerage app; an always-on Crier service turns account events into compact Discord messages. Configure presentation from an iPhone-friendly browser console or a PC browser.
 
 **Status: self-hosted monitor and Discord publisher, with experimental Webull and Tradier adapters.** One command starts the console, selected account monitor and publisher. Receipt capture and a versioned event interface support other sources. Automated broker coverage still needs account-specific validation. Crier never places, changes or cancels trades. A separate experimental native iOS ReplayKit companion now exists; it is not a hosted customer platform or a validated unattended iPhone screen reader.
