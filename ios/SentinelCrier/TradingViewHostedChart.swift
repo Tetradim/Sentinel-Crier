@@ -25,7 +25,9 @@ enum TradingViewDisplaySymbol {
         guard symbol.range(of: #"^[A-Z]{1,5}$"#, options: .regularExpression) != nil else {
             return nil
         }
-        return "AMEX:\(symbol)"
+        // Only exchange mappings independently verified for widget display.
+        guard symbol == "IWM" else { return nil }
+        return "AMEX:IWM"
     }
 }
 
@@ -36,18 +38,19 @@ struct TradingViewHostedChart: View {
     var body: some View {
         Group {
             if !TradingViewChartPolicy.commercialEmbedApproved {
-                ContentUnavailableView(
-                    "TradingView chart not enabled",
-                    systemImage: "chart.xyaxis.line",
-                    description: Text("Embedded TradingView data requires verified commercial display permissions. Crier will not use widget prices for trading orders.")
-                )
+                VStack(spacing: 10) {
+                    Image(systemName: "chart.xyaxis.line").font(.largeTitle)
+                    Text("TradingView chart not enabled").font(.headline)
+                    Text("Embedded TradingView data requires verified commercial display permissions. Widget prices cannot be used for trading orders.")
+                        .font(.footnote).multilineTextAlignment(.center)
+                }.foregroundStyle(.secondary).padding()
             } else if let symbol = TradingViewDisplaySymbol.listedETF(ticker) {
                 TradingViewWebWidget(symbol: symbol, timeframe: timeframe)
             } else {
-                ContentUnavailableView(
-                    "Symbol unavailable", systemImage: "exclamationmark.triangle",
-                    description: Text("Choose a supported listed stock or ETF.")
-                )
+                VStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle")
+                    Text("The symbol is not mapped to a verified TradingView listing.")
+                }.foregroundStyle(.secondary).padding()
             }
         }
     }
@@ -114,7 +117,7 @@ private struct TradingViewWebWidget: UIViewRepresentable {
            "timezone":"America/New_York","theme":"dark","style":"1",
            "locale":"en","allow_symbol_change":false,"hide_side_toolbar":true,
            "hide_top_toolbar":false,"hide_legend":false,"hide_volume":false,
-           "withdateranges":true,"studies":["Moving Average Exponential"]}
+           "withdateranges":true,"studies":[]}
           </script>
         </div></body></html>
         """
