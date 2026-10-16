@@ -55,3 +55,45 @@ before slicing the visible chart window.
   taking account of attribution/license and native iOS compatibility.
 - Never let chart state bypass the broker-confirmed order preview or live-order
   authorization flow.
+
+
+## TradingView hosted data — display only, approval gated
+
+Product choice (October 2026): use TradingView **hosted chart widgets** as
+the preferred source of **displayed chart visuals** for IWM once applicable
+commercial embedded-app permission and exchange data licensing are confirmed.
+
+This is intentionally **not** the same as TradingView Lightweight Charts,
+which provides rendering only and contains no market data:
+https://tradingview.github.io/lightweight-charts/docs/product-comparison
+
+The TradingView-hosted Advanced Chart widget can itself display
+TradingView-sourced prices, but these are licensed for display, **not** an API
+feed for Crier. TradingView specifically restricts non-display and trading/
+order-verification uses of its market data:
+https://www.tradingview.com/policies/
+https://www.tradingview.com/widget-docs/widgets/charts/advanced-chart/
+
+`TradingViewHostedChart.swift` contains a WebKit wrapper, restricted to a
+verified ETF symbol mapping (IWM), with the official TradingView attribution
+visible. Its `commercialEmbedApproved` flag stays **false** pending written
+approval of the particular mobile commercial use, market coverage and widget
+integration. The embedded widget is never wired into order submission,
+execution price checks or automated indicator signals.
+
+The user-approved native EMA 5/10/20 renderer remains available for actual
+licensed candle data. TradingView's hosted widget has its own studies/UI and
+cannot be assumed to inherit Crier's EMA settings; verify three period-specific
+EMAs and display permissions before activating the widget. TradingView does
+not guarantee charting for all individual OCC option contracts; those remain
+unavailable until an independently licensed per-contract data feed is approved.
+
+## Future architecture preserved separately (not active)
+
+`crier/future_unified_market_feed.py` is intentionally isolated and labeled
+**FUTURE / NOT ACTIVE**. It documents and implements only pure eligibility
+selection for possibly combining authorized provider subscriptions into one
+Crier *delivery* stream. It does not connect to providers, aggregate or average
+prices, extract TradingView data, or participate in the active app/API.
+
+The unified market feed is postponed unless the product direction changes.
