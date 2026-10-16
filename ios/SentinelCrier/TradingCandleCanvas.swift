@@ -11,9 +11,9 @@ struct TradingCandleCanvas: View {
     @State private var cursorFraction: CGFloat?
     private func emaColor(_ period: Int) -> Color {
         switch period {
-        case 9: return .yellow
-        case 20: return .cyan
-        case 50: return .purple
+        case 5: return .yellow
+        case 10: return .cyan
+        case 20: return .purple
         default: return .orange
         }
     }
