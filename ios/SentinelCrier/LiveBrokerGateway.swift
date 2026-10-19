@@ -87,6 +87,8 @@ protocol LiveBrokerGateway {
 /// ALSO enforce confirmation, account authorization, and idempotency server-side.
 actor LiveOrderConfirmationGate {
     private var activeOrderId: String?
+    private var approvedRequest: LiveOrderRequest?
+    private var approvedPreview: LiveOrderPreview?
     private var submissionStarted = false
 
     func begin(_ request: LiveOrderRequest, preview: LiveOrderPreview) throws {
@@ -94,13 +96,17 @@ actor LiveOrderConfirmationGate {
         guard activeOrderId == nil, preview.matches(request) else {
             throw LiveOrderError.invalidOrder
         }
+        approvedRequest = request
+        approvedPreview = preview
         activeOrderId = request.clientOrderId
         submissionStarted = false
     }
 
     /// Call only in the explicit, customer-confirmed action handler.
     func submitConfirmed(_ request: LiveOrderRequest, via gateway: LiveBrokerGateway) async throws -> LiveOrderReceipt {
-        guard activeOrderId == request.clientOrderId, !submissionStarted else {
+        guard activeOrderId == request.clientOrderId, approvedRequest == request,
+              let preview = approvedPreview, preview.matches(request),
+              Date().timeIntervalSince(preview.previewedAt) < 60, !submissionStarted else {
             throw LiveOrderError.invalidOrder
         }
         submissionStarted = true

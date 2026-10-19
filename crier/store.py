@@ -60,8 +60,13 @@ class Store:
             db.execute("BEGIN IMMEDIATE")
             return self.ingest_in_transaction(db, snap, settings, baseline)
 
-    def ingest_in_transaction(self, db, snap: Snapshot, settings: Settings, baseline=False):
+    def ingest_in_transaction(self, db, snap: Snapshot, settings: Settings, baseline=False, *, execution_price=None):
         """Caller must own a transaction; used for atomic receipt/event acceptance."""
+        if execution_price is not None:
+            if (snap.broker != "alpaca" or snap.verification != "broker_reported"
+                    or not isinstance(execution_price, Decimal)
+                    or not execution_price.is_finite() or execution_price <= 0):
+                raise ValueError("Exact execution price requires trusted Alpaca fill evidence")
         key = order_key(snap)
         identity_parts = [snap.symbol, snap.category, snap.side, snap.intent]
         # Keep existing broker watermarks compatible; do not merge manual and broker evidence.
@@ -93,6 +98,14 @@ class Store:
         else:
             quantity = snap.cumulative_qty - old_qty
             price = (snap.average_price * snap.cumulative_qty - old_price * old_qty) / quantity
+            if execution_price is not None:
+                # Snapshot averages round to 8 decimals. Permit only the maximum
+                # notional error from rounding BOTH cumulative averages (half an
+                # eighth-decimal unit each), never an arbitrary price override.
+                error_bound = (snap.cumulative_qty + old_qty) * Decimal("0.000000005")
+                if abs((execution_price - price) * quantity) > error_bound:
+                    raise ValueError("Execution price disagrees with cumulative notional")
+                price = execution_price
             if price <= 0: outcome = "review"
             else:
                 # Persist watermark and frozen public payload in one transaction.

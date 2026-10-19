@@ -11,6 +11,7 @@ actor VerifiedExecutionOutbox {
         var state: DeliveryState
         var discordMessageId: String?
         let recordedAt: Date
+        var retryAfter: Date?
     }
 
     private let folder: URL
@@ -62,10 +63,19 @@ actor VerifiedExecutionOutbox {
     /// Returns one pending entry and marks it uncertain before network I/O.
     /// A crash or timeout cannot cause an automatic duplicate Discord post.
     func claimForDelivery() throws -> Entry? {
-        guard var entry = entries().first(where: { $0.state == .pending }) else { return nil }
+        guard !entries().contains(where: { ($0.retryAfter ?? .distantPast) > Date() }),
+              var entry = entries().first(where: { $0.state == .pending }) else { return nil }
         entry.state = .uncertain
         try persist(entry)
         return entry
+    }
+
+    func rateLimited(id: String, seconds: Double) throws {
+        guard let data = try? Data(contentsOf: file(for: id)),
+              var entry = try? decoder.decode(Entry.self, from: data), entry.state == .uncertain else { return }
+        entry.state = .pending
+        entry.retryAfter = Date().addingTimeInterval(seconds.isFinite && seconds >= 0 ? max(1, seconds) : 60)
+        try persist(entry)
     }
 
     func confirmDelivery(id: String, discordMessageId: String) throws {

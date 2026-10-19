@@ -12,6 +12,9 @@ targets:
     type: application
     platform: iOS
     sources:
+      - path: SentinelCrier/AlpacaREST.swift
+      - path: SentinelCrier/AlpacaJournal.swift
+      - path: SentinelCrier/AlpacaWorkspace.swift
       - path: SentinelCrier/SentinelCrierApp.swift
       - path: SentinelCrier/StandaloneConfiguration.swift
       - path: SentinelCrier/CrierCommandCenter.swift
@@ -42,6 +45,7 @@ targets:
     type: bundle.unit-test
     platform: iOS
     sources:
+      - path: SentinelCrier/AlpacaTests.swift
       - path: SentinelCrier/MultiBrokerTradingTests.swift
       - path: SentinelCrier/TradingChartTests.swift
     dependencies:

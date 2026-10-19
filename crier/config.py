@@ -30,8 +30,8 @@ class Config:
             except FileExistsError: pass
             self.token = path.read_text(encoding="utf-8").strip()
         if len(self.token) < 32: raise ValueError("CRIER_ACCESS_TOKEN must contain at least 32 characters")
-        if self.monitor not in ("none", "webull", "tradier"):
-            raise ValueError("CRIER_MONITOR must be none, webull or tradier")
+        if self.monitor not in ("none", "webull", "tradier", "alpaca"):
+            raise ValueError("CRIER_MONITOR must be none, webull, tradier or alpaca")
         if self.intake_key and (len(self.intake_key) < 32 or self.intake_key == self.token):
             raise ValueError("CRIER_INTAKE_KEY must be a separate key with at least 32 characters")
         if self.screen_upload_key and (len(self.screen_upload_key) < 32 or self.screen_upload_key in (self.token, self.intake_key)):

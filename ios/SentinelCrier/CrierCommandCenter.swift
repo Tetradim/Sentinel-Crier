@@ -3,76 +3,79 @@ import SwiftUI
 /// Original native SwiftUI shell: five primary tabs, with account settings
 /// available from Home instead of consuming a permanent tab.
 struct CrierCommandCenter: View {
+    @StateObject private var model = AlpacaWorkspace()
+    @Environment(\.scenePhase) private var scenePhase
     var body: some View {
         TabView {
             BrokerageOverview()
                 .tabItem { Label("Home", systemImage: "house") }
             CrierMarketsView()
                 .tabItem { Label("Markets", systemImage: "chart.xyaxis.line") }
-            LiveTradingHome()
+            AlpacaTradingView()
                 .tabItem { Label("Trade", systemImage: "arrow.left.arrow.right") }
             CrierPositionsView()
                 .tabItem { Label("Positions", systemImage: "square.stack.3d.up") }
             CrierExecutionsView()
                 .tabItem { Label("Alerts", systemImage: "bell") }
         }
+        .environmentObject(model)
         .preferredColorScheme(.dark)
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                await model.refresh()
+                do { try await Task.sleep(nanoseconds: 15_000_000_000) } catch { return }
+            }
+        }
     }
 }
 
 struct CrierPositionsView: View {
+    @EnvironmentObject var model: AlpacaWorkspace
     var body: some View {
         NavigationStack {
             List {
-                Section("All Accounts") {
-                    Label("No brokerage positions available", systemImage: "square.stack.3d.up")
-                        .foregroundStyle(.secondary)
-                    Text("Trade Groups will show each brokerage's real position quantity and independent fill status. Coordinated closes require a fresh broker position check.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-            }
-            .navigationTitle("Positions")
-        }
-    }
-}
-
-struct CrierExecutionsView: View {
-    @State private var executions: [VerifiedExecutionOutbox.Entry] = []
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section("Verified executions") {
-                    if executions.isEmpty {
-                        Label("No confirmed fills yet", systemImage: "checkmark.seal")
-                            .foregroundStyle(.secondary)
-                    }
-                    ForEach(executions) { entry in
-                        VStack(alignment: .leading, spacing: 4) {
-                            let execution = entry.execution
-                            Text("\(execution.contract.underlying) \(execution.contract.expiration) \(execution.contract.strike)\(execution.contract.right)")
-                                .font(.headline)
-                            Text("\(execution.action.rawValue) · \(execution.incrementalQuantity) @ $\(execution.executionPrice)")
-                            Text("\(execution.brokerId) · Discord \(entry.state.rawValue)")
-                                .font(.caption).foregroundStyle(.secondary)
+                Section("\(model.environment.rawValue.uppercased()) positions") {
+                    if model.positions.isEmpty { Text("No positions loaded. Connect or refresh the account.") }
+                    ForEach(model.positions) { position in
+                        VStack(alignment: .leading) {
+                            Text(position.symbol).font(.headline)
+                            Text("Quantity: \(position.qty) � average $\(position.avg_entry_price)")
+                            if let value = position.market_value { Text("Market value: $\(value)") }
                         }
                     }
                 }
-                Section("Discord trading signals") {
-                    Text("Incoming signal channels will be available after approved Discord intake and source permissions are configured. Messages will prepare tickets, not automatically execute trades.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-            }
-            .navigationTitle("Alerts")
-            .task { await refresh() }
-            .refreshable { await refresh() }
+                Text(model.message).font(.footnote)
+            }.navigationTitle("Positions").refreshable { await model.refresh() }
         }
     }
-
-    @MainActor
-    private func refresh() async {
-        guard let outbox = VerifiedExecutionOutbox() else { return }
-        executions = Array(await outbox.entries().reversed())
+}
+struct CrierExecutionsView: View {
+    @EnvironmentObject var model: AlpacaWorkspace
+    @AppStorage("discordFillStyle") private var style = "plain"
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Discord fill format") {
+                    Picker("Format", selection: $style) {
+                        Text("Plain text").tag("plain")
+                        Text("Card").tag("card")
+                    }
+                    Text("Only broker FILL activities are published. First connection sets a baseline; earlier history is not posted. Monitoring runs while this app is active. Uncertain deliveries need manual Discord verification and are never automatically resent.").font(.footnote)
+                }
+                Section("\(model.environment.rawValue.uppercased()) verified fills") {
+                    ForEach(model.deliveries.reversed()) { entry in
+                        VStack(alignment: .leading) {
+                            Text("\(entry.fill.side.uppercased()) \(entry.fill.qty) \(entry.fill.symbol) @ $\(entry.fill.price)")
+                            Text(entry.fill.transaction_time).font(.caption)
+                            Text("Discord: \(entry.state)").font(.caption)
+                            Text(entry.fill.id).font(.caption).textSelection(.enabled)
+                        }
+                    }
+                }
+                Text(model.message).font(.footnote)
+            }.navigationTitle("Alerts").refreshable { await model.refresh() }
+        }
     }
 }
 
@@ -83,17 +86,7 @@ struct CrierConnectionsView: View {
 
     var body: some View {
         Form {
-            Section("Live broker connections") {
-                ForEach(["Webull", "Alpaca", "Tradier"], id: \.self) { name in
-                    HStack {
-                        Text(name)
-                        Spacer()
-                        Text("Not connected").font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                Text("Official broker authorization requires developer approval and a secure cloud backend. Brokerage passwords are never entered into Crier.")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
+            AlpacaConnectionForm()
             Section("Preferences") {
                 NavigationLink("Trading settings", destination: CrierSettingsView())
             }
@@ -132,7 +125,7 @@ struct CrierSettingsView: View {
                 Toggle("Automatic stop orders", isOn: $autoStops).disabled(true)
                 Toggle("Automatic take-profit orders", isOn: $autoTakeProfit).disabled(true)
                 Toggle("Discord-triggered automatic trading", isOn: $automatedDiscord).disabled(true)
-                Text("These are preference placeholders only. No automation is active or connected to a broker in this build. All optional controls default to off.")
+                Text("These are preference placeholders only. These automatic order strategies are not implemented. Manual Alpaca orders are available from Trade. All optional controls default to off.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Section("Execution safeguards") {

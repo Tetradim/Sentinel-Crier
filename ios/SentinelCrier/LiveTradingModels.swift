@@ -35,7 +35,7 @@ enum LiveOrderAction: String, Codable {
     case buyToOpen, sellToClose, sellToOpen, buyToClose
 }
 
-struct LiveOrderRequest: Codable {
+struct LiveOrderRequest: Codable, Equatable {
     let brokerId: String
     let accountId: String
     let contract: LiveOptionContract

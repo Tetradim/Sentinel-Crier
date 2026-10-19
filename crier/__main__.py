@@ -8,7 +8,7 @@ def main():
     parser.add_argument("command", choices=["serve", "watch", "export-history", "enroll"], nargs="?", default="serve")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", default=8765, type=int)
-    parser.add_argument("--monitor", choices=["none", "webull", "tradier"], help="Start a read-only monitor with the console")
+    parser.add_argument("--monitor", choices=["none", "webull", "tradier", "alpaca"], help="Start a read-only monitor with the console")
     parser.add_argument("--output", default="data/webull-history.json")
     parser.add_argument("--baseline", help="Path to a complete verified baseline JSON manifest")
     args = parser.parse_args()

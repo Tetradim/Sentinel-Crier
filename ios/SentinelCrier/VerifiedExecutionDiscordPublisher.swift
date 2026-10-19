@@ -32,7 +32,12 @@ actor VerifiedExecutionDiscordPublisher {
             "content": content,
             "allowed_mentions": ["parse": []]
         ])
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await CrierHTTPSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, http.statusCode == 429 {
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            try await outbox.rateLimited(id: entry.id, seconds: object?["retry_after"] as? Double ?? 60)
+            return
+        }
         guard let http = response as? HTTPURLResponse, http.statusCode == 200,
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let id = object["id"] as? String, !id.isEmpty,

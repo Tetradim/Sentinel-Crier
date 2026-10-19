@@ -13,6 +13,8 @@ def run_monitor(config):
             from .webull import observe
         elif config.monitor == "tradier":
             from .tradier import observe
+        elif config.monitor == "alpaca":
+            from .alpaca import observe
         else:
             return
         observe(config)

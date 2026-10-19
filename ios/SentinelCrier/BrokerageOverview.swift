@@ -3,60 +3,30 @@ import SwiftUI
 /// Fast, read-only account overview. Empty state is deliberate until the
 /// authorized cloud broker snapshot endpoint has been provisioned.
 struct BrokerageOverview: View {
+    @EnvironmentObject var model: AlpacaWorkspace
     @AppStorage(TradingPreferences.hideBalancesKey) private var hideBalances = false
-
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("All Accounts").font(.title2.bold())
-                            Text("No connected brokerage accounts")
-                                .font(.footnote).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button {
-                            hideBalances.toggle()
-                        } label: {
-                            Image(systemName: hideBalances ? "eye.slash" : "eye")
-                        }
-                        .accessibilityLabel(hideBalances ? "Show balances" : "Hide balances")
-                    }
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text("Total equity").font(.caption).foregroundStyle(.secondary)
-                            Text(hideBalances ? "â€¢â€¢â€¢â€¢â€¢â€¢" : "Unavailable")
-                                .font(.title3.weight(.semibold))
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing) {
-                            Text("Buying power").font(.caption).foregroundStyle(.secondary)
-                            Text(hideBalances ? "â€¢â€¢â€¢â€¢â€¢â€¢" : "Unavailable")
-                                .font(.title3.weight(.semibold))
-                        }
-                    }
+                Section("Alpaca • \(model.environment.rawValue.uppercased())") {
+                    if let account = model.account {
+                        Text("Account status: \(account.status)")
+                        Text("Equity: \(hideBalances ? "••••" : "$" + account.equity)")
+                        Text("Buying power: \(hideBalances ? "••••" : "$" + account.buying_power)")
+                        Toggle("Hide balances", isOn: $hideBalances)
+                    } else { Text("Connect API credentials in Connections.") }
+                    if let time = model.updatedAt { Text("Updated \(time.formatted())").font(.caption) }
+                    Text(model.message).font(.footnote)
                 }
-                Section("Connected brokerages") {
-                    Label("Connect a broker to see live balances", systemImage: "building.columns")
-                        .foregroundStyle(.secondary)
-                    Text("Crier will display timestamped live account data when its official broker connections are active. A delayed account must not block the entire dashboard.")
-                        .font(.footnote).foregroundStyle(.secondary)
+                Section("Monitoring") {
+                    Text("Orders and fills refresh every 15 seconds while the app is active. Reopening catches up fills since the saved baseline. iOS suspension stops monitoring and Discord delivery until you return.")
+                    Text("Webull Connect approval pending. Automated signals, stops and profit orders are unavailable.").font(.footnote)
                 }
-                Section("Activity") {
-                    Label("No live trading activity to display", systemImage: "bolt.horizontal.circle")
-                        .foregroundStyle(.secondary)
+            }.navigationTitle("Home")
+                .refreshable { await model.refresh() }
+                .toolbar {
+                    NavigationLink(destination: CrierConnectionsView()) { Image(systemName: "person.crop.circle") }.accessibilityLabel("Connections and settings")
                 }
-            }
-            .navigationTitle("Home")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    NavigationLink(destination: CrierConnectionsView()) {
-                        Image(systemName: "person.crop.circle")
-                    }
-                    .accessibilityLabel("Connections and settings")
-                }
-            }
         }
     }
 }
@@ -70,7 +40,7 @@ struct CrierMarketsView: View {
                     HStack {
                         Image(systemName: "lock.shield")
                             .foregroundStyle(.secondary)
-                        Text("Quotes, option chains and contracts will be shown only after live data licensing and broker APIs are connected.")
+                        Text("This chart workspace is not an Alpaca quote feed. Discover tradable option contracts in Trade; live bid/ask quotes are not implemented.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }

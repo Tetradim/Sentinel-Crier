@@ -1,60 +1,31 @@
-# Standalone iPhone operation (current beta)
+# Standalone iPhone build and validation
 
-The iOS app no longer needs a Python/PC server. Its five-tab interface stores local
-observations in the shared App Group; the user can paste a Discord channel webhook
-into **Connections** and explicitly enable **unverified OCR candidate alerts** in
-**Alerts**. The ReplayKit broadcast extension uses Vision OCR, records observations
-on the phone, and posts clearly labeled **UNVERIFIED** candidates directly to Discord
-over HTTPS. No brokerage login is collected.
+The native app connects directly to Alpaca's official personal Trading API. It does not require the Python backend or a PC after installation. Webull Connect remains pending approval; no Webull order placement is implemented. There is no ReplayKit extension in this target.
 
-The user must manually start an iOS screen broadcast. Apple may stop the extension,
-and it is not a permanent background monitor. OCR is not authenticated Webull
-execution data. Repeated identical receipts are suppressed even across sessions;
-this may also suppress distinct identical trades. Ambiguous network outcomes are
-not automatically retried, to avoid duplicate Discord messages. These trade-offs
-need physical-iPhone testing with realistic screens and Discord.
+## Build on macOS
 
-The Discord webhook is a secret stored in the shared Keychain access group. The
-App Group and Keychain Sharing entitlements must be signed for both targets.
-A signed iPhone build is still required for installation; a simulator build cannot
-be installed on a physical device.
-
-The Python backend remains in the repository as a **separate optional deployment**
-and is not needed by the standalone iOS app.
-
----
-
-# Sentinel Crier iOS companion: build and testing
-
-The SwiftUI app, ReplayKit extension and recognition test target are declared in `project.yml` and generated using XcodeGen.
-
-## Build on macOS or GitHub Actions
-
-1. Install Xcode and XcodeGen (`brew install xcodegen`).
+1. Install Xcode with an iOS simulator runtime and XcodeGen.
 2. Run `cd ios && xcodegen generate`.
-3. Run `xcodebuild -project SentinelCrier.xcodeproj -scheme SentinelCrier -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build`.
-4. Run `xcodebuild -project SentinelCrier.xcodeproj -scheme RecognitionTests -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' CODE_SIGNING_ALLOWED=NO test`. Adjust the simulator destination to an installed runtime.
-5. For device installation, configure an Apple development team and provisioning for the app and broadcast extension. Both targets need App Group `group.com.tetradim.sentinelcrier` and Keychain Sharing `<TeamPrefix>com.tetradim.sentinelcrier.shared`. The main app additionally requires its app-only Keychain group.
+3. Build: `xcodebuild -project SentinelCrier.xcodeproj -scheme SentinelCrier -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build`.
+4. Test: `xcodebuild -project SentinelCrier.xcodeproj -scheme TradingTests -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' CODE_SIGNING_ALLOWED=NO test`. Select an installed simulator if that name differs.
+5. For physical installation, configure your Apple team, bundle ID, App Group `group.com.tetradim.sentinelcrier`, and Keychain Sharing entitlement `<TeamPrefix>com.tetradim.sentinelcrier.shared`. A signed archive/provisioning profile is required; simulator output cannot install on a phone.
 
-The repository's macOS CI workflow attempts to build and run tests. A configured workflow is not evidence of a passing run; inspect GitHub Actions results.
+These instructions are not evidence of a successful build. XCTest, signing, device networking, Keychain access, app lifecycle recovery and paper-broker integration require validation on macOS/iPhone. No broker API request or order was executed during implementation.
 
-## Implemented stage-one code
+## Connect and operate
 
-- Native SwiftUI setup and HTTPS backend status check; main admin token in device Keychain.
-- Explicit ReplayKit system broadcast picker and broadcast extension lifecycle.
-- On-device Vision OCR with a conservative Webull options parser.
-- Frame-state coalescing so one continuously visible receipt is not repeatedly enqueued.
-- Independent screen-upload Keychain credential, App Group endpoint configuration, local bounded queue, and HTTPS upload retries.
-- Backend `POST /api/screen-observations` authenticated with `CRIER_SCREEN_UPLOAD_KEY`, storing observations as `pending_review`.
-- No OCR-driven Discord publishing or order placement.
+- Open Home → Connections. Paper is always the launch default. Select paper or live explicitly, then save that environment's Alpaca API key and secret. Secrets are device-only Keychain entries. Disconnect before changing environments. Live orders use real money and have an explicit real-money confirmation label.
+- Save a Discord channel webhook in Connections. Choose plain text or card format in Alerts.
+- The first successful refresh establishes a durable fill baseline without posting historical fills. Later active refreshes catch up broker FILL activities by exact execution ID, including fills from other clients on the connected account.
+- Trade supports whole-share stocks and standard 100-share single-leg options, day limit orders, buys and closes of existing long holdings. Options discovery requires underlying and an exact expiration; nonstandard contracts are filtered out. Live bid/ask quotes, multi-leg strategies, short opening, automated signals/stops/profit-taking and multi-broker execution are not implemented.
+- Enter a limit and review the immutable ticket. Review is a local estimate, not a broker preview or approval. Confirm within 60 seconds. Acceptance is not a fill. Pull to refresh the saved order list; cancellation is a request and must be reconciled.
+- Client IDs and submissions are written atomically before POST. Unknown results block new submissions for that account until reconciliation finds the order. Never manually replace an unknown order without checking Alpaca. Preserve the journal if it cannot be read; deleting it removes duplicate protection.
+- Orders, positions and fills refresh every 15 seconds only while the app is active. iOS suspension stops polling and Discord delivery. Reopening catches up from the durable baseline. Catch-up is bounded to 10,000 events per refresh and fails without advancing the baseline if exceeded.
+- Discord entries become uncertain before sending. Successful `wait=true` responses record the message ID. HTTP 429 creates a shared cooldown and safely returns the item to pending. Timeouts, other HTTP errors and crashes remain uncertain and are not automatically resent. Verify these manually in Discord; there is no unsafe retry button.
+- Paper/live and account identities isolate persisted orders and fills. Redirects are disabled for broker and Discord requests. Credentials never appear in persisted tickets or broker error messages.
 
-## Known limits / validation gates
+## Validation before live use
 
-- The iOS app and extension have **not** been verified on a physical iPhone.
-- ReplayKit cannot run invisibly in the background and must be started by the user.
-- Upload retries require a subsequent active broadcast; a stopped extension does not drain its queue.
-- Webull OCR patterns require real redacted completed, pending and partial-order examples.
-- Identical screen fields are not unique execution IDs; independent broker verification is needed for unattended Discord alerts.
-- Provisioning, Keychain sharing, build, XCTest and on-device HTTPS uploads need to be checked before customer installation.
+Run all `TradingTests`, then use paper credentials on a physical iPhone to verify discovery, reviewed submission, partial fills, cancellation, foreground catch-up, lost-network reconciliation, relaunch persistence, Discord 429 behavior and environment switching. Live capability is implemented but is not a claim of live or paper execution certification. Keep live credentials disconnected until those checks pass.
 
-See [screen upload deployment guide](../docs/webull-screen-upload.md).
+Official references: [Trading orders](https://docs.alpaca.markets/us/docs/working-with-orders), [options trading](https://docs.alpaca.markets/us/docs/options-trading), [Trading API models](https://alpaca.markets/sdks/python/api_reference/trading/models.html).

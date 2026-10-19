@@ -51,7 +51,7 @@ class Snapshot(BaseModel):
     category: Literal["US_STOCK", "US_OPTION"]
     side: Literal["BUY", "SELL"]
     intent: Literal["OPEN", "CLOSE", "UNKNOWN"] = "UNKNOWN"
-    cumulative_qty: Decimal = Field(gt=0, allow_inf_nan=False, max_digits=20, decimal_places=8)
+    cumulative_qty: Decimal = Field(gt=0, allow_inf_nan=False, max_digits=20, decimal_places=9)
     average_price: Decimal = Field(gt=0, allow_inf_nan=False, max_digits=20, decimal_places=8)
     occurred_at: datetime
     status: Literal["PARTIAL", "FILLED"]
