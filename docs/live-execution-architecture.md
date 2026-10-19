@@ -29,8 +29,12 @@ This feature branch adds `crier/live_order_journal.py`, a persistent
 4. Obtain independent, current broker previews for each account. Store a
    canonical hash of the complete order parameters, applicable fees, account
    selections, quantity allocation, and expiration. Expire the review if inputs
-   or contract data change. The journal does not yet store or enforce this
-   cryptographic preview binding.
+   or contract data change. The journal binds a confirmation to a digest of the
+   staged orders (`order_set_digest`) and expires it; the calling service must
+   still compute that digest over what the customer reviewed and the broker previewed.
+   Expired confirmations can be renewed with fresh customer consent only while
+   every order in the group remains unsubmitted. A reserved or reconciled order
+   prevents renewal of the entire group.
 5. Require explicit interactive customer confirmation of the full combined
    allocation and exposure. Authentication, CSRF/session protections,
    authorization policy and proof of consent must be enforced by the service.
@@ -84,3 +88,23 @@ iOS source/test project: `ios/project.yml`; build and run the iOS
 
 These commands are instructions; test execution in CI and on actual iPhones
 remains outstanding.
+
+## Journal schema upgrade
+
+Schema 2 upgrades the original unversioned journal (and version 1) inside a
+single SQLite write transaction. Keep a database backup before deployment.
+Orders, reservations, fills, and existing audit entries are preserved.
+Execution rows gain the broker order identity from their matching order.
+Legacy confirmations require fresh confirmation before an unsubmitted order
+can be reserved; unknown submissions remain reserved and cannot be retried.
+
+Unrecognized schemas, damaged audit chains, or fills without a matching broker
+order stop the upgrade and roll back all schema/data changes. Resolve these
+against broker records; do not delete the database to bypass the error. Legacy
+timestamps are preserved; timezone-less or invalid values flag their orders
+for reconciliation. Repeated migration is safe.
+
+Callers must now supply `expected_digest=order_set_digest(reviewed_orders)` to
+`confirm_group`, and authenticated `broker_id` and `account_id` to
+`record_execution`. The digest does not replace customer authentication or a
+current broker preview. These helpers do not enable an iOS submission route.

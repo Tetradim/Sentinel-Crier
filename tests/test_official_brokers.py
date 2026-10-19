@@ -33,7 +33,7 @@ def test_live_alpaca_account_uses_official_host_and_auth_headers():
 
 def test_broker_missing_amount_remains_unknown():
     def response(request):
-        return httpx.Response(200, json={"id": "live-account"})
+        return httpx.Response(200, json={"id": "live-account", "currency": "USD"})
     adapter = AlpacaLiveReadOnly("key-id", "secret",
                                   transport=httpx.MockTransport(response))
     result = asyncio.run(adapter.account())
@@ -81,3 +81,35 @@ def test_no_redirect_to_untrusted_host():
                                   transport=httpx.MockTransport(response))
     with pytest.raises(BrokerConnectionError):
         asyncio.run(adapter.account())
+
+
+def test_missing_currency_is_never_assumed_to_be_usd():
+    def response(request):
+        return httpx.Response(200, json={"id": "live-account", "equity": "10"})
+    adapter = AlpacaLiveReadOnly("key-id", "secret",
+                                  transport=httpx.MockTransport(response))
+    with pytest.raises(BrokerConnectionError):
+        asyncio.run(adapter.account())
+
+
+def test_account_payload_matches_the_client_contract():
+    def response(request):
+        return httpx.Response(200, json={"id": "a1", "currency": "USD", "equity": "1"})
+    adapter = AlpacaLiveReadOnly("key-id", "secret",
+                                  transport=httpx.MockTransport(response))
+    assert set(asyncio.run(adapter.account())) == {
+        "broker_id", "account_id", "display_name", "currency", "equity",
+        "buying_power", "status"}
+
+
+@pytest.mark.parametrize("status", [401, 429, 503])
+def test_error_names_the_http_status_but_never_a_secret(status):
+    def response(request):
+        return httpx.Response(status, text="secret-body")
+    adapter = AlpacaLiveReadOnly("key-id", "very-secret",
+                                  transport=httpx.MockTransport(response))
+    with pytest.raises(BrokerConnectionError) as caught:
+        asyncio.run(adapter.account())
+    message = str(caught.value)
+    assert f"HTTP {status}" in message
+    assert "very-secret" not in message and "key-id" not in message and "secret-body" not in message

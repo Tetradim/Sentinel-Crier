@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from uuid import uuid4
 
-from crier.live_order_journal import LiveOrderJournal, OrderIntent, LiveJournalError
+from crier.live_order_journal import LiveOrderJournal, OrderIntent, LiveJournalError, order_set_digest
 
 
 def test_concurrent_fills_deduplicate_and_survive_restart(tmp_path):
@@ -15,7 +15,7 @@ def test_concurrent_fills_deduplicate_and_survive_restart(tmp_path):
             order = OrderIntent("paper-test", str(uuid4()), "alpaca", "paper",
                                 "TEST-CONTRACT", str(uuid4()), "buyToOpen", 10, "1.23")
             journal.stage_group([order])
-            journal.confirm_group(order.tenant_id, order.group_id)
+            journal.confirm_group(order.tenant_id, order.group_id, expected_digest=order_set_digest([order]))
             journal.reserve_submission(order.tenant_id, order.client_order_id)
             orders.append(order)
 
@@ -24,7 +24,8 @@ def test_concurrent_fills_deduplicate_and_survive_restart(tmp_path):
             return journal.record_execution(
                 order.tenant_id, order.client_order_id,
                 order.client_order_id + "-" + str(index), 1, "1.23",
-                "2026-10-16T15:00:00+00:00", order.client_order_id)
+                "2026-10-16T15:00:00+00:00", order.client_order_id,
+                broker_id=order.broker_id, account_id=order.account_id)
 
         unique = [(order, i) for order in orders for i in range(10)]
         with ThreadPoolExecutor(max_workers=12) as pool:
@@ -51,7 +52,7 @@ def test_concurrent_submission_reservation_has_exactly_one_winner(tmp_path):
                         "TEST-CONTRACT", str(uuid4()), "buyToOpen", 1, "0.01")
     try:
         journal.stage_group([order])
-        journal.confirm_group(order.tenant_id, order.group_id)
+        journal.confirm_group(order.tenant_id, order.group_id, expected_digest=order_set_digest([order]))
 
         def reserve(_):
             try:

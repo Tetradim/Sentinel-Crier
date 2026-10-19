@@ -8,8 +8,9 @@ per-customer identity provider are integrated. No fake balances or fills.
 from __future__ import annotations
 
 import hmac
+import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -17,14 +18,18 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from .official_brokers import AlpacaLiveReadOnly, BrokerConnectionError
 
+log = logging.getLogger("crier.cloud")
+
 
 @dataclass(frozen=True)
 class CloudSettings:
     """One-owner development deployment only; not customer multitenancy."""
 
-    api_token: str
-    alpaca_key_id: str | None = None
-    alpaca_secret_key: str | None = None
+    # repr=False: a dataclass repr would otherwise print every secret into logs,
+    # tracebacks and pytest failure output.
+    api_token: str = field(repr=False)
+    alpaca_key_id: str | None = field(default=None, repr=False)
+    alpaca_secret_key: str | None = field(default=None, repr=False)
 
     @classmethod
     def from_environment(cls) -> "CloudSettings":
@@ -67,7 +72,8 @@ def create_cloud_app(settings: CloudSettings | None = None) -> FastAPI:
 
     @app.middleware("http")
     async def harden(request: Request, call_next):
-        if request.url.path != "/health" and request.method != "GET":
+        safe = request.method == "GET" or (request.method == "HEAD" and request.url.path == "/health")
+        if not safe:
             return JSONResponse(
                 {"detail": "Live order services unavailable until approved and audited"},
                 status_code=405,
@@ -79,16 +85,18 @@ def create_cloud_app(settings: CloudSettings | None = None) -> FastAPI:
         response.headers["Referrer-Policy"] = "no-referrer"
         return response
 
+    expected_token = settings.api_token.encode("utf-8")
+
     def authorize(authorization: str | None = Header(default=None)) -> None:
-        if not authorization or not authorization.startswith("Bearer "):
-            raise HTTPException(status_code=401, detail="Authorization required",
-                                headers={"WWW-Authenticate": "Bearer"})
-        supplied = authorization.removeprefix("Bearer ")
-        if not hmac.compare_digest(supplied, settings.api_token):
+        # Compare bytes: hmac.compare_digest raises TypeError on non-ASCII str, which
+        # would turn a malformed header into an unauthenticated 500.
+        scheme, _, supplied = (authorization or "").partition(" ")
+        if scheme.lower() != "bearer" or not hmac.compare_digest(
+                supplied.encode("utf-8", "surrogateescape"), expected_token):
             raise HTTPException(status_code=401, detail="Authorization required",
                                 headers={"WWW-Authenticate": "Bearer"})
 
-    @app.get("/health")
+    @app.api_route("/health", methods=["GET", "HEAD"])
     def health():
         # Liveness only; must never be used as proof of trading readiness.
         return {"service": "crier-cloud", "alive": True}
@@ -125,7 +133,8 @@ def create_cloud_app(settings: CloudSettings | None = None) -> FastAPI:
         broker = alpaca_adapter()
         try:
             account = await broker.account()
-        except BrokerConnectionError:
+        except BrokerConnectionError as exc:
+            log.warning("alpaca account read failed: %s", exc)  # message never holds secrets
             raise HTTPException(status_code=503, detail="Live broker account unavailable")
         return {"captured_at": datetime.now(timezone.utc).isoformat(),
                 "accounts": [account], "unavailable_brokers": ["webull", "tradier"]}
@@ -136,7 +145,8 @@ def create_cloud_app(settings: CloudSettings | None = None) -> FastAPI:
         try:
             account = await broker.account()
             positions = await broker.positions()
-        except BrokerConnectionError:
+        except BrokerConnectionError as exc:
+            log.warning("alpaca positions read failed: %s", exc)
             raise HTTPException(status_code=503, detail="Live broker positions unavailable")
         for position in positions:
             position["account_id"] = account["account_id"]
