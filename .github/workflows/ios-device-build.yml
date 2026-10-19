@@ -1,0 +1,105 @@
+name: Signed iPhone package
+on:
+  workflow_dispatch:
+    inputs:
+      method:
+        description: Match the installed provisioning profile type
+        type: choice
+        required: true
+        default: app-store-connect
+        options: [app-store-connect, release-testing, debugging]
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: macos-15
+    timeout-minutes: 40
+    environment: ios-signing
+    env:
+      EXPORT_METHOD: ${{ inputs.method }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select installed Xcode
+        run: bash scripts/select_xcode.sh
+      - name: Install signing identity
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${BUILD_CERTIFICATE_BASE64:?Missing signing certificate}"
+          : "${P12_PASSWORD:?Missing certificate password}"
+          : "${BUILD_PROVISION_PROFILE_BASE64:?Missing provisioning profile}"
+          : "${KEYCHAIN_PASSWORD:?Missing temporary keychain password}"
+          : "${APPLE_TEAM_ID:?Missing Apple team ID}"
+          python3 - <<'PY'
+          import base64, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          for name, target in [('BUILD_CERTIFICATE_BASE64','signing.p12'), ('BUILD_PROVISION_PROFILE_BASE64','crier.mobileprovision')]:
+              (root / target).write_bytes(base64.b64decode(os.environ[name], validate=True))
+          PY
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/crier.keychain-db"
+          security set-keychain-settings -lut 21600 "$RUNNER_TEMP/crier.keychain-db"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/crier.keychain-db"
+          security import "$RUNNER_TEMP/signing.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$RUNNER_TEMP/crier.keychain-db"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/crier.keychain-db" >/dev/null
+          security list-keychain -d user -s "$RUNNER_TEMP/crier.keychain-db"
+          security cms -D -i "$RUNNER_TEMP/crier.mobileprovision" > "$RUNNER_TEMP/profile.plist"
+          python3 - <<'PY'
+          import datetime, os, pathlib, plistlib, shutil
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          profile = plistlib.loads((root / 'profile.plist').read_bytes())
+          team = os.environ['APPLE_TEAM_ID']
+          bundle = 'com.tetradim.sentinelcrier'
+          ent = profile['Entitlements']
+          assert team in profile['TeamIdentifier'], 'Wrong signing team'
+          assert ent['application-identifier'].endswith('.' + bundle), 'Wrong bundle identifier'
+          assert 'group.com.tetradim.sentinelcrier' in ent.get('com.apple.security.application-groups', []), 'Missing App Group'
+          assert profile['ExpirationDate'] > datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None), 'Expired profile'
+          method = os.environ['EXPORT_METHOD']
+          identity = 'Apple Development' if method == 'debugging' else 'Apple Distribution'
+          options = {'method': method, 'destination': 'export', 'teamID': team, 'signingStyle': 'manual',
+                     'signingCertificate': identity, 'provisioningProfiles': {bundle: profile['UUID']},
+                     'manageAppVersionAndBuildNumber': False}
+          (root / 'ExportOptions.plist').write_bytes(plistlib.dumps(options))
+          directory = pathlib.Path.home() / 'Library/MobileDevice/Provisioning Profiles'
+          directory.mkdir(parents=True, exist_ok=True)
+          shutil.copyfile(root / 'crier.mobileprovision', directory / (profile['UUID'] + '.mobileprovision'))
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write('PROFILE_UUID=' + profile['UUID'] + '\nSIGNING_IDENTITY=' + identity + '\n')
+          PY
+      - name: Generate project and archive
+        run: |
+          set -euo pipefail
+          brew install xcodegen
+          (cd ios && xcodegen generate)
+          xcodebuild -project ios/SentinelCrier.xcodeproj -scheme SentinelCrier -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Crier.xcarchive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" archive
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Crier.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/CrierExport"
+      - name: Save signed package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sentinel-Crier-${{ inputs.method }}-${{ github.run_number }}
+          path: ${{ runner.temp }}/CrierExport/*.ipa
+          if-no-files-found: error
+          retention-days: 7
+      - name: Remove signing identity
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/crier.keychain-db" || true
+          python3 - <<'PY'
+          import os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          for name in ('signing.p12', 'crier.mobileprovision', 'profile.plist'):
+              (root / name).unlink(missing_ok=True)
+          profile = os.environ.get('PROFILE_UUID')
+          if profile:
+              (pathlib.Path.home() / 'Library/MobileDevice/Provisioning Profiles' / (profile + '.mobileprovision')).unlink(missing_ok=True)
+          PY

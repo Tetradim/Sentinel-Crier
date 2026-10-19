@@ -4,10 +4,12 @@ on:
     paths:
       - 'ios/**'
       - '.github/workflows/ios-build.yml'
+      - 'scripts/select_xcode.sh'
   pull_request:
     paths:
       - 'ios/**'
       - '.github/workflows/ios-build.yml'
+      - 'scripts/select_xcode.sh'
 jobs:
   build:
     runs-on: macos-15
@@ -15,6 +17,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - name: Select installed Xcode
+        run: bash scripts/select_xcode.sh
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate Xcode project
