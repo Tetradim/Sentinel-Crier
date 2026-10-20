@@ -40,7 +40,7 @@ struct CrierPositionsView: View {
                     ForEach(model.positions) { position in
                         VStack(alignment: .leading) {
                             Text(position.symbol).font(.headline)
-                            Text("Quantity: \(position.qty) • average $\(position.avg_entry_price)")
+                            Text("Quantity: \(position.qty) â€¢ average $\(position.avg_entry_price)")
                             if let value = position.market_value { Text("Market value: $\(value)") }
                         }
                     }

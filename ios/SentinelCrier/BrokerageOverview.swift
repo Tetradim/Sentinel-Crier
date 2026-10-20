@@ -8,11 +8,11 @@ struct BrokerageOverview: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Alpaca • \(model.environment.rawValue.uppercased())") {
+                Section("Alpaca â€¢ \(model.environment.rawValue.uppercased())") {
                     if let account = model.account {
                         Text("Account status: \(account.status)")
-                        Text("Equity: \(hideBalances ? "••••" : "$" + account.equity)")
-                        Text("Buying power: \(hideBalances ? "••••" : "$" + account.buying_power)")
+                        Text("Equity: \(hideBalances ? "â€¢â€¢â€¢â€¢" : "$" + account.equity)")
+                        Text("Buying power: \(hideBalances ? "â€¢â€¢â€¢â€¢" : "$" + account.buying_power)")
                         Toggle("Hide balances", isOn: $hideBalances)
                     } else { Text("Connect API credentials in Connections.") }
                     if let time = model.updatedAt { Text("Updated \(time.formatted())").font(.caption) }
