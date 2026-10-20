@@ -44,6 +44,15 @@ struct MirrorPairing: Codable {
 }
 
 struct MirrorFillEvent: Codable {
+    static func confirmedIntent(order: AlpacaOrder, fill: AlpacaFill) throws -> String {
+        guard order.id == fill.order_id, order.symbol == fill.symbol, order.side == fill.side,
+              !order.client_order_id.hasPrefix("crier-m-"),
+              order.order_class == "simple" || order.order_class == "",
+              let intent = order.position_intent, ["buy_to_open", "sell_to_close"].contains(intent) else {
+            throw AlpacaError.invalid("Source order is mirrored, complex, mismatched or has unverified intent.")
+        }
+        return intent
+    }
     let event_id: String
     let environment: String
     let symbol: String
@@ -133,14 +142,10 @@ actor MirrorSender {
                     try change(item.key, status: "skipped: expired timestamp"); continue
                 }
                 let order = try await api.orderByID(item.fill.order_id)
-                guard order.id == item.fill.order_id, order.symbol == item.fill.symbol, order.side == item.fill.side,
-                      !order.client_order_id.hasPrefix("crier-m-") else {
-                    try change(item.key, status: "skipped: mirrored or mismatched order"); continue
+                do {
+                    let intent = try MirrorFillEvent.confirmedIntent(order: order, fill: item.fill)
+                    event = try MirrorFillEvent(fill: item.fill, environment: item.environment, accountID: item.account, intent: intent)
                 }
-                guard let intent = order.position_intent, ["buy_to_open", "sell_to_close"].contains(intent) else {
-                    try change(item.key, status: "skipped: source intent unverified"); message = "Skipped fill: broker did not confirm long opening/closing intent."; continue
-                }
-                do { event = try MirrorFillEvent(fill: item.fill, environment: item.environment, accountID: item.account, intent: intent) }
                 catch { try change(item.key, status: "skipped: unsupported fill"); continue }
                 try change(item.key, status: "pending", event: event)
             }

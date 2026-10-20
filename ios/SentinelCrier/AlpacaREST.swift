@@ -61,6 +61,7 @@ struct AlpacaOrder: Codable, Identifiable {
     let id: String; let client_order_id: String; let symbol: String; let status: String
     let qty: String?; let limit_price: String?; let filled_qty: String; let filled_avg_price: String?; let side: String
     var position_intent: String?
+    var order_class: String?
 }
 struct AlpacaFill: Codable, Identifiable, Equatable {
     let id: String; let activity_type: String; let order_id: String; let symbol: String

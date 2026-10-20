@@ -136,7 +136,7 @@ class Mirror:
         with self.db() as db:
             return {'configured': self.broker is not None,
                     'pairs': [dict(r) for r in db.execute('SELECT id,name,enabled,revoked,environment FROM pairs')],
-                    'events': [dict(r) for r in db.execute('SELECT id,pair_id,payload,state,note,created FROM events ORDER BY created DESC LIMIT 100')]}
+                    'events': [dict(r) for r in db.execute('SELECT id,pair_id,payload,state,note,client_id,broker_id,created FROM events ORDER BY created DESC LIMIT 100')]}
 
     def update(self, identity, state, note='', broker_id=None):
         with self.db() as db:

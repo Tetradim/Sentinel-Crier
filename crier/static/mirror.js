@@ -21,7 +21,7 @@ async function refresh() {
     $('pairs').append(row);
   }
   $('events').replaceChildren();
-  for(const event of state.events) { const data=JSON.parse(event.payload); const p=document.createElement('p'); p.textContent=`${data.side.toUpperCase()} ${data.quantity} ${data.symbol} @ $${data.price} • ${event.state} • ${event.note}`; $('events').append(p); }
+  for(const event of state.events) { const data=JSON.parse(event.payload); const p=document.createElement('p'); p.textContent=`${data.side.toUpperCase()} ${data.quantity} ${data.symbol} @ $${data.price} • ${event.state} • ${event.note} • Client ID: ${event.client_id}`; $('events').append(p); }
 }
 $('unlock').onclick=()=>run(async()=>{access=$('access').value;$('access').value='';await refresh();});
 $('pair').onclick=()=>run(async()=>{const pair=await api('/pairs','POST',{name:$('name').value});$('pairing').value=JSON.stringify({url:location.origin,token:pair.token,environment:pair.environment});await refresh();});

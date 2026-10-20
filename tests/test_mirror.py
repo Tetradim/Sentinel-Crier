@@ -113,3 +113,10 @@ def test_broker_adapter_uses_official_stock_class_and_no_redirects():
         raise AssertionError(request.url)
     broker = AlpacaMirrorBroker('paper','test-key','test-secret',httpx.Client(transport=httpx.MockTransport(handle)))
     broker.validate(event(symbol='AAPL'))
+
+def test_owner_can_identify_unresolved_order(setup):
+    mirror, broker, pair = setup; broker.fail = True
+    mirror.receive(pair['token'], event())
+    row = mirror.status()['events'][0]
+    assert row['client_id'] == broker.posts[0]['client_order_id']
+    assert row['broker_id'] is None
