@@ -4,7 +4,7 @@ Free, open-source broker fill alerts and a native iPhone trading interface for t
 Sentinel family. Crier publishes **executions confirmed by the broker**; submitting
 an order is not a fill and does not produce a filled-trade alert.
 
-## Two ways to run
+## Ways to run
 
 - **Native iPhone app:** connect a personal Alpaca account directly, review and
   confirm stock or standard single-leg option day-limit orders, reconcile orders,
@@ -15,6 +15,10 @@ an order is not a fill and does not produce a filled-trade alert.
   Crier polls supported broker fills and publishes through a durable Discord
   outbox. Its responsive console works on desktop and mobile. The Python monitor
   never places or cancels trades.
+- **Direct mirroring:** pair the native iPhone sender with a PC receiver. Enabling
+  Follow on the receiver authorizes automatic matching Alpaca orders. This optional
+  execution service uses separate credentials from the read-only monitor and does
+  not require Discord. See [direct mirroring setup](docs/direct-mirroring.md).
 
 The phone monitors while Crier is active and catches up when reopened. It cannot
 promise continuous background monitoring while another app is in use. Use the
