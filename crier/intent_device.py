@@ -20,6 +20,7 @@ class IntentDevice:
         self.path=self.folder/'intent-device.sqlite3'; self.broker=broker
         self.pair=None; self.engine=None; self.message='Not paired'; self.lock=threading.RLock()
         self.changed=asyncio.Event()
+        self.publish_changed=asyncio.Event()
         with self.db() as db:
             db.executescript('''CREATE TABLE IF NOT EXISTS outgoing(id TEXT PRIMARY KEY,pair TEXT,trade_id TEXT,sequence INTEGER,action TEXT,payload TEXT,state TEXT);
             CREATE TABLE IF NOT EXISTS cursors(pair TEXT PRIMARY KEY,cursor INTEGER);''')
@@ -83,6 +84,7 @@ class IntentDevice:
                 db.execute('INSERT INTO outgoing VALUES (?,?,?,?,?,?,?)',(event.event_id,self.fingerprint,trade_id,sequence,action,event.model_dump_json(),'pending'))
             self.engine.accept(event)
             self.changed.set()
+            self.publish_changed.set()
             return event
     def outgoing(self):
         if not self.pair: return []
@@ -94,6 +96,7 @@ class IntentDevice:
     async def publish_loop(self,stop):
         async with httpx.AsyncClient(timeout=10,follow_redirects=False,trust_env=False) as client:
             while not stop.is_set():
+                self.publish_changed.clear()
                 if self.pair and self.pair['role']=='host' and self.engine:
                     for row in self.outgoing():
                         if stop.is_set(): break
@@ -107,7 +110,7 @@ class IntentDevice:
                             self.message='Intent delivered'
                         except Exception:
                             self.message='Relay delivery pending; same message will retry'; break
-                try: await asyncio.wait_for(stop.wait(),.1 if self.outgoing() else .5)
+                try: await asyncio.wait_for(self.publish_changed.wait(),.1 if self.outgoing() else .5)
                 except TimeoutError: pass
     async def receive_loop(self,stop):
         async with httpx.AsyncClient(timeout=26,follow_redirects=False,trust_env=False) as client:

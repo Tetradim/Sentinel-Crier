@@ -26,6 +26,12 @@ def test_host_journals_before_dispatch_and_sequences(tmp_path):
     assert d.outgoing()[0]['action']=='cancel' # obsolete entry invalidated before sending
     assert 'token' not in d.status()['pair']
 
+def test_host_command_wakes_idle_publisher(tmp_path):
+    d=device(tmp_path)
+    assert not d.publish_changed.is_set()
+    d.command('enter',symbol='AAPL',asset='stock',quantity=1,limit_price='1')
+    assert d.publish_changed.is_set()
+
 def test_receiver_cannot_publish(tmp_path):
     d=IntentDevice(tmp_path)
     d.configure({'url':'https://example.test','token':'x'*40,'environment':'paper','role':'follower'})
