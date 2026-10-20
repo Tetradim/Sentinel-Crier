@@ -15,7 +15,7 @@ These instructions are not evidence of a successful build. XCTest, signing, devi
 ## Connect and operate
 
 - Open Home → Connections. Paper is always the launch default. Select paper or live explicitly, then save that environment's Alpaca API key and secret. Secrets are device-only Keychain entries. Disconnect before changing environments. Live orders use real money and have an explicit real-money confirmation label.
-- Save a Discord channel webhook in Connections. Choose plain text or card format in Alerts.
+- Save a Discord channel webhook in Connections. Choose Homebrew Markdown, plain text or card format in Alerts.
 - The first successful refresh establishes a durable fill baseline without posting historical fills. Later active refreshes catch up broker FILL activities by exact execution ID, including fills from other clients on the connected account.
 - Trade supports whole-share stocks and standard 100-share single-leg options, day limit orders, buys and closes of existing long holdings. Options discovery requires underlying and an exact expiration; nonstandard contracts are filtered out. Live bid/ask quotes, multi-leg strategies, short opening, automated signals/stops/profit-taking and multi-broker execution are not implemented.
 - Enter a limit and review the immutable ticket. Review is a local estimate, not a broker preview or approval. Confirm within 60 seconds. Acceptance is not a fill. Pull to refresh the saved order list; cancellation is a request and must be reconciled.

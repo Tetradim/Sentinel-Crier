@@ -39,6 +39,8 @@ instructions describe removed iOS code and are not current installation steps.
 
 See [native build and operation](ios/BUILD.md) and
 [device release checklist](docs/iphone-release-checklist.md).
+See [native data handling](docs/native-data-handling.md) for local retention and
+what is sent to Alpaca and Discord.
 
 A simulator build is not installable on an iPhone. A signed device package requires
 an Apple development team and matching signing assets. The manually triggered

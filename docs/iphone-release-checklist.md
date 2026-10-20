@@ -44,8 +44,11 @@ then distributed using TestFlight after Apple's processing/review. It is not a
 universally sideloadable package.
 
 This workflow exports only; it never uploads or submits your app automatically.
-An app icon, version/build identifiers, bundle identity and entitlements must pass
-Apple validation. A fresh accepted build number is required on every upload.
+The project includes an opaque 1024px app icon, version/build identifiers and a
+settings-storage privacy manifest. Bundle identity, entitlements and distribution
+metadata still need Apple validation. Review [native data handling](native-data-handling.md)
+when supplying your privacy policy and App Store privacy answers.
+A fresh accepted build number is required on every upload.
 The workflow uses its run number; adjust if your existing App Store build number
 is already larger. Do not place signing secrets in source files or chat.
 

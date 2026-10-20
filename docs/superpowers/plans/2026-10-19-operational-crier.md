@@ -13,17 +13,17 @@ FastAPI, SQLite, httpx; GitHub-hosted macOS Xcode builds.
 
 ## Independently owned implementation work
 
-- [ ] iOS: implement an Alpaca adapter, account configuration, real positions,
+- [x] iOS: implement an Alpaca adapter, account configuration, real positions,
   stock/option tickets, fresh confirmation, persistent unknown-submission recovery,
   execution polling, Discord publishing and visible delivery state. Mock transport
   tests cover request fidelity, paper/live separation, duplicates and 429 recovery.
-- [ ] Python: implement paginated authenticated Alpaca fill polling, initial
+- [x] Python: implement paginated authenticated Alpaca fill polling, initial
   baseline, restart recovery, account/environment separation and existing Store
   outbox integration. Add mocked broker tests and CLI/config selection.
-- [ ] Release: replace obsolete ReplayKit instructions, document foreground iOS
+- [x] Release: replace obsolete ReplayKit instructions, document foreground iOS
   limits and optional always-on PC operation, fix simulator discovery, and provide
   a manually triggered signed archive workflow using repository secrets.
-- [ ] Verify: run Python tests and syntax checks, compile/test iOS in macOS CI,
+- [x] Verify: run Python tests and syntax checks, compile/test iOS in macOS CI,
   inspect changes and fix failures, then record precisely which acceptance checks
   passed and which need Apple signing, a physical device or broker approval.
 
@@ -40,3 +40,7 @@ Run `python -m pytest -q`, `python -m compileall -q crier`, and
 `node --check crier/static/app.js`. macOS CI generates the Xcode project, builds
 the simulator target and runs TradingTests on an available iPhone simulator.
 Signed distribution runs only with user-provided Apple signing secrets.
+
+Implementation and automated checks completed against `b7b0dcc`; see
+[verification record](../../verification-2026-10-19.md). Signed distribution,
+physical-device acceptance and pending broker approvals are not completed.
