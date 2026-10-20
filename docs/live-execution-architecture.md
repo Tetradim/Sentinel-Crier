@@ -1,19 +1,21 @@
 # Live broker execution integration boundary
 
-This feature branch adds `crier/live_order_journal.py`, a persistent
+This repository includes `crier/live_order_journal.py`, a persistent
 **live-order bookkeeping component**, and native iOS trading screens.
 
 ## Current posture
 
-- No endpoint currently routes a Crier iOS option ticket into broker submission.
+- The native Alpaca app uses its own direct HTTPS adapter and local durable journal.
+  The Python cloud gateway remains read-only and is not its order-routing service.
 - The journal has no broker SDK, brokerage credentials, HTTP entry point, or
   background submission job. Its methods cannot place an order on their own.
 - The preexisting Crier fill observer/Discord system is separate from the new
   trade-intent journal. Existing receipt or OCR input MUST NOT authorize a trade.
-- These changes include no customer-facing mock, paper, or simulated trading mode.
+- The native Alpaca path explicitly supports paper and live environments.
+  This Python journal is an independent component, not a connected multi-user platform.
 - Unit tests use synthetic identifiers purely to check database safety invariants.
 
-## Required integration before real-money orders can be enabled
+## Requirements for a future multi-user cloud execution service
 
 1. Provision a secure cloud service with authenticated customer identities,
    per-user account authorization, appropriate secret management, TLS, and
@@ -69,7 +71,7 @@ This feature branch adds `crier/live_order_journal.py`, a persistent
 - Reservation changes `unsubmitted` to `submission_unknown` *before*
   outbound network I/O. Retries of the same reservation are rejected.
 - Broker status is never inferred as rejection solely from a timeout.
-- A fill is identified by tenant + broker + account + broker execution ID.
+- A fill is identified by tenant + broker + account + broker order + execution ID.
   Exact duplicate events are ignored; conflicting duplicates are rejected.
 - Fill quantities cannot exceed the requested contract count.
 - Audit entries form a verification-capable SHA-256 chain. Local hashes are
@@ -84,7 +86,7 @@ This feature branch adds `crier/live_order_journal.py`, a persistent
 Backend safety tests: `python -m pytest tests/test_live_order_journal.py -q`
 
 iOS source/test project: `ios/project.yml`; build and run the iOS
-`TradingTests` and `RecognitionTests` targets on macOS with XcodeGen/Xcode.
+`TradingTests` target on macOS with XcodeGen/Xcode.
 
 These commands are instructions; test execution in CI and on actual iPhones
 remains outstanding.

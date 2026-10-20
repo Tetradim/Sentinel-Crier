@@ -117,13 +117,7 @@ actor AlpacaDiscordDelivery {
         parts.queryItems = [URLQueryItem(name: "wait", value: "true")]
         guard let url = parts.url else { return }
         guard let delivery = try await journal.claim(environment: environment, accountID: accountID) else { return }
-        let f = delivery.fill
-        let title = "\(environment.rawValue.uppercased()) • BROKER-CONFIRMED FILL"
-        let content = "\(f.side.uppercased()) \(f.qty) \(f.symbol) @ $\(f.price)\nBroker time: \(f.transaction_time)\nExecution ID: \(f.id)"
-        var payload: [String: Any] = ["allowed_mentions": ["parse": []]]
-        if UserDefaults.standard.string(forKey: "discordFillStyle") == "card" {
-            payload["embeds"] = [["title": title, "description": content, "color": environment == .paper ? 9807270 : 5763719]]
-        } else { payload["content"] = title + "\n" + content }
+        let payload = AlpacaAlertFormatter.payload(delivery, style: UserDefaults.standard.string(forKey: "discordFillStyle") ?? "homebrew")
         var request = URLRequest(url: url); request.httpMethod = "POST"; request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)

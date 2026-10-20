@@ -52,12 +52,13 @@ struct CrierPositionsView: View {
 }
 struct CrierExecutionsView: View {
     @EnvironmentObject var model: AlpacaWorkspace
-    @AppStorage("discordFillStyle") private var style = "plain"
+    @AppStorage("discordFillStyle") private var style = "homebrew"
     var body: some View {
         NavigationStack {
             List {
                 Section("Discord fill format") {
                     Picker("Format", selection: $style) {
+                        Text("Homebrew Markdown").tag("homebrew")
                         Text("Plain text").tag("plain")
                         Text("Card").tag("card")
                     }

@@ -49,7 +49,7 @@ struct AlpacaAccount: Codable {
 }
 struct AlpacaPosition: Codable, Identifiable {
     var id: String { symbol }
-    let symbol: String; let qty: String; let avg_entry_price: String; let market_value: String?
+    let symbol: String; let qty: String; let qty_available: String?; let avg_entry_price: String; let market_value: String?
 }
 struct AlpacaContract: Codable, Identifiable, Hashable {
     let id: String; let symbol: String; let name: String; let status: String
@@ -84,7 +84,7 @@ struct AlpacaTicket: Codable, Equatable, Identifiable {
         if multiplier == 100 {
             guard let intent = positionIntent,
                   (side == "buy" && intent == "buy_to_open") || (side == "sell" && intent == "sell_to_close") else { throw AlpacaError.invalid("Only buy-to-open and sell-to-close single-leg options are supported.") }
-        } else if positionIntent != nil { throw AlpacaError.invalid("Stocks cannot have an option intent.") }
+        } else if positionIntent != nil && !(side == "sell" && positionIntent == "sell_to_close") { throw AlpacaError.invalid("Unsupported stock position intent.") }
     }
     func body() throws -> Data {
         var values: [String: Any] = ["symbol": symbol, "qty": String(quantity), "side": side,

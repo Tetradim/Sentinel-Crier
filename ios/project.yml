@@ -13,6 +13,7 @@ targets:
     platform: iOS
     sources:
       - path: SentinelCrier/AlpacaREST.swift
+      - path: SentinelCrier/AlpacaAlertFormatter.swift
       - path: SentinelCrier/AlpacaJournal.swift
       - path: SentinelCrier/AlpacaWorkspace.swift
       - path: SentinelCrier/SentinelCrierApp.swift
@@ -46,6 +47,7 @@ targets:
     platform: iOS
     sources:
       - path: SentinelCrier/AlpacaTests.swift
+      - path: SentinelCrier/AlpacaAlertFormatterTests.swift
       - path: SentinelCrier/MultiBrokerTradingTests.swift
       - path: SentinelCrier/TradingChartTests.swift
     dependencies:

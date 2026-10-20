@@ -1,68 +1,82 @@
-# Sentinel Crier — iPhone release and verification gates
+# iPhone installation and release
 
-This document separates code-complete functionality from an installable, tested iOS build. It does **not** claim the current project passes Xcode or is installable today.
+Crier's native app connects directly to a personal Alpaca API account. It does not
+require the Python service, and this version does not include a screen-broadcast
+extension. Webull Connect remains pending approval and integration.
 
-## What is implemented
+## Install on your test phone with a Mac
 
-- Five-tab dark-mode iPhone command center: Dashboard, Activity, Alerts, Connections, Settings.
-- Secure server connection and dedicated screen-upload credential storage.
-- User-authorized ReplayKit broadcast extension with on-device OCR.
-- Conservative Webull screen candidate extraction and continuous-screen coalescing.
-- Durable, bounded JSON observation queue and authenticated HTTPS submission.
-- Backend observation quarantine; independent verified-fill intake and Discord outbox.
-- Server-rendered synthetic preview for supported message formats.
-- Tests for duplicate observations, separated upload/admin authentication, and no OCR-driven delivery.
+1. Enroll an Apple development team and register `com.tetradim.sentinelcrier`.
+2. Enable App Groups and associate `group.com.tetradim.sentinelcrier` with that app.
+   Configure Keychain Sharing to match `ios/SentinelCrier.entitlements`.
+3. Install Xcode with a currently accepted iOS SDK and XcodeGen. Run
+   `cd ios && xcodegen generate`, then open `SentinelCrier.xcodeproj`.
+4. Choose the SentinelCrier application target, select your development team in
+   Signing & Capabilities, and keep automatic signing enabled for local testing.
+5. Connect/unlock your iPhone, trust the Mac, enable Developer Mode when requested,
+   select the phone as the run destination, and build/run.
+6. Begin in Paper with a paper-account API key and secret. Configure a private
+   test Discord webhook in Connections. Do not use a production trading channel
+   for paper alerts that downstream bots might interpret as live signals.
 
-## Required release gates (must pass before customer testing)
+## Build a signed package from Windows using GitHub Actions
 
-1. **Xcode build:** macOS CI builds the app and extension for a generic iOS Simulator without signing. Inspect the workflow result rather than assuming it passed.
-2. **Unit tests:** recognition XCTest and backend pytest both pass; test the current code, not an earlier commit.
-3. **Provisioning:** an Apple developer signing identity and provisioning profiles for the app and ReplayKit extension. Both need matching App Group and shared Keychain access groups.
-4. **Signed device build:** distribute through TestFlight or a signed development installation. GitHub Actions simulator builds cannot be installed on a physical iPhone.
-5. **App/extension handoff:** confirm saving upload credentials in the app makes them available to the broadcast extension on a real device.
-6. **ReplayKit behavior:** user starts/stops sharing, switches into Webull, backgrounds the companion, and handles interruptions.
-7. **Recognition validation:** use redacted genuine Webull option receipts and negative cases (preview, canceled, pending, partial, unrelated app). Do not use a live trading order merely to test the app.
-8. **Transport validation:** verify HTTPS upload, no raw screenshot transmission, offline queue/recovery, idempotent replay, and disable-upload purge.
-9. **Discord isolation:** confirm OCR observations appear as `pending_review` and **never** publish automatically; verified broker fills follow the separate authenticated intake.
-10. **Operational validation:** restart backend, review outbox status, simulate Discord rate limits and uncertain delivery, and verify customer-facing status messages.
+The repository contains the manually triggered **Signed iPhone package** workflow.
+Use an Apple-issued certificate/private key and matching provisioning profile;
+GitHub cannot manufacture a developer membership or approve an application.
 
-## Windows + physical iPhone path
+Create a GitHub environment named `ios-signing`. Configure these environment secrets:
 
-The customer can continue using Windows for backend development and administration. Native iOS installation still requires an Apple-signed build produced by Xcode on macOS (local or cloud-hosted), or a TestFlight build submitted with appropriate Apple developer credentials. An unsigned simulator build cannot be sideloaded onto a physical iPhone. Do not request a customer's Apple ID, signing certificates or brokerage credentials in chat.
+| Secret | Value |
+| --- | --- |
+| `APPLE_TEAM_ID` | Apple developer team identifier |
+| `BUILD_CERTIFICATE_BASE64` | Base64 of exported signing certificate plus private key (.p12) |
+| `P12_PASSWORD` | Password protecting that .p12 |
+| `BUILD_PROVISION_PROFILE_BASE64` | Base64 of the matching .mobileprovision profile |
+| `KEYCHAIN_PASSWORD` | Random temporary CI keychain password |
 
-When a signed TestFlight or development build exists, use the following acceptance checklist on the iPhone:
+Then select Actions → Signed iPhone package → Run workflow on main. Choose the
+method matching your profile: `debugging` (development), `release-testing` (ad hoc,
+registered devices), or `app-store-connect` (distribution). Download its IPA
+artifact after success. Development/ad-hoc packages only install on eligible
+provisioned devices. An App Store Connect IPA is uploaded to App Store Connect,
+then distributed using TestFlight after Apple's processing/review. It is not a
+universally sideloadable package.
 
-- Launch, navigate all five tabs, verify readable small-screen layouts and VoiceOver labels.
-- Connect to an HTTPS test backend; check credentials survive restart.
-- Confirm incorrect tokens produce a clear error and do not appear in logs.
-- Enable screen upload; explicitly start ReplayKit broadcasting.
-- View a non-trade screen; verify no false fill.
-- View a synthetic or redacted completed-trade fixture; verify an observation appears as pending review.
-- Disable upload; verify queued evidence is erased and further uploads stop.
-- Confirm no Discord message is sent from OCR alone.
-- Exercise delivery through independently verified synthetic backend fill events using a **test-only** Discord webhook.
-- Stop broadcasting, restart app, and verify status is not falsely labeled monitoring active.
+This workflow exports only; it never uploads or submits your app automatically.
+An app icon, version/build identifiers, bundle identity and entitlements must pass
+Apple validation. A fresh accepted build number is required on every upload.
+The workflow uses its run number; adjust if your existing App Store build number
+is already larger. Do not place signing secrets in source files or chat.
 
-## Safety and limitations
+## Physical-device acceptance
 
-ReplayKit requires explicit user authorization and cannot silently read Webull screens. OCR has no independent execution ID and is not proof of a completed broker fill. Broker-verified automated alerting requires a validated account-event source; the Webull observer remains experimental. A production-ready bot cannot be claimed until those conditions and the release gates above are met.
+- Connect paper credentials, restart, and reconnect using Keychain storage.
+- Verify account identity, environment, balances and positions against Alpaca.
+- Discover a standard option contract, compare symbol/expiration/strike, and
+  review quantity and per-share premium. Standard options use a 100 multiplier.
+- Submit only after explicit confirmation. Acceptance must not appear as a fill.
+- Exercise paper buy/sell, partial execution, cancellation and rejected orders.
+- Interrupt a submission; confirm saved client-ID reconciliation prevents a
+  second POST, including after app termination/restart.
+- Check broker fill timestamp, quantity, price and paper label in Discord.
+- Simulate offline and rate-limited delivery; inspect uncertain sends manually.
+- Switch paper/live and credentials; ensure evidence is isolated by account and
+  environment. Do not place a real-money order merely as an installation check.
+- Background/close the app. It must not claim continuous monitoring; reopen and
+  verify catch-up without historical replay or duplicates.
 
-## Local backend checks
+For unattended monitoring while Crier is suspended, use the optional PC service.
+Select one publisher for a given account/destination to avoid independent duplicate
+alerts. Quotes, complex options, automatic exits and other broker integrations
+must not be assumed available because a navigation tab exists.
 
-```powershell
-python -m pip install -e ".[test]"
-python -m pytest -q
-python -m compileall -q crier
-node --check crier/static/app.js
-```
+## Official references
 
-## macOS build checks
+- [Apple device installation](https://help.apple.com/xcode/mac/current/en.lproj/dev5a825a1ca.html)
+- [GitHub signing certificates](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications)
+- [TestFlight](https://developer.apple.com/help/app-store-connect/test-a-beta-version/testflight-overview/)
+- [Apple SDK requirements](https://developer.apple.com/news/?id=ueeok6yw)
 
-```sh
-cd ios
-xcodegen generate
-xcodebuild -project SentinelCrier.xcodeproj -scheme SentinelCrier -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
-xcodebuild -project SentinelCrier.xcodeproj -scheme RecognitionTests -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' CODE_SIGNING_ALLOWED=NO test
-```
-
-These are commands to run, **not** assertions that they have passed.
+The workflow and this checklist are preparation, not proof of a signed or approved
+release. Record device and broker validation results against the exact commit.

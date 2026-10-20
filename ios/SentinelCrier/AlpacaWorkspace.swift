@@ -110,9 +110,9 @@ final class AlpacaWorkspace: ObservableObject {
             }
             if sell {
                 let currentPositions = try await api.positions()
-                guard let held = currentPositions.first(where: { $0.symbol == selected }), let heldQty = Decimal(string: held.qty), heldQty >= Decimal(quantity) else { throw AlpacaError.invalid("Sell orders require sufficient existing long holdings. Short opening is unsupported.") }
+                guard let held = currentPositions.first(where: { $0.symbol == selected }), let heldQty = Decimal(string: held.qty_available ?? ""), heldQty >= Decimal(quantity) else { throw AlpacaError.invalid("Sell orders require sufficient existing long holdings. Short opening is unsupported.") }
             }
-            let ticket = AlpacaTicket(id: "crier-" + UUID().uuidString.lowercased(), environment: environment, accountID: account.id, symbol: selected, quantity: quantity, limitPrice: price, side: sell ? "sell" : "buy", positionIntent: contract == nil ? nil : (sell ? "sell_to_close" : "buy_to_open"), multiplier: contract == nil ? 1 : 100, reviewedAt: Date())
+            let ticket = AlpacaTicket(id: "crier-" + UUID().uuidString.lowercased(), environment: environment, accountID: account.id, symbol: selected, quantity: quantity, limitPrice: price, side: sell ? "sell" : "buy", positionIntent: sell ? "sell_to_close" : (contract == nil ? nil : "buy_to_open"), multiplier: contract == nil ? 1 : 100, reviewedAt: Date())
             try ticket.validate(); review = ticket
             message = "Review is a local estimate, not broker approval. Expires in 60 seconds."
         }
@@ -123,6 +123,11 @@ final class AlpacaWorkspace: ObservableObject {
             try ticket.validate()
             let current = try await api.account()
             guard current.id == ticket.accountID, current.status == "ACTIVE", !current.account_blocked, !current.trading_blocked else { throw AlpacaError.invalid("Account changed or cannot trade.") }
+            if ticket.side == "sell" {
+                let currentPositions = try await api.positions()
+                guard let held = currentPositions.first(where: { $0.symbol == ticket.symbol }),
+                      let available = Decimal(string: held.qty_available ?? ""), available >= Decimal(ticket.quantity) else { throw AlpacaError.invalid("Available holdings changed. Review again.") }
+            }
             try ticket.validate()
             try await journal.begin(ticket)
             review = nil // Consume before any network await.

@@ -30,6 +30,22 @@ final class AlpacaTests: XCTestCase {
         let snapshot = await second.snapshot()
         XCTAssertEqual(snapshot.submissions.first?.state, "unknown")
     }
+    func testDefinitiveRejectionPermitsFreshReviewButRetainsClientID() async throws {
+        let url = file(); defer { try? FileManager.default.removeItem(at: url) }
+        let journal = try AlpacaJournal(file: url); let first = ticket()
+        try await journal.begin(first)
+        try await journal.reject(first, status: 422)
+        do { try await journal.begin(first); XCTFail("Rejected ID must never be reused") } catch {}
+        let fresh = AlpacaTicket(id: "crier-fresh", environment: .paper, accountID: "account-a", symbol: "AAPL", quantity: 1, limitPrice: 1, side: "buy", positionIntent: nil, multiplier: 1, reviewedAt: Date())
+        try await journal.begin(fresh)
+        let snapshot = await journal.snapshot(); XCTAssertEqual(snapshot.submissions.count, 2)
+    }
+    func testServerFailureDoesNotClearUnknown() async throws {
+        let url = file(); defer { try? FileManager.default.removeItem(at: url) }
+        let journal = try AlpacaJournal(file: url); let first = ticket()
+        try await journal.begin(first); try await journal.reject(first, status: 500)
+        let snapshot = await journal.snapshot(); XCTAssertEqual(snapshot.submissions.first?.state, "unknown")
+    }
     func testCorruptJournalFailsClosed() throws {
         let url = file(); defer { try? FileManager.default.removeItem(at: url) }
         try Data("not json".utf8).write(to: url)
@@ -144,5 +160,40 @@ final class AlpacaRESTTests: XCTestCase {
         AlpacaMockURLProtocol.handler = { _ in (403, Data("test-secret".utf8)) }
         do { _ = try await api().account(); XCTFail("Expected failure") }
         catch { XCTAssertFalse(error.localizedDescription.contains("test-secret")) }
+    }
+}
+
+private actor ConfirmationTestGateway: LiveBrokerGateway {
+    private(set) var submissions = 0
+    func brokers() async throws -> [LiveBrokerDescriptor] { [] }
+    func accounts(brokerId: String) async throws -> [LiveAccount] { [] }
+    func positions(brokerId: String, accountId: String) async throws -> [LivePosition] { [] }
+    func optionChain(brokerId: String, underlying: String, expiration: String) async throws -> [LiveOptionQuote] { [] }
+    func preview(_ request: LiveOrderRequest) async throws -> LiveOrderPreview { throw LiveOrderError.unavailable }
+    func submit(_ request: LiveOrderRequest) async throws -> LiveOrderReceipt {
+        submissions += 1
+        return LiveOrderReceipt(brokerId: request.brokerId, accountId: request.accountId, clientOrderId: request.clientOrderId, brokerOrderId: "broker", status: .accepted, receivedAt: Date())
+    }
+    func orderStatus(brokerId: String, accountId: String, clientOrderId: String) async throws -> LiveOrderReceipt { throw LiveOrderError.unavailable }
+    func executions(brokerId: String, accountId: String, brokerOrderId: String) async throws -> [BrokerConfirmedExecution] { [] }
+}
+final class ConfirmationBindingTests: XCTestCase {
+    private func request(quantity: Int) -> LiveOrderRequest {
+        LiveOrderRequest(brokerId: "alpaca", accountId: "a", contract: LiveOptionContract(brokerContractId: "opt", underlying: "AAPL", expiration: "2026-12-18", strike: 200, right: "C", multiplier: 100), action: .buyToOpen, contracts: quantity, limitPrice: 2, clientOrderId: "same-id")
+    }
+    private func preview(date: Date = Date()) -> LiveOrderPreview {
+        LiveOrderPreview(brokerId: "alpaca", accountId: "a", clientOrderId: "same-id", estimatedTotal: nil, estimatedFees: nil, buyingPowerEffect: nil, warnings: [], previewedAt: date, expiresAt: nil)
+    }
+    func testSameIDCannotChangeApprovedQuantity() async throws {
+        let gate = LiveOrderConfirmationGate(); let gateway = ConfirmationTestGateway()
+        try await gate.begin(request(quantity: 1), preview: preview())
+        do { _ = try await gate.submitConfirmed(request(quantity: 2), via: gateway); XCTFail("Changed order was submitted") } catch {}
+        let count = await gateway.submissions; XCTAssertEqual(count, 0)
+    }
+    func testReviewWithoutBrokerExpiryStillExpiresLocally() async throws {
+        let gate = LiveOrderConfirmationGate(); let gateway = ConfirmationTestGateway()
+        try await gate.begin(request(quantity: 1), preview: preview(date: Date().addingTimeInterval(-61)))
+        do { _ = try await gate.submitConfirmed(request(quantity: 1), via: gateway); XCTFail("Stale review was submitted") } catch {}
+        let count = await gateway.submissions; XCTAssertEqual(count, 0)
     }
 }
