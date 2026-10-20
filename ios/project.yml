@@ -6,12 +6,16 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
     TARGETED_DEVICE_FAMILY: "1"
 targets:
   SentinelCrier:
     type: application
     platform: iOS
     sources:
+      - path: SentinelCrier/Assets.xcassets
+      - path: SentinelCrier/PrivacyInfo.xcprivacy
       - path: SentinelCrier/AlpacaREST.swift
       - path: SentinelCrier/AlpacaAlertFormatter.swift
       - path: SentinelCrier/AlpacaJournal.swift
@@ -36,6 +40,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Sentinel Crier
         INFOPLIST_KEY_CrierSharedKeychainGroup: "$(AppIdentifierPrefix)com.tetradim.sentinelcrier.shared"

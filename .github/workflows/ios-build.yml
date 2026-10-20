@@ -27,3 +27,16 @@ jobs:
         run: xcodebuild -list -project ios/SentinelCrier.xcodeproj
       - name: Build for iOS Simulator without signing
         run: xcodebuild -project ios/SentinelCrier.xcodeproj -scheme SentinelCrier -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+      - name: Collect compiler and build-service crash reports
+        if: failure()
+        run: |
+          mkdir -p build-diagnostics
+          xcrun swiftc -frontend -parse ios/SentinelCrier/Alpaca*.swift > build-diagnostics/swift-parse.txt 2>&1 || true
+          cp -R "$HOME/Library/Logs/DiagnosticReports" build-diagnostics/ 2>/dev/null || true
+          cat build-diagnostics/swift-parse.txt
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: ios-build-diagnostics
+          path: build-diagnostics
+          retention-days: 3
