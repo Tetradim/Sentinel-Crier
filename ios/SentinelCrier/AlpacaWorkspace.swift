@@ -12,11 +12,13 @@ final class AlpacaWorkspace: ObservableObject {
     @Published private(set) var busy = false
     @Published private(set) var message = "Connect Alpaca paper to begin."
     @Published private(set) var updatedAt: Date?
+    @Published private(set) var mirrorMessage = "Not paired."
     private var api: AlpacaREST?
     private var journal: AlpacaJournal?
     private var publisher: AlpacaDiscordDelivery?
+    private var mirrorSender: MirrorSender?
     init() {
-        do { let journal = try AlpacaJournal.local(); self.journal = journal; publisher = AlpacaDiscordDelivery(journal: journal) }
+        do { let journal = try AlpacaJournal.local(); self.journal = journal; publisher = AlpacaDiscordDelivery(journal: journal); mirrorSender = try MirrorSender.local() }
         catch { message = "Trading disabled: durable journal could not be read. Preserve it for recovery." }
     }
     private func perform(_ operation: () async throws -> Void) async {
@@ -83,7 +85,10 @@ final class AlpacaWorkspace: ObservableObject {
             cursor = last.id
         } while true
         for fill in collected.reversed() { try await journal.ingest(fill, environment: environment, accountID: account.id) }
+        try await mirrorSender?.ingest(Array(collected.reversed()), environment: environment, account: account.id)
         try await journal.setBaseline(newest ?? baseline ?? "__empty__", environment: environment, accountID: account.id)
+        do { mirrorMessage = try await mirrorSender?.deliver(api: api, account: account.id) ?? "Mirror journal unavailable." }
+        catch { mirrorMessage = error.localizedDescription }
         try await publisher?.deliver(environment: environment, accountID: account.id)
         updatedAt = Date(); message = "Account, orders and broker fills refreshed."
     }
@@ -172,6 +177,7 @@ struct AlpacaConnectionForm: View {
             Text(model.message).font(.footnote)
             Text("Webull Connect approval pending. Tradier is not integrated. No brokerage password is requested.").font(.footnote).foregroundStyle(.secondary)
         }
+        MirrorConnectionForm()
     }
 }
 struct AlpacaTradingView: View {

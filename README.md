@@ -120,3 +120,7 @@ results; a workflow file alone is not evidence of a successful build. Physical
 phone operation, signing and App Store review are separate acceptance steps.
 
 [Source/reuse references](docs/source-references.md). MIT license.
+
+## Direct trade mirroring
+
+Pair a customer's iPhone with a PC receiver to follow confirmed Alpaca fills without Discord parsing. The receiver owns its credentials and has Follow/Pause controls. Start with paper accounts. See [setup, supported orders and delivery behavior](docs/direct-mirroring.md). Phone-only execution and Webull mirroring are not implemented.

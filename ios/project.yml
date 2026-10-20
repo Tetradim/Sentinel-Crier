@@ -20,6 +20,7 @@ targets:
       - path: SentinelCrier/AlpacaAlertFormatter.swift
       - path: SentinelCrier/AlpacaJournal.swift
       - path: SentinelCrier/AlpacaWorkspace.swift
+      - path: SentinelCrier/MirrorConnection.swift
       - path: SentinelCrier/SentinelCrierApp.swift
       - path: SentinelCrier/StandaloneConfiguration.swift
       - path: SentinelCrier/CrierCommandCenter.swift
@@ -52,6 +53,7 @@ targets:
     platform: iOS
     sources:
       - path: SentinelCrier/AlpacaTests.swift
+      - path: SentinelCrier/MirrorTests.swift
       - path: SentinelCrier/AlpacaAlertFormatterTests.swift
       - path: SentinelCrier/MultiBrokerTradingTests.swift
       - path: SentinelCrier/TradingChartTests.swift

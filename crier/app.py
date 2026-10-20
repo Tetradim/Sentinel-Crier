@@ -22,6 +22,7 @@ from .lock import single_process
 from .intake_routes import intake_router
 from .screen_observations import screen_observation_router
 from .monitors import start_monitor, stop_monitor
+from .mirror_routes import configure_mirror, mirror_router
 
 STATIC = Path(__file__).parent / "static"
 
@@ -62,6 +63,7 @@ def create_app(config=None):
 
     app = FastAPI(title="Sentinel Crier", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
+    app.state.mirror = configure_mirror(config)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
@@ -77,6 +79,7 @@ def create_app(config=None):
 
     app.include_router(intake_router(config, store, auth))
     app.include_router(screen_observation_router(store, auth, config.screen_upload_key))
+    app.include_router(mirror_router(app.state.mirror, auth))
 
     @app.middleware("http")
     async def headers(request: Request, call_next):
@@ -128,5 +131,8 @@ def create_app(config=None):
 
     @app.get("/")
     def index(): return FileResponse(STATIC / "index.html")
+
+    @app.get("/mirror")
+    def mirror_console(): return FileResponse(STATIC / "mirror.html")
 
     return app

@@ -60,6 +60,7 @@ struct AlpacaContractPage: Codable { let option_contracts: [AlpacaContract]; let
 struct AlpacaOrder: Codable, Identifiable {
     let id: String; let client_order_id: String; let symbol: String; let status: String
     let qty: String?; let limit_price: String?; let filled_qty: String; let filled_avg_price: String?; let side: String
+    var position_intent: String?
 }
 struct AlpacaFill: Codable, Identifiable, Equatable {
     let id: String; let activity_type: String; let order_id: String; let symbol: String
@@ -148,6 +149,10 @@ final class AlpacaREST {
     }
     func order(clientID: String) async throws -> AlpacaOrder {
         try JSONDecoder().decode(AlpacaOrder.self, from: await request("v2/orders:by_client_order_id", query: [URLQueryItem(name: "client_order_id", value: clientID)]))
+    }
+    func orderByID(_ id: String) async throws -> AlpacaOrder {
+        guard !id.isEmpty, id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }) else { throw AlpacaError.invalid("Invalid broker order ID.") }
+        return try JSONDecoder().decode(AlpacaOrder.self, from: await request("v2/orders/" + id))
     }
     func cancel(orderID: String) async throws { _ = try await request("v2/orders/" + orderID, method: "DELETE") }
     func fills(pageToken: String? = nil) async throws -> [AlpacaFill] {

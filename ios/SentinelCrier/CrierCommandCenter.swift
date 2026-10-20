@@ -24,7 +24,8 @@ struct CrierCommandCenter: View {
             guard scenePhase == .active else { return }
             while !Task.isCancelled {
                 await model.refresh()
-                do { try await Task.sleep(nanoseconds: 15_000_000_000) } catch { return }
+                let paired = (try? MirrorPairing.load()) != nil
+                do { try await Task.sleep(nanoseconds: paired ? 2_000_000_000 : 15_000_000_000) } catch { return }
             }
         }
     }
