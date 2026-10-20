@@ -1,0 +1,50 @@
+package com.sentinel.crier
+import org.json.JSONObject
+import org.junit.Test
+import org.junit.Assert.*
+import java.time.Instant
+class EngineTest {
+ class Store:IntentStore {
+  var rev=Pair(1,false); val os=mutableListOf<Journal.Order>(); var done=false
+  val metadata=mutableMapOf("device" to "device")
+  override fun meta(key:String)=metadata[key] ?: ""
+  override fun setMeta(key:String,value:String) { metadata[key]=value }
+  override fun revision(trade:String)=rev
+  override fun orders(trade:String)=os.toList()
+  override fun mark(id:String,outbox:Boolean) { done=true }
+  override fun state(client:String,state:String) { val o=os.first { it.client==client }; os[os.indexOf(o)]=o.copy(state=state) }
+  override fun update(client:String,o:JSONObject) { val old=os.first { it.client==client }; os[os.indexOf(old)]=old.copy(state=o.getString("status"),broker=o.getString("id"),filled=o.getInt("filled_qty")) }
+  override fun unknown(client:String,trade:String,seq:Int,side:String) { os.add(Journal.Order(client,seq,side,"unknown","",0)) }
+  override fun create(action:String,symbol:String,asset:String,quantity:Int,price:String,environment:String,tradeId:String)=JSONObject()
+ }
+ class Fake:BrokerPort {
+  var submissionError:HttpError?=null
+  var beforeSubmit:(()->Unit)?=null
+  var posts=0; var canceled=0; var quantity=0; var remote:JSONObject?=null; var available=5
+  override fun account()="account"
+  override fun order(client:String)=remote
+  override fun cancel(id:String) { canceled++ }
+  override fun holdings(symbol:String)=available
+  override fun submit(event:JSONObject,client:String,quantity:Int,sell:Boolean,canSubmit:()->Boolean):JSONObject { beforeSubmit?.invoke(); if(!canSubmit()) throw Superseded(); submissionError?.let { throw it }; posts++; this.quantity=quantity; val r=JSONObject().put("status","accepted").put("id","broker").put("filled_qty","0").put("client_order_id",client).put("symbol",event.getString("symbol")).put("side",if(sell) "sell" else "buy").put("qty",quantity.toString()); remote=r; return r }
+ }
+ private fun event(action:String="enter",seq:Int=1)=JSONObject().put("event_id","event").put("trade_id","trade").put("sequence",seq).put("action",action).put("symbol","SPY").put("asset","stock").put("quantity",5).put("limit_price","1.00").put("created_at",Instant.now().toString()).put("expires_at",Instant.now().plusSeconds(30).toString())
+ private fun engine(s:Store,b:Fake)=Engine(s,JSONObject().put("account","account").put("role","follower"),b) { false }
+ @Test fun clientIdMatchesAcrossInstallations() { val first=Store(); val second=Store(); engine(first,Fake()).step(event()); engine(second,Fake()).step(event()); assertEquals("si-event-b",first.os.single().client); assertEquals(first.os.single().client,second.os.single().client) }
+  @Test fun tombstonePreventsLateEntry() { val s=Store(); s.rev=Pair(2,true); val b=Fake(); engine(s,b).step(event()); assertEquals(0,b.posts) }
+ @Test fun duplicateClient422StaysUnknown() { val s=Store(); val b=Fake(); b.submissionError=HttpError(422); try { engine(s,b).step(event()); fail("Expected duplicate response") } catch(_:HttpError) {} ; assertEquals("unknown",s.os.single().state); b.submissionError=null; engine(s,b).step(event()); assertEquals(0,b.posts) }
+  @Test fun unknown404NeverResubmits() { val s=Store(); s.os.add(Journal.Order("client",1,"buy","unknown","",0)); val b=Fake(); engine(s,b).step(event()); assertEquals(0,b.posts); assertFalse(s.done) }
+ @Test fun exitWaitsForTerminalThenCapsOwnedShares() {
+  val s=Store(); s.rev=Pair(2,true); s.setMeta("quantity:client","5"); s.os.add(Journal.Order("client",1,"buy","accepted","broker",2)); val b=Fake()
+  b.remote=JSONObject().put("status","partially_filled").put("id","broker").put("filled_qty","2").put("client_order_id","client").put("symbol","SPY").put("side","buy").put("qty","5")
+  val e=engine(s,b); e.step(event("exit",2)); assertEquals(1,b.canceled); assertEquals(0,b.posts)
+  b.remote=JSONObject().put("status","canceled").put("id","broker").put("filled_qty","3").put("client_order_id","client").put("symbol","SPY").put("side","buy").put("qty","5"); b.available=2
+  e.step(event("exit",2)); assertEquals(1,b.posts); assertEquals(2,b.quantity)
+ }
+ @Test fun replacementOnlyBuysOutstandingTarget() { val s=Store(); s.rev=Pair(2,false); s.os.add(Journal.Order("old",1,"buy","canceled","broker",3)); val b=Fake(); engine(s,b).step(event("replace",2)); assertEquals(2,b.quantity) }
+ @Test fun preflightInvalidationPreventsPost() { val s=Store(); val b=Fake(); b.beforeSubmit={ s.rev=Pair(2,true) }; engine(s,b).step(event()); assertEquals(0,b.posts); assertEquals("superseded",s.os.single().state) }
+ @Test fun partialExitContinuesOnlyAfterFill() { val s=Store(); s.rev=Pair(2,true); s.os.add(Journal.Order("buy",1,"buy","filled","buyid",5)); val b=Fake(); b.available=2; val e=engine(s,b); e.step(event("exit",2)); assertEquals(2,b.quantity); assertEquals("si-event-s0",s.os.last().client); b.remote!!.put("status","filled").put("filled_qty","2"); b.available=0; e.step(event("exit",2)); assertEquals(1,b.posts); assertFalse(s.done); b.available=3; e.step(event("exit",2)); assertEquals(2,b.posts); assertEquals(3,b.quantity); assertNotEquals(s.os[1].client,s.os[2].client) }
+  @Test fun replacementDoesNotCancelItsOwnNewOrder() { val s=Store(); s.rev=Pair(2,false); val b=Fake(); val e=engine(s,b); e.step(event("replace",2)); e.step(event("replace",2)); assertEquals(1,b.posts); assertEquals(0,b.canceled) }
+}
+
+
+

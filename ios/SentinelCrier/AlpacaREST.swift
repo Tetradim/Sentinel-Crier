@@ -148,6 +148,12 @@ final class AlpacaREST {
         guard ticket.environment == environment else { throw AlpacaError.invalid("Environment changed. Review again.") }
         return try JSONDecoder().decode(AlpacaOrder.self, from: await request("v2/orders", method: "POST", body: ticket.body()))
     }
+    func submitIntent(symbol: String, quantity: Int, price: String?, sell: Bool, option: Bool, clientID: String) async throws -> AlpacaOrder {
+        var body: [String: Any] = ["symbol": symbol, "qty": String(quantity), "side": sell ? "sell" : "buy", "type": price == nil ? "market" : "limit", "time_in_force": "day", "client_order_id": clientID]
+        if let price { body["limit_price"] = price }
+        if option || sell { body["position_intent"] = sell ? "sell_to_close" : "buy_to_open" }
+        return try JSONDecoder().decode(AlpacaOrder.self, from: await request("v2/orders", method: "POST", body: JSONSerialization.data(withJSONObject: body)))
+    }
     func order(clientID: String) async throws -> AlpacaOrder {
         try JSONDecoder().decode(AlpacaOrder.self, from: await request("v2/orders:by_client_order_id", query: [URLQueryItem(name: "client_order_id", value: clientID)]))
     }
@@ -160,5 +166,23 @@ final class AlpacaREST {
         var query = [URLQueryItem(name: "direction", value: "desc"), URLQueryItem(name: "page_size", value: "100")]
         if let pageToken { query.append(URLQueryItem(name: "page_token", value: pageToken)) }
         return try JSONDecoder().decode([AlpacaFill].self, from: await request("v2/account/activities/FILL", query: query))
+    }
+}
+
+extension AlpacaKeychain {
+    static func savePairing(_ token: String) throws {
+        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "com.tetradim.sentinelcrier.intent", kSecAttrAccount as String: "relay"]
+        let data = Data(token.utf8)
+        let status = SecItemUpdate(q as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if status == errSecItemNotFound {
+            var item = q; item[kSecValueData as String] = data; item[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            guard SecItemAdd(item as CFDictionary, nil) == errSecSuccess else { throw AlpacaError.invalid("Pairing Keychain write failed.") }
+        } else if status != errSecSuccess { throw AlpacaError.invalid("Pairing Keychain update failed.") }
+    }
+    static func loadPairing() throws -> String {
+        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "com.tetradim.sentinelcrier.intent", kSecAttrAccount as String: "relay", kSecReturnData as String: true]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(q as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { throw AlpacaError.invalid("Unlock to load relay pairing.") }
+        return String(decoding: data, as: UTF8.self)
     }
 }

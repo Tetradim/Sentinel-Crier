@@ -128,3 +128,7 @@ phone operation, signing and App Store review are separate acceptance steps.
 ## Direct trade mirroring
 
 Pair a customer's iPhone with a PC receiver to follow confirmed Alpaca fills without Discord parsing. The receiver owns its credentials and has Follow/Pause controls. Start with paper accounts. See [setup, supported orders and delivery behavior](docs/direct-mirroring.md). Phone-only execution and Webull mirroring are not implemented.
+
+## Submission-time mirroring across devices
+
+Use the new `/intent` console and native intent pairing to connect iOS, Android and PC as hosts or followers. Orders created inside Crier are dispatched without waiting for fills; replace, cancel and exit retain the tracked trade identity. Each follower chooses exact-limit, market or bounded-limit pricing and executes in its own Alpaca account. See [setup and actual behavior](docs/intent-mirroring.md), including signing, network, background-execution and broker limitations. The older `/mirror` path above remains legacy fill-based behavior, not the submission-time path.

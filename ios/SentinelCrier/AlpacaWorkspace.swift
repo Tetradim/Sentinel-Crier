@@ -13,12 +13,13 @@ final class AlpacaWorkspace: ObservableObject {
     @Published private(set) var message = "Connect Alpaca paper to begin."
     @Published private(set) var updatedAt: Date?
     @Published private(set) var mirrorMessage = "Not paired."
+    @Published private(set) var intent: IntentController?
     private var api: AlpacaREST?
     private var journal: AlpacaJournal?
     private var publisher: AlpacaDiscordDelivery?
     private var mirrorSender: MirrorSender?
     init() {
-        do { let journal = try AlpacaJournal.local(); self.journal = journal; publisher = AlpacaDiscordDelivery(journal: journal); mirrorSender = try MirrorSender.local() }
+        do { let journal = try AlpacaJournal.local(); self.journal = journal; publisher = AlpacaDiscordDelivery(journal: journal); mirrorSender = try MirrorSender.local(); intent = try IntentController.local() }
         catch { message = "Trading disabled: durable journal could not be read. Preserve it for recovery." }
     }
     private func perform(_ operation: () async throws -> Void) async {
@@ -45,12 +46,14 @@ final class AlpacaWorkspace: ObservableObject {
             let client = AlpacaREST(environment: environment, credentials: try AlpacaKeychain.load(environment))
             let current = try await client.account()
             account = current; api = client
+            try intent?.connect(api: client, account: current.id)
             try await refreshConnected()
         }
     }
     func disconnect(removeCredentials: Bool = false) {
         guard !busy else { return }
         if removeCredentials { AlpacaKeychain.remove(environment) }
+        intent?.disconnect()
         api = nil; account = nil; review = nil; positions = []; contracts = []; submissions = []; deliveries = []; updatedAt = nil
         message = "Disconnected. Saved orders and fills remain in the journal."
     }
@@ -85,9 +88,9 @@ final class AlpacaWorkspace: ObservableObject {
             cursor = last.id
         } while true
         for fill in collected.reversed() { try await journal.ingest(fill, environment: environment, accountID: account.id) }
-        try await mirrorSender?.ingest(Array(collected.reversed()), environment: environment, account: account.id)
+        if try IntentPairing.load() == nil { try await mirrorSender?.ingest(Array(collected.reversed()), environment: environment, account: account.id) }
         try await journal.setBaseline(newest ?? baseline ?? "__empty__", environment: environment, accountID: account.id)
-        do { mirrorMessage = try await mirrorSender?.deliver(api: api, account: account.id) ?? "Mirror journal unavailable." }
+        do { if try IntentPairing.load() == nil { mirrorMessage = try await mirrorSender?.deliver(api: api, account: account.id) ?? "Mirror journal unavailable." } }
         catch { mirrorMessage = error.localizedDescription }
         try await publisher?.deliver(environment: environment, accountID: account.id)
         updatedAt = Date(); message = "Account, orders and broker fills refreshed."
@@ -134,6 +137,13 @@ final class AlpacaWorkspace: ObservableObject {
                       let available = Decimal(string: held.qty_available ?? ""), available >= Decimal(ticket.quantity) else { throw AlpacaError.invalid("Available holdings changed. Review again.") }
             }
             try ticket.validate()
+            if let intent, intent.hosting {
+                guard ticket.side == "buy" else { throw AlpacaError.invalid("Use Exit on the tracked intent trade to sell mirrored holdings.") }
+                _ = try intent.host(symbol: ticket.symbol, asset: ticket.multiplier == 100 ? "option" : "stock", quantity: ticket.quantity, price: NSDecimalNumber(decimal: ticket.limitPrice).stringValue)
+                review = nil; message = "Intent saved; broker and relay dispatch started concurrently."
+                return
+            }
+            if try IntentPairing.load() != nil { throw AlpacaError.invalid("Follower pairing cannot originate trades. Use a host pairing to submit mirrored orders.") }
             try await journal.begin(ticket)
             review = nil // Consume before any network await.
             do {
@@ -177,7 +187,8 @@ struct AlpacaConnectionForm: View {
             Text(model.message).font(.footnote)
             Text("Webull Connect approval pending. Tradier is not integrated. No brokerage password is requested.").font(.footnote).foregroundStyle(.secondary)
         }
-        MirrorConnectionForm()
+        IntentConnectionForm()
+        if (try? IntentPairing.load()) == nil { MirrorConnectionForm() }
     }
 }
 struct AlpacaTradingView: View {
@@ -221,6 +232,7 @@ struct AlpacaTradingView: View {
                     }
                 }
                 Section { Text(model.message).font(.footnote) }
+                if let intent = model.intent { IntentTradesView(controller: intent) }
                 Section("Saved orders • pull to reconcile") {
                     ForEach(model.submissions.reversed()) { submission in
                         VStack(alignment: .leading) {

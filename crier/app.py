@@ -23,6 +23,8 @@ from .intake_routes import intake_router
 from .screen_observations import screen_observation_router
 from .monitors import start_monitor, stop_monitor
 from .mirror_routes import configure_mirror, mirror_router
+from .intent_relay import IntentRelay, sync_router
+from .intent_routes import configure_device, device_router
 
 STATIC = Path(__file__).parent / "static"
 
@@ -52,11 +54,19 @@ def create_app(config=None):
             task = asyncio.create_task(sender(stop)) if config.delivery_enabled else None
             app.state.sender = task
             app.state.monitor = None
+            device_stop = asyncio.Event()
+            device_tasks = [asyncio.create_task(work(device_stop)) for work in
+                            (app.state.device.publish_loop, app.state.device.receive_loop, app.state.device.execute_loop)]
             try:
                 app.state.monitor = start_monitor(config)
                 yield
             finally:
                 stop.set()
+                device_stop.set()
+                app.state.device.changed.set()
+                # Long-poll and relay I/O can stop; let broker mutation reconcile durably before releasing ownership.
+                for pending in device_tasks[:2]: pending.cancel()
+                await asyncio.gather(*device_tasks, return_exceptions=True)
                 await asyncio.to_thread(stop_monitor, app.state.monitor)
                 # Let an in-flight HTTP request settle before releasing ownership.
                 if task: await task
@@ -64,6 +74,8 @@ def create_app(config=None):
     app = FastAPI(title="Sentinel Crier", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
     app.state.mirror = configure_mirror(config)
+    app.state.relay = IntentRelay(config.data_dir / 'intent-relay.sqlite3')
+    app.state.device = configure_device(config)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
@@ -80,6 +92,8 @@ def create_app(config=None):
     app.include_router(intake_router(config, store, auth))
     app.include_router(screen_observation_router(store, auth, config.screen_upload_key))
     app.include_router(mirror_router(app.state.mirror, auth))
+    app.include_router(sync_router(app.state.relay, auth))
+    app.include_router(device_router(app.state.device, auth))
 
     @app.middleware("http")
     async def headers(request: Request, call_next):
@@ -134,5 +148,8 @@ def create_app(config=None):
 
     @app.get("/mirror")
     def mirror_console(): return FileResponse(STATIC / "mirror.html")
+
+    @app.get("/intent")
+    def intent_console(): return FileResponse(STATIC / "intent.html")
 
     return app

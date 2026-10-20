@@ -53,3 +53,7 @@ separate installation with its own storage and configuration.
 
 The bundled privacy manifest declares settings-storage API usage; it is not a
 substitute for the distributor's privacy policy or App Store privacy disclosures.
+
+## Submission-time intent relay
+
+Intent pairing is separate from legacy fill sharing. Its HTTPS relay receives order instructions (contract, action, requested quantity/price, paper/live environment, timestamps and random trade/event IDs) when the host submits or changes an order, before broker confirmation. Broker API keys remain on each execution device. The relay operator retains those instructions and pairing-token hashes. Host and follower tokens have separate publish/read scopes. Each device retains a durable journal of received revisions, outgoing commands, its own broker orders and actual fills; do not delete it to resolve an unknown submission. Revocation stops future delivery but cannot undo an already submitted order. Physical device release/privacy disclosures must cover the deployed relay operator and retention policy.
