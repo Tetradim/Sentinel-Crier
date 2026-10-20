@@ -33,3 +33,6 @@ The wire contract is in [intent-v1.md](protocol/intent-v1.md). HTTPS protects tr
 Alpaca personal Trading API is implemented on all three platforms. Webull Connect remains awaiting access/integration; copying a client does not create broker access. Supported trading is whole shares and standard long single-leg options; no short opening or multi-leg strategy replication.
 
 Tests use fake broker clients and HTTP transports, not actual orders. Simulator/JVM/backend tests do not replace a physical iPhone/Android/PC paper-account test over the real network. Signing, account credentials, hosting and the paper trial remain installation/release steps.
+
+See the [verification results](intent-verification-2026-10-20.md) and
+[cross-device paper acceptance procedure](intent-paper-acceptance.md).
