@@ -14,5 +14,3 @@ Scope: standard single-leg long options and whole shares, source execution quant
 - [x] Run Python suite and native CI; inspect changes; document setup and limitations; commit/push main directly as requested.
 
 Broker reference: https://docs.alpaca.markets/us/reference/postorder and https://docs.alpaca.markets/us/reference/getorderbyclientorderid. POST uses a deterministic client_order_id; timeout is unresolved, never a fresh retry. Sell requires qty_available and explicit sell_to_close.
-
-
