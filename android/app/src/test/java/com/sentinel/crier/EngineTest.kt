@@ -45,6 +45,3 @@ class EngineTest {
  @Test fun partialExitContinuesOnlyAfterFill() { val s=Store(); s.rev=Pair(2,true); s.os.add(Journal.Order("buy",1,"buy","filled","buyid",5)); val b=Fake(); b.available=2; val e=engine(s,b); e.step(event("exit",2)); assertEquals(2,b.quantity); assertEquals("si-event-s0",s.os.last().client); b.remote!!.put("status","filled").put("filled_qty","2"); b.available=0; e.step(event("exit",2)); assertEquals(1,b.posts); assertFalse(s.done); b.available=3; e.step(event("exit",2)); assertEquals(2,b.posts); assertEquals(3,b.quantity); assertNotEquals(s.os[1].client,s.os[2].client) }
   @Test fun replacementDoesNotCancelItsOwnNewOrder() { val s=Store(); s.rev=Pair(2,false); val b=Fake(); val e=engine(s,b); e.step(event("replace",2)); e.step(event("replace",2)); assertEquals(1,b.posts); assertEquals(0,b.canceled) }
 }
-
-
-

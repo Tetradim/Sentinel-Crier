@@ -18,4 +18,3 @@ interface BrokerPort {
  fun holdings(symbol:String):Int
  fun submit(event:JSONObject,client:String,quantity:Int,sell:Boolean,canSubmit:()->Boolean):JSONObject
 }
-

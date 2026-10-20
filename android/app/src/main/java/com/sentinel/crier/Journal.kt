@@ -58,8 +58,3 @@ class Journal(context: Context): SQLiteOpenHelper(context,"intent.db",null,1), I
   }
  }
 }
-
-
-
-
-

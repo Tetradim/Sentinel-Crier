@@ -62,6 +62,3 @@ class MainActivity:Activity() {
  }
  override fun onDestroy() { io.shutdown(); super.onDestroy() }
 }
-
-
-

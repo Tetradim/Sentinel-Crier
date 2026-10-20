@@ -40,5 +40,3 @@ class SyncService: Service() {
  override fun onTimeout(startId:Int,fgsType:Int) { Journal(this).setMeta("status","Android stopped background sync. Reopen Crier to resume; inspect broker orders."); stopSelf() }
  override fun onDestroy() { running=false; pool.shutdownNow(); super.onDestroy() }
 }
-
-

@@ -36,6 +36,3 @@ class Broker(private val config: JSONObject): BrokerPort {
   return Network.request("$base/v2/orders", "POST", headers, body)
  }
 }
-
-
-

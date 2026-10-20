@@ -73,8 +73,3 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
   require(filled>=previous.toBigDecimal() && filled<=quantity.toBigDecimal() && filled.stripTrailingZeros().scale()<=0) { "Invalid cumulative fill" }
  }
 }
-
-
-
-
-
