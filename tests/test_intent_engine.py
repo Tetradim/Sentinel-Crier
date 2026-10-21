@@ -296,3 +296,38 @@ def test_trade_flight_recorder_persists_timeline_and_fill_evidence(pair):
     from crier.intent_engine import IntentEngine
     reopened=IntentEngine(e.path,b)
     assert reopened.trade_trace(instruction['trade_id'])==trace
+
+
+def test_trade_report_compares_observed_ask_not_limit_price(pair):
+    e,b=pair
+    instruction=event(limit_price='2.00')
+    e.accept(instruction)
+    tid=instruction['trade_id']
+    timestamp=datetime.now(timezone.utc).isoformat()
+    e.record_quote(tid,'sender',dict(source='test-feed',quote_timestamp=timestamp,bid='2.30',ask='2.40'))
+    e.record_quote(tid,'receiver',dict(source='test-feed',quote_timestamp=timestamp,bid='2.36',ask='2.44'))
+    report=e.trade_report(tid)
+    assert report['premium_movement']['status']=='available'
+    assert report['premium_movement']['reference']=='ask'
+    assert report['premium_movement']['change']=='0.04'
+    assert report['cross_device_latency_ms'] is None
+    assert report['quotes']['sender']['source']=='test-feed'
+
+
+def test_trade_report_never_fabricates_missing_quote(pair):
+    e,b=pair
+    instruction=event()
+    e.accept(instruction)
+    report=e.trade_report(instruction['trade_id'])
+    assert report['premium_movement']['status']=='unavailable'
+    assert report['quotes']=={}
+
+
+def test_trade_quote_requires_source_and_timestamp(pair):
+    e,b=pair
+    instruction=event()
+    e.accept(instruction)
+    with pytest.raises(ValueError):
+        e.record_quote(instruction['trade_id'],'sender',{'ask':'2.40'})
+    with pytest.raises(ValueError):
+        e.record_quote(instruction['trade_id'],'receiver',{'source':'test','quote_timestamp':'2026-01-01T12:00:00','ask':'2.40'})
