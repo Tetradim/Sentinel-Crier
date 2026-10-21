@@ -12,6 +12,9 @@
   credential round-trip smoke test. No broker or relay requests were made by that test.
 - The executable and ZIP are build outputs in `dist/`, not source-controlled binaries.
   The Windows desktop workflow builds and uploads a portable ZIP on GitHub.
+- [Clean Windows CI run](https://github.com/Tetradim/Sentinel-Crier/actions/runs/39523173846)
+  passed on implementation commit `9ce4b4e`: full tests, packaging, packaged smoke
+  test and artifact upload. Download the `SentinelCrier-Windows` artifact there.
 
 No actual iPhone-to-PC paper order or live order was placed. HTTPS relay availability,
 account access, physical-device delivery latency and live execution remain deployment
