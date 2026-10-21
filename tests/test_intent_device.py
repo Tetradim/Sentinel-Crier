@@ -56,3 +56,42 @@ def test_replace_cannot_poison_outbox_with_changed_symbol(tmp_path):
     assert len(d.outgoing())==1
     cancel=d.command('cancel',trade_id=first.trade_id)
     assert cancel.sequence==2
+
+
+def test_receiver_quarantines_bad_event_and_processes_next(tmp_path,monkeypatch):
+    import asyncio
+    import json
+    import httpx
+    from datetime import timedelta
+    from crier import intent_device
+    d=IntentDevice(tmp_path)
+    d.configure({'url':'https://example.test','token':'x'*40,'environment':'paper','role':'follower'})
+    d.engine=Engine()
+    good=event()
+    # Existing relay fixtures return a wire-format dictionary.
+    valid=good if isinstance(good,dict) else good.to_dict()
+    calls=0
+    def respond(request):
+        nonlocal calls
+        calls+=1
+        return httpx.Response(200,json={'events':[{'cursor':1,'event':{'version':99}},
+                                                  {'cursor':2,'event':valid}]})
+    transport=httpx.MockTransport(respond)
+    original=httpx.AsyncClient
+    monkeypatch.setattr(intent_device.httpx,'AsyncClient',
+        lambda **kwargs: original(transport=transport,**kwargs))
+    async def run():
+        stop=asyncio.Event()
+        task=asyncio.create_task(d.receive_loop(stop))
+        for _ in range(100):
+            await asyncio.sleep(.01)
+            with d.db() as db:
+                cursor=db.execute('SELECT cursor FROM cursors').fetchone()
+            if cursor and cursor[0]==2: break
+        stop.set()
+        await task
+    asyncio.run(run())
+    with d.db() as db:
+        assert db.execute('SELECT cursor FROM cursors').fetchone()[0]==2
+        assert db.execute('SELECT count(*) FROM quarantined_events').fetchone()[0]==1
+    assert len(d.engine.events)==1
