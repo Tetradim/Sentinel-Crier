@@ -276,3 +276,23 @@ def test_future_entry_does_not_poison_later_revision(pair):
     e.accept(replacement)
     assert e.tick()[0]['state']=='submitted'
     assert len(b.sent)==1
+
+
+def test_trade_flight_recorder_persists_timeline_and_fill_evidence(pair):
+    e,b=pair
+    instruction=event()
+    e.accept(instruction)
+    e.tick()
+    trace=e.trade_trace(instruction['trade_id'])
+    stages=[entry['stage'] for entry in trace]
+    assert 'instruction_stored' in stages
+    assert 'broker_submit_started' in stages
+    assert 'broker_submit_returned' in stages
+    assert 'broker_reconciled' in stages
+    assert all(entry['timestamp'] and entry['monotonic_ns'] for entry in trace)
+    assert next(entry for entry in trace if entry['stage']=='broker_submit_started')['details']['limit_price']=='10.00'
+    assert next(entry for entry in trace if entry['stage']=='broker_reconciled')['details']['filled_qty']=='0'
+    assert not any('token' in str(entry).lower() or 'secret' in str(entry).lower() for entry in trace)
+    from crier.intent_engine import IntentEngine
+    reopened=IntentEngine(e.path,b)
+    assert reopened.trade_trace(instruction['trade_id'])==trace
