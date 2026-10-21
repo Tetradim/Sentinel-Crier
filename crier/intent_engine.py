@@ -8,7 +8,7 @@ import sqlite3
 import threading
 import time
 from .intent_protocol import IntentEvent
-from .trade_diagnostics import validate_quote, trade_report
+from .trade_diagnostics import validate_quote, trade_report, export_trade_json, export_trade_csv
 from .lock import single_process, AlreadyRunningError
 
 DEFAULTS = dict(enabled=False, mode='exact_limit', max_slippage_bps=100,
@@ -70,6 +70,16 @@ class IntentEngine:
 
     def trade_report(self, trade_id, side='buy'):
         return trade_report(self.trade_trace(trade_id),side)
+
+    def export_trade(self, trade_id, format='json', side='buy'):
+        report=self.trade_report(trade_id,side)
+        if not report['timeline']:
+            raise ValueError('Unknown trade or no recorded diagnostic events')
+        if format=='json':
+            return export_trade_json(report)
+        if format=='csv':
+            return export_trade_csv(report)
+        raise ValueError('Unsupported diagnostics export format')
 
     def load_settings(self):
         with self._db() as db: row=db.execute('SELECT data FROM intent_settings WHERE id=1').fetchone()
