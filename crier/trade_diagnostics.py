@@ -6,6 +6,8 @@ Never interpret an order limit as an observed bid/ask or fill.
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 import json
+import csv
+import io
 
 
 def _decimal(value):
@@ -75,3 +77,25 @@ def trade_report(events, side='buy'):
                 timeline=rows, quotes=quotes, premium_movement=comparison,
                 cross_device_latency_ms=None,
                 cross_device_latency_note='Not computed without verified clock synchronization')
+
+
+def export_trade_json(report):
+    """Portable UTF-8 JSON evidence bundle."""
+    return json.dumps(report,sort_keys=True,indent=2,ensure_ascii=False)+'\\n'
+
+
+def export_trade_csv(report):
+    """One row per observed event; details preserved as JSON, not flattened away."""
+    stream=io.StringIO(newline='')
+    writer=csv.writer(stream)
+    writer.writerow(('timestamp_utc','trade_id','event_id','stage','monotonic_ns','details_json'))
+    for entry in report['timeline']:
+        # Prefix spreadsheet formula characters to prevent CSV formula execution.
+        def safe(value):
+            value='' if value is None else str(value)
+            return "'" + value if value.startswith(('=','+','-','@','\\t','\\r')) else value
+        writer.writerow((safe(entry.get('timestamp')),safe(entry.get('trade_id')),
+                         safe(entry.get('event_id')),safe(entry.get('stage')),
+                         safe(entry.get('monotonic_ns')),
+                         safe(json.dumps(entry.get('details',{}),sort_keys=True))))
+    return stream.getvalue()
