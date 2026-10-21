@@ -17,6 +17,7 @@ class Config:
     screen_upload_key: str = ""
     intake_verified: bool = False
     monitor: str = "none"
+    public_pairing_enabled: bool = False
 
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
@@ -52,4 +53,5 @@ class Config:
             intake_key=os.getenv("CRIER_INTAKE_KEY", ""),
             screen_upload_key=os.getenv("CRIER_SCREEN_UPLOAD_KEY", ""),
             intake_verified=os.getenv("CRIER_INTAKE_VERIFIED", "false").lower() == "true",
-            monitor=os.getenv("CRIER_MONITOR", "none").lower())
+            monitor=os.getenv("CRIER_MONITOR", "none").lower(),
+            public_pairing_enabled=os.getenv("CRIER_PUBLIC_PAIRING_ENABLED", "false").lower()=="true")

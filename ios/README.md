@@ -53,3 +53,15 @@ is never permission to submit again. Preserve the journal for recovery.
 `IntentTests.swift` covers wire validation, revision ordering/tombstones, durable
 unknown state, and local price policies. Native compilation/testing requires the
 macOS Xcode workflow; no trading endpoint needs to be exercised for these tests.
+# Remote Host / Receive
+
+The account settings include Host, Receive, and Invite another receiver. A private
+invitation link configures a receiver without copying JSON or a separate service
+address. Pairing is stored in Keychain before brokerage activation. Subsequent
+button presses reuse the saved role/channel and broker credentials. A wrong
+Paper/Live selection is rejected before the invitation is consumed.
+
+An operator must first deploy the connection service; see
+[remote setup](../docs/remote-connect-setup.md). The shared
+`crier/connection-service.json` resource can supply its public origin in distributed
+builds. No default service has been invented or deployed. Keep iOS foregrounded.

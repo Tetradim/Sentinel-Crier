@@ -13,6 +13,7 @@ from .device_secrets import load_secret, save_secret
 from .intent_broker import AlpacaIntentBroker, HOSTS
 from .intent_device import IntentDevice
 from .intent_routes import Pair
+from .connection_client import ConnectionClient
 
 
 def data_directory():
@@ -56,15 +57,31 @@ class DesktopSession:
         self.closing = False
         self.lifecycle = asyncio.Lock()
 
+    def connection_client(self):
+        saved=json.loads(load_secret(self.credentials)) if self.credentials.exists() else {}
+        return ConnectionClient(self.folder/'connection-pair.secret', existing=saved.get('pair'))
+
+    async def host(self, origin, environment):
+        async with self.lifecycle:
+            return await self.connection_client().host(origin,environment)
+
+    async def receive(self, invitation, origin):
+        async with self.lifecycle:
+            return await self.connection_client().receive(invitation,origin)
+
     async def connect(self, pairing_text, key, secret, allow_live=False):
         async with self.lifecycle:
             if self.device:
                 raise ValueError('Disconnect before changing connection settings.')
             saved = json.loads(load_secret(self.credentials)) if self.credentials.exists() else {}
             try:
-                pair = Pair.model_validate(json.loads(pairing_text) if pairing_text.strip() else saved.get('pair', {})).model_dump()
+                pair = Pair.model_validate(json.loads(pairing_text) if pairing_text.strip() else
+                    saved.get('pair') or self.connection_client().saved() or {}).model_dump()
             except (ValueError, TypeError):
                 raise ValueError('Paste the complete host or follower pairing JSON.') from None
+            provisional=self.connection_client().saved()
+            if provisional and pair!=provisional:
+                raise ValueError('This device is pinned to its saved pairing; replacing it would abandon its journal.')
             url = urlsplit(pair['url'])
             if (url.scheme != 'https' or not url.hostname or url.username or url.password
                     or url.query or url.fragment or url.path not in ('', '/') or not 32 <= len(pair['token']) <= 256):

@@ -25,6 +25,7 @@ from .monitors import start_monitor, stop_monitor
 from .mirror_routes import configure_mirror, mirror_router
 from .intent_relay import IntentRelay, sync_router
 from .intent_routes import configure_device, device_router
+from .quick_connect import ConnectionService, connection_router
 
 STATIC = Path(__file__).parent / "static"
 
@@ -93,6 +94,7 @@ def create_app(config=None):
     app.include_router(screen_observation_router(store, auth, config.screen_upload_key))
     app.include_router(mirror_router(app.state.mirror, auth))
     app.include_router(sync_router(app.state.relay, auth))
+    app.include_router(connection_router(ConnectionService(app.state.relay), config.public_pairing_enabled))
     app.include_router(device_router(app.state.device, auth))
 
     @app.middleware("http")

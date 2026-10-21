@@ -8,6 +8,7 @@ from tkinter import ttk, messagebox
 import webbrowser
 
 from .desktop_runtime import DesktopWorker, data_directory
+from .connection_client import default_origin
 from .lock import AlreadyRunningError, single_process
 
 
@@ -37,12 +38,15 @@ class DesktopApp:
         tabs.pack(fill='both', expand=True)
         self.activity = ttk.Frame(tabs, padding=14)
         setup = ttk.Frame(tabs, padding=14)
+        pricing = ttk.Frame(tabs, padding=14)
         tabs.add(self.activity, text='Trading & activity')
-        tabs.add(setup, text='Connection & pricing')
+        tabs.add(setup, text='Host / Receive')
+        tabs.add(pricing, text='Pricing')
         tabs.select(setup)
         self._setup(setup)
+        self._pricing(pricing)
         self._activity(self.activity)
-        self.notice = tk.StringVar(value='Paste the follower pairing from the same channel used by your iPhone.')
+        self.notice = tk.StringVar(value='Host shares an invitation. Receive joins it. Saved devices reconnect with the same button.')
         ttk.Label(outer, textvariable=self.notice, wraplength=1000).pack(anchor='w', pady=(12,0))
         ttk.Label(outer, text='Keep this PC awake and Crier running. Closing stops mirroring; existing broker orders remain.',
                   style='Subtitle.TLabel').pack(anchor='w', pady=(6,0))
@@ -59,9 +63,20 @@ class DesktopApp:
         return variable
 
     def _setup(self, frame):
-        ttk.Label(frame, text='Connect to the iPhone channel', font=('Segoe UI',12,'bold')).pack(anchor='w')
-        ttk.Label(frame, text='Use follower pairing here when the iPhone is the host. Leave fields blank to reuse saved credentials.').pack(anchor='w', pady=6)
-        self.pairing = self._entry(frame, 'Pairing JSON', masked=True)
+        ttk.Label(frame, text='Connect across networks', font=('Segoe UI',12,'bold')).pack(anchor='w')
+        ttk.Label(frame, text='Choose Host to share your trades, or Receive to follow a paired host.').pack(anchor='w', pady=6)
+        self.service = self._entry(frame, 'Service (host setup)', default_origin())
+        self.invitation = self._entry(frame, 'Host invitation / code', masked=True)
+        row=ttk.Frame(frame); row.pack(fill='x', pady=8)
+        self.host_environment=tk.StringVar(value='paper')
+        ttk.Combobox(row, textvariable=self.host_environment, values=('paper','live'), state='readonly', width=8).pack(side='left')
+        ttk.Button(row,text='Host / invite receiver',command=lambda:self.quick_connect('host')).pack(side='left',padx=8)
+        ttk.Button(row,text='Receive / reconnect',command=lambda:self.quick_connect('receive')).pack(side='left')
+        self.share=self._entry(frame, 'Invitation to share')
+        ttk.Button(frame,text='Copy invitation',command=self.copy_invitation).pack(anchor='w')
+        ttk.Label(frame,text='Each invitation joins one receiver and expires in 10 minutes. Generate another for each additional receiver.').pack(anchor='w',pady=6)
+        ttk.Separator(frame).pack(fill='x',pady=10)
+        ttk.Label(frame,text='Your brokerage account • leave both blank to reuse saved credentials').pack(anchor='w')
         self.key = self._entry(frame, 'Alpaca API key', masked=True)
         self.secret = self._entry(frame, 'Alpaca API secret', masked=True)
         self.live = tk.BooleanVar(value=False)
@@ -73,7 +88,9 @@ class DesktopApp:
         ttk.Button(buttons, text='Disconnect', command=lambda: self.submit('disconnect')).pack(side='left', padx=8)
         ttk.Button(buttons, text='Pairing & setup guide', command=lambda: webbrowser.open(
             'https://github.com/Tetradim/Sentinel-Crier/blob/main/desktop/README.md')).pack(side='left')
-        ttk.Separator(frame).pack(fill='x', pady=14)
+        self.pairing = self._entry(frame, 'Advanced: pairing JSON', masked=True)
+
+    def _pricing(self, frame):
         ttk.Label(frame, text='Local execution settings', font=('Segoe UI',12,'bold')).pack(anchor='w')
         row = ttk.Frame(frame); row.pack(fill='x', pady=6)
         ttk.Label(row, text='Price policy', width=25).pack(side='left')
@@ -86,6 +103,28 @@ class DesktopApp:
         self.quantity_cap = self._entry(frame, 'Maximum entry quantity', '1000')
         ttk.Label(frame, text='Bounded limit uses the smaller allowance. Market orders have no price bound.').pack(anchor='w', pady=4)
         ttk.Button(frame, text='Save pricing settings', command=self.save_settings).pack(anchor='w', pady=6)
+
+    def copy_invitation(self):
+        if self.share.get():
+            self.root.clipboard_clear(); self.root.clipboard_append(self.share.get())
+            self.notice.set('Invitation copied. Send it only to the intended receiver.')
+
+    def quick_connect(self, role):
+        def ready(result):
+            self.pairing.set(json.dumps(result['pair']))
+            self.service.set(result['pair']['url'])
+            self.host_environment.set(result['pair']['environment'])
+            self.invitation.set('')
+            self.share.set(result.get('invitation',''))
+            if not self.connected:
+                # Pairing is already durable if broker credentials are not available yet.
+                self.root.after(0,self.connect)
+            else:
+                self.pairing.set('')
+        if role=='host':
+            self.submit('host',self.service.get(),self.host_environment.get(),callback=ready)
+        else:
+            self.submit('receive',self.invitation.get(),self.service.get(),callback=ready)
 
     def _activity(self, frame):
         controls = ttk.Frame(frame); controls.pack(fill='x', pady=(0,10))
@@ -242,6 +281,7 @@ class DesktopApp:
 
 def smoke_test(report=None):
     from .device_secrets import save_secret, load_secret
+    assert Path(__file__).with_name('connection-service.json').exists(), 'Missing bundled connection-service resource'
     with tempfile.TemporaryDirectory(prefix='crier-desktop-smoke-') as folder:
         path = Path(folder)
         save_secret(path/'test.secret', 'offline-smoke')

@@ -36,19 +36,62 @@ final class AlpacaWorkspace: ObservableObject {
         submissions = snapshot.submissions.filter { $0.ticket.environment == environment && $0.ticket.accountID == account.id }
         deliveries = snapshot.deliveries.filter { $0.environment == environment && $0.accountID == account.id }
     }
-    func connect(key: String, secret: String) async {
-        await perform {
-            guard journal != nil else { throw AlpacaError.invalid("Journal unavailable. Trading is disabled.") }
-            review = nil; account = nil; api = nil; positions = []; contracts = []
-            if !key.isEmpty || !secret.isEmpty {
-                try AlpacaKeychain.save(AlpacaCredentials(key: key.trimmingCharacters(in: .whitespacesAndNewlines), secret: secret.trimmingCharacters(in: .whitespacesAndNewlines)), environment: environment)
-            }
-            let client = AlpacaREST(environment: environment, credentials: try AlpacaKeychain.load(environment))
-            let current = try await client.account()
-            account = current; api = client
-            try intent?.connect(api: client, account: current.id)
-            try await refreshConnected()
+    private func connectSavedBroker(key: String = "", secret: String = "") async throws {
+        intent?.disconnect()
+        guard journal != nil else { throw AlpacaError.invalid("Journal unavailable. Trading is disabled.") }
+        review = nil; account = nil; api = nil; positions = []; contracts = []
+        if !key.isEmpty || !secret.isEmpty {
+            try AlpacaKeychain.save(AlpacaCredentials(key: key.trimmingCharacters(in: .whitespacesAndNewlines), secret: secret.trimmingCharacters(in: .whitespacesAndNewlines)), environment: environment)
         }
+        let client = AlpacaREST(environment: environment, credentials: try AlpacaKeychain.load(environment))
+        let current = try await client.account()
+        account = current; api = client
+        try intent?.connect(api: client, account: current.id)
+        try await refreshConnected()
+    }
+    func connect(key: String, secret: String) async {
+        await perform { try await connectSavedBroker(key: key, secret: secret) }
+    }
+    // Hold the workspace lifecycle lock from provisioning through broker activation.
+    // Persist the channel before any further network operation can fail.
+    func quickConnect(host: Bool, service: String, invitation: String, newInvite: Bool = false) async throws -> String? {
+        guard !busy else { throw AlpacaError.invalid("Wait for the current connection operation to finish.") }
+        busy = true
+        defer { busy = false }
+        let selectedEnvironment = environment
+        var saved = try IntentPairing.load()
+        let created = saved == nil
+        if let existing = saved {
+            guard existing.role == (host ? "host" : "follower"), existing.environment == selectedEnvironment else {
+                throw AlpacaError.invalid("This device already has a different role or environment saved. Its journal remains pinned to that pairing.")
+            }
+            guard host || invitation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw AlpacaError.invalid("This receiver is already paired. Clear the invitation field and press Receive to reconnect.")
+            }
+        } else {
+            let pair: IntentPairing
+            if host { pair = try await QuickConnection.host(service: service, environment: selectedEnvironment) }
+            else { pair = try await QuickConnection.receive(QuickConnection.invitation(invitation, service: service), environment: selectedEnvironment) }
+            guard environment == selectedEnvironment else { throw AlpacaError.invalid("Environment changed during pairing. Retry with the original environment.") }
+            try pair.save(); MirrorPairing.remove(); saved = pair
+        }
+        var link: String?
+        var invitationFailure: String?
+        if host, (created || newInvite), let pair = saved {
+            do { link = try await QuickConnection.invite(pair) }
+            catch { invitationFailure = error.localizedDescription }
+        }
+        do {
+            guard let intent else { throw AlpacaError.invalid("Intent journal unavailable.") }
+            if let api, let account { try intent.connect(api: api, account: account.id) }
+            else { try await connectSavedBroker() }
+            message = "Saved pairing connected. Keep this app open for delivery."
+        } catch {
+            message = "Pairing saved. Broker connection needs attention: " + error.localizedDescription
+        }
+        if let invitationFailure { message += " Invitation: " + invitationFailure }
+        await reloadJournal()
+        return link
     }
     func disconnect(removeCredentials: Bool = false) {
         guard !busy else { return }

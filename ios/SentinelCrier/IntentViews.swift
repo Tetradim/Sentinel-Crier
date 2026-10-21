@@ -1,18 +1,58 @@
 import SwiftUI
+import UIKit
 
 struct IntentConnectionForm: View {
     @EnvironmentObject var model: AlpacaWorkspace
+    @AppStorage("connection-service-url") private var service = QuickConnection.defaultService
     @State private var pairing = ""
+    @State private var invitation = ""
+    @State private var shareLink = ""
     @State private var message = ""
+    @State private var working = false
+    private func connect(host: Bool, newInvite: Bool = false) {
+        working = true; message = ""
+        Task { @MainActor in
+            defer { working = false }
+            do {
+                if let link = try await model.quickConnect(host: host, service: service, invitation: invitation, newInvite: newInvite) { shareLink = link }
+                if !host { invitation = "" }
+                message = model.message
+            } catch { message = error.localizedDescription }
+        }
+    }
     var body: some View {
-        Section("Submission-time mirroring") {
-            SecureField("Paste intent pairing JSON", text: $pairing).textInputAutocapitalization(.never).autocorrectionDisabled()
-            Button("Save host / follower pairing") {
-                do { try IntentPairing.decode(pairing).save(); MirrorPairing.remove(); pairing = ""; message = "Pairing saved. Reconnect Alpaca to activate." }
-                catch { message = error.localizedDescription }
-            }.disabled(model.account != nil)
+        Section("Remote connection") {
+            Button("Host") { connect(host: true) }.disabled(model.busy || working)
+            SecureField("Invitation link or code (first connection)", text: $invitation)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                .disabled(model.busy || working)
+            Button("Receive") { connect(host: false) }.disabled(model.busy || working)
+            if (try? IntentPairing.load())?.role == "host" {
+                Button("Invite another receiver") { connect(host: true, newInvite: true) }.disabled(model.busy || working)
+            }
+            if !shareLink.isEmpty {
+                Text(shareLink).font(.caption).textSelection(.enabled)
+                ShareLink("Share receiver invitation", item: shareLink)
+                Button("Copy invitation") { UIPasteboard.general.string = shareLink }
+                Text("Single use; expires after 10 minutes. Each additional receiver needs a new invitation.").font(.caption)
+            }
             Text(message).font(.footnote)
-            Text("Each device uses its own Alpaca keys. Keep this app open while following; iOS suspends background networking. Disconnect Alpaca to edit pairing.").font(.caption)
+            Text("Pair once; use Host or Receive to reconnect. Each device uses its own Alpaca keys. Keep this app open while following; iOS suspends background networking.").font(.caption)
+            DisclosureGroup("Advanced connection setup") {
+                TextField("HTTPS connection service URL", text: $service)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                    .disabled(model.busy || working)
+                Text("A hosted connection service is required. A receiver invitation link supplies its address automatically.").font(.caption)
+                SecureField("Paste intent pairing JSON", text: $pairing).textInputAutocapitalization(.never).autocorrectionDisabled()
+                Button("Save host / follower pairing") {
+                    do {
+                        guard try IntentPairing.load() == nil else { throw AlpacaError.invalid("A pairing is already saved. Preserve its pinned journal; use Host or Receive to reconnect.") }
+                        let value = try IntentPairing.decode(pairing)
+                        guard value.environment == model.environment else { throw AlpacaError.invalid("Select the pairing's broker environment first.") }
+                        try value.save(); MirrorPairing.remove(); pairing = ""; message = "Pairing saved. Press Host or Receive to activate."
+                    } catch { message = error.localizedDescription }
+                }.disabled(model.account != nil || model.busy || working)
+            }
             if let intent = model.intent { IntentSettingsView(controller: intent) }
         }
     }

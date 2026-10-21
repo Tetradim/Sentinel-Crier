@@ -78,6 +78,16 @@ def test_live_requires_explicit_local_selection(tmp_path):
             await session.connect(json.dumps(dict(PAIR, environment='live')), 'key', 'secret')
     asyncio.run(run())
 
+def test_manual_pair_cannot_replace_provisional_quick_pair(tmp_path):
+    from crier.device_secrets import save_secret
+    async def run():
+        save_secret(tmp_path/'connection-pair.secret',json.dumps(PAIR))
+        session=DesktopSession(tmp_path,account_lookup=account,broker_factory=Broker,start_workers=False)
+        with pytest.raises(ValueError,match='pairing'):
+            await session.connect(json.dumps(dict(PAIR,token='z'*40)), 'key','secret')
+        assert not session.status()['connected']
+    asyncio.run(run())
+
 def test_ios_wire_event_reaches_desktop_broker_without_waiting_for_fill(tmp_path, monkeypatch):
     from fastapi import FastAPI
     from crier.intent_relay import IntentRelay, sync_router

@@ -6,6 +6,10 @@ an order is not a fill and does not produce a filled-trade alert.
 
 ## Ways to run
 
+**Remote Host / Receive:** the iPhone and Windows apps now support expiring
+invitation links and saved-pairing reconnection. An operator must deploy the shared
+service once; no service is preconfigured yet. [Deploy and connect](docs/remote-connect-setup.md).
+
 - **Windows desktop app:** launch `SentinelCrier.exe`, paste the iPhone channel's
   follower pairing, and connect your own Alpaca account. Native controls handle
   Follow/Pause, pricing and broker order status without environment variables or a

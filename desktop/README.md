@@ -10,14 +10,13 @@ implemented in this desktop release.
    artifact, or use the locally built ZIP in `dist/`.
 2. Extract the entire ZIP to a normal folder. Keep `SentinelCrier.exe` and `_internal`
    together. Double-click `SentinelCrier.exe`. No separate Python install is required.
-3. Open **Connection & pricing**. Paste the **follower** pairing JSON from the same
-   channel whose **host** pairing is saved in the iOS app.
+3. Open **Host / Receive**. Paste the invitation shared by the iPhone host.
 4. Enter this PC account's Alpaca API key and secret. The account ID is discovered
    automatically. Paper credentials require a paper channel. Live channels require
    explicitly selecting **Allow connection to a live-money account**.
-5. Click **Connect**. Confirm the environment, account ID and follower role shown at
+5. Click **Receive / reconnect**. Confirm the environment, account ID and follower role shown at
    the top. Connecting always starts new entries paused.
-6. Select exact-limit, bounded-limit or market pricing and save settings. In
+6. In **Pricing**, select exact-limit, bounded-limit or market pricing and save settings. In
    **Trading & activity**, click **Enable new entries** when ready to receive trades.
 7. Place a trade **inside Crier on the iPhone**. Its order instruction travels through
    the relay immediately, without waiting for a host fill. PC activity shows the
@@ -27,6 +26,12 @@ The phone and PC do not need the same brokerage account. Use separate paper acco
 for initial testing. No Discord parsing is involved in this connection.
 
 ## Pairing and network
+
+For the new Host/Receive setup, see [one-time service deployment](https://github.com/Tetradim/Sentinel-Crier/blob/main/docs/remote-connect-setup.md).
+Once that service is deployed, invite links supply its address automatically to receivers.
+Use **Host / invite receiver** to originate trades from Windows and invite other devices.
+After pairing, clear the invitation field and use the same button to reconnect with
+saved credentials. Advanced pairing JSON and the original Connect button remain available.
 
 Both apps still need a reachable HTTPS Crier relay. This executable is a desktop
 trading client; it does not silently open router ports or provision public hosting.

@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: sentinel-crier-connect
+    runtime: python
+    plan: starter
+    buildCommand: pip install .
+    startCommand: python -m crier.connection_server
+    healthCheckPath: /health
+    autoDeployTrigger: "off"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: CRIER_DATA_DIR
+        value: /var/data/crier
+      - key: CRIER_PUBLIC_PAIRING_ENABLED
+        value: "true"
+      - key: CRIER_ACCESS_TOKEN
+        generateValue: true
+    disk:
+      name: crier-connection-data
+      mountPath: /var/data
+      sizeGB: 1

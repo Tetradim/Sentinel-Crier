@@ -21,7 +21,10 @@ class IntentRelay:
             CREATE TABLE IF NOT EXISTS channels(id TEXT PRIMARY KEY,name TEXT,environment TEXT,host_digest TEXT UNIQUE,follower_digest TEXT UNIQUE,revoked INTEGER DEFAULT 0);
             CREATE TABLE IF NOT EXISTS intents(cursor INTEGER PRIMARY KEY AUTOINCREMENT,channel TEXT,event_id TEXT,trade_id TEXT,sequence INTEGER,identity TEXT,payload TEXT,UNIQUE(channel,event_id),UNIQUE(channel,trade_id,sequence));
             CREATE INDEX IF NOT EXISTS stream_cursor ON intents(channel,cursor);
+            CREATE TABLE IF NOT EXISTS receivers(id TEXT PRIMARY KEY,channel TEXT,token_digest TEXT UNIQUE,created REAL,revoked INTEGER DEFAULT 0,start_cursor INTEGER DEFAULT 0);
             ''')
+            if 'start_cursor' not in {row['name'] for row in db.execute('PRAGMA table_info(receivers)')}:
+                db.execute('ALTER TABLE receivers ADD COLUMN start_cursor INTEGER DEFAULT 0')
     @contextmanager
     def db(self):
         db=sqlite3.connect(self.path,timeout=15); db.row_factory=sqlite3.Row
@@ -37,6 +40,9 @@ class IntentRelay:
     def authenticate(self,db,token,role):
         column='host_digest' if role=='host' else 'follower_digest'
         row=db.execute(f'SELECT * FROM channels WHERE {column}=? AND revoked=0',(sha256(token.encode()).hexdigest(),)).fetchone()
+        if row is None and role=='follower':
+            row=db.execute('SELECT c.* FROM channels c JOIN receivers r ON r.channel=c.id WHERE r.token_digest=? AND c.revoked=0 AND r.revoked=0',
+                           (sha256(token.encode()).hexdigest(),)).fetchone()
         if not row: raise PermissionError('Pairing invalid or revoked')
         return row
     def publish(self,token,event):
@@ -59,6 +65,8 @@ class IntentRelay:
     def read(self,token,after):
         with self.db() as db:
             channel=self.authenticate(db,token,'follower')
+            receiver=db.execute('SELECT start_cursor FROM receivers WHERE token_digest=?',(sha256(token.encode()).hexdigest(),)).fetchone()
+            if receiver: after=max(after,receiver['start_cursor'])
             rows=db.execute('SELECT cursor,payload FROM intents WHERE channel=? AND cursor>? ORDER BY cursor LIMIT 500',(channel['id'],after)).fetchall()
         return {'events':[{'cursor':r['cursor'],'event':json.loads(r['payload'])} for r in rows], 'cursor':rows[-1]['cursor'] if rows else after}
     def revoke(self,identity):
