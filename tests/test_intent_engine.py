@@ -331,3 +331,23 @@ def test_trade_quote_requires_source_and_timestamp(pair):
         e.record_quote(instruction['trade_id'],'sender',{'ask':'2.40'})
     with pytest.raises(ValueError):
         e.record_quote(instruction['trade_id'],'receiver',{'source':'test','quote_timestamp':'2026-01-01T12:00:00','ask':'2.40'})
+
+
+def test_trade_diagnostic_exports_are_parseable_and_complete(pair):
+    import csv
+    import io
+    import json
+    e,b=pair
+    instruction=event()
+    e.accept(instruction)
+    e.tick()
+    tid=instruction['trade_id']
+    exported=json.loads(e.export_trade(tid,'json'))
+    assert exported['trade_id']==tid
+    assert any(x['stage']=='broker_submit_started' for x in exported['timeline'])
+    rows=list(csv.DictReader(io.StringIO(e.export_trade(tid,'csv'))))
+    assert len(rows)==len(exported['timeline'])
+    assert all(row['trade_id']==tid for row in rows)
+    assert any(json.loads(row['details_json']).get('client_order_id') for row in rows)
+    with pytest.raises(ValueError):
+        e.export_trade(tid,'xml')
