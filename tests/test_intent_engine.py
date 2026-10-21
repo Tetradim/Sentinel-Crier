@@ -224,3 +224,31 @@ def test_duplicate_422_is_not_definite_rejection():
         return httpx.Response(422,json={'message':'client_order_id must be unique'})
     broker=AlpacaIntentBroker('paper','key','secret','pinned',httpx.Client(transport=httpx.MockTransport(handler)))
     with pytest.raises(httpx.HTTPStatusError): broker.submit({'symbol':'AAPL','asset':'stock','side':'buy'})
+
+
+def test_explicit_422_invalid_quantity_is_definitive_rejection():
+    import httpx
+    from crier.intent_broker import AlpacaIntentBroker, BrokerNotSubmitted
+    def handler(request):
+        if request.url.path=='/v2/account':
+            return httpx.Response(200,json={'id':'pinned','status':'ACTIVE'})
+        if request.url.path.startswith('/v2/assets/'):
+            return httpx.Response(200,json={'symbol':'AAPL','class':'us_equity','tradable':True,'status':'active'})
+        return httpx.Response(422,json={'message':'invalid qty'})
+    broker=AlpacaIntentBroker('paper','key','secret','pinned',httpx.Client(transport=httpx.MockTransport(handler)))
+    with pytest.raises(BrokerNotSubmitted):
+        broker.submit({'symbol':'AAPL','asset':'stock','side':'buy'})
+
+
+def test_unknown_422_remains_ambiguous():
+    import httpx
+    from crier.intent_broker import AlpacaIntentBroker
+    def handler(request):
+        if request.url.path=='/v2/account':
+            return httpx.Response(200,json={'id':'pinned','status':'ACTIVE'})
+        if request.url.path.startswith('/v2/assets/'):
+            return httpx.Response(200,json={'symbol':'AAPL','class':'us_equity','tradable':True,'status':'active'})
+        return httpx.Response(422,json={'message':'order rejected'})
+    broker=AlpacaIntentBroker('paper','key','secret','pinned',httpx.Client(transport=httpx.MockTransport(handler)))
+    with pytest.raises(httpx.HTTPStatusError):
+        broker.submit({'symbol':'AAPL','asset':'stock','side':'buy'})
