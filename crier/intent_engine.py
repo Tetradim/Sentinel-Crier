@@ -6,6 +6,7 @@ from decimal import Decimal, ROUND_DOWN, ROUND_UP
 import json
 import sqlite3
 import threading
+import time
 from .intent_protocol import IntentEvent
 from .lock import single_process, AlreadyRunningError
 
@@ -24,7 +25,8 @@ class IntentEngine:
             CREATE TABLE IF NOT EXISTS intent_settings(id INTEGER PRIMARY KEY, data TEXT);
             CREATE TABLE IF NOT EXISTS intent_pin(id INTEGER PRIMARY KEY, environment TEXT, account TEXT);
             CREATE TABLE IF NOT EXISTS intent_cancel_requested(cid TEXT PRIMARY KEY);
-            CREATE TABLE IF NOT EXISTS intent_settled(id TEXT PRIMARY KEY, data TEXT);''')
+            CREATE TABLE IF NOT EXISTS intent_settled(id TEXT PRIMARY KEY, data TEXT);
+            CREATE TABLE IF NOT EXISTS intent_trace(id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, monotonic_ns INTEGER NOT NULL, trade_id TEXT NOT NULL, event_id TEXT, stage TEXT NOT NULL, details TEXT NOT NULL);''')
     @contextmanager
     def _db(self):
         db=sqlite3.connect(self.path, timeout=30)
@@ -32,6 +34,23 @@ class IntentEngine:
         try:
             with db: yield db
         finally: db.close()
+    def _trace(self, trade_id, stage, event_id=None, **details):
+        """Best-effort diagnostics; never affect broker execution decisions."""
+        try:
+            with self._db() as db:
+                db.execute('INSERT INTO intent_trace(timestamp,monotonic_ns,trade_id,event_id,stage,details) VALUES (?,?,?,?,?,?)',
+                           (datetime.now(timezone.utc).isoformat(),time.monotonic_ns(),trade_id,event_id,stage,json.dumps(details,sort_keys=True)))
+        except (sqlite3.Error, TypeError, ValueError):
+            pass
+
+    def trade_trace(self, trade_id):
+        """Chronological evidence without credentials or raw broker responses."""
+        with self._db() as db:
+            return [dict(timestamp=r['timestamp'],monotonic_ns=r['monotonic_ns'],
+                         trade_id=r['trade_id'],event_id=r['event_id'],stage=r['stage'],
+                         details=json.loads(r['details']))
+                    for r in db.execute('SELECT * FROM intent_trace WHERE trade_id=? ORDER BY id',(trade_id,))]
+
     def load_settings(self):
         with self._db() as db: row=db.execute('SELECT data FROM intent_settings WHERE id=1').fetchone()
         return dict(DEFAULTS, **(json.loads(row[0]) if row else {}))
@@ -64,6 +83,7 @@ class IntentEngine:
             db.execute('INSERT INTO intent_events VALUES (?,?)',(e['event_id'],encoded))
             desired=encoded if not prior or e['sequence']>prior['sequence'] else row['data']
             db.execute('INSERT OR REPLACE INTO intent_trades VALUES (?,?,?,?)',(e['trade_id'],desired,invalid,skipped))
+        self._trace(e['trade_id'],'instruction_stored',e['event_id'],action=e['action'],sequence=e['sequence'],symbol=e['symbol'],asset=e['asset'],quantity=e['quantity'],limit_price=e['limit_price'],sender_created_at=e['created_at'],expires_at=e['expires_at'])
         return {'state':'stored','trade_id':e['trade_id']}
     def status(self):
         with self._db() as db:
@@ -75,7 +95,9 @@ class IntentEngine:
         with self._db() as db: return [dict(r) for r in db.execute('SELECT * FROM intent_orders WHERE trade_id=?',(tid,))]
     def _reconcile(self, order):
         snap=self.broker.lookup(order['cid'])
-        if snap is None: return # Unknown stays unknown forever until resolved; never blind POST.
+        if snap is None:
+            self._trace(order['trade_id'],'broker_lookup_unknown',client_order_id=order['cid'])
+            return # Unknown stays unknown forever until resolved; never blind POST.
         if snap.get('client_order_id')!=order['cid']: raise ValueError('Broker order identity mismatch')
         if order['broker_id'] and snap.get('id')!=order['broker_id']: raise ValueError('Broker order ID changed')
         with self._db() as db:
@@ -85,6 +107,7 @@ class IntentEngine:
         if not filled.is_finite() or filled<Decimal(order['filled']) or filled>Decimal(order['qty']): raise ValueError('Inconsistent broker cumulative quantity')
         with self._db() as db:
             db.execute('UPDATE intent_orders SET status=?, broker_id=?, filled=? WHERE cid=?',(snap['status'],snap['id'],str(filled),order['cid']))
+        self._trace(order['trade_id'],'broker_reconciled',client_order_id=order['cid'],status=snap['status'],filled_qty=str(filled),avg_fill_price=str(snap.get('filled_avg_price')) if snap.get('filled_avg_price') is not None else None,broker_created_at=snap.get('created_at'),broker_filled_at=snap.get('filled_at'))
     def tick(self):
         try:
             with single_process(self.path+'.worker.lock'): return self._tick_locked()
@@ -96,7 +119,9 @@ class IntentEngine:
             with self._db() as db: ids=[r[0] for r in db.execute('SELECT t.id FROM intent_trades t LEFT JOIN intent_settled s ON t.id=s.id WHERE s.id IS NULL OR t.data!=s.data')]
             for tid in ids:
                 try: results.append(self._step(tid))
-                except Exception as exc: results.append({'trade_id':tid,'state':'reconcile_required','error':type(exc).__name__})
+                except Exception as exc:
+                    self._trace(tid,'execution_error',error_type=type(exc).__name__)
+                    results.append({'trade_id':tid,'state':'reconcile_required','error':type(exc).__name__})
         finally: self.worker.release()
         return results
     def _settle(self, tid, event, state):
@@ -104,6 +129,7 @@ class IntentEngine:
             current=db.execute('SELECT data FROM intent_trades WHERE id=?',(tid,)).fetchone()[0]
             if json.loads(current)==event:
                 db.execute('INSERT OR REPLACE INTO intent_settled VALUES (?,?)',(tid,current))
+        self._trace(tid,'execution_decision',event.get('event_id'),state=state)
         return {'trade_id':tid,'state':state}
     def _step(self, tid):
         with self._db() as db: row=db.execute('SELECT * FROM intent_trades WHERE id=?',(tid,)).fetchone()
@@ -126,9 +152,11 @@ class IntentEngine:
                     with self._db() as db:
                         db.execute('INSERT INTO intent_cancel_requested VALUES (?)',(order['cid'],))
                         db.execute("UPDATE intent_orders SET status='cancel_unknown' WHERE cid=?",(order['cid'],))
+                    self._trace(tid,'cancel_requested',e['event_id'],client_order_id=order['cid'])
                     try:
                         self.broker.cancel(order['broker_id'])
-                    except Exception:
+                    except Exception as exc:
+                        self._trace(tid,'cancel_uncertain',e['event_id'],client_order_id=order['cid'],error_type=type(exc).__name__)
                         # The request may have reached the broker. Leave the order
                         # nonterminal, but permit another cancellation attempt only
                         # after the next tick has reconciled broker state.
@@ -143,6 +171,7 @@ class IntentEngine:
         if side=='buy' and now<datetime.fromisoformat(e['created_at'].replace('Z','+00:00')):
             # A future-dated event is not permanently invalid: wait for its
             # validity window. Later revisions must remain eligible.
+            self._trace(tid,'execution_deferred',e['event_id'],reason='future_created_at',sender_created_at=e['created_at'])
             return {'trade_id':tid,'state':'waiting_for_start'}
         if side=='buy' and (not settings['enabled'] or now>=datetime.fromisoformat(e['expires_at'].replace('Z','+00:00')) or (now-datetime.fromisoformat(e['created_at'].replace('Z','+00:00'))).total_seconds()>settings['max_age_seconds'] or e['quantity']>settings['max_quantity']):
             with self._db() as db: db.execute('UPDATE intent_trades SET skipped=1 WHERE id=?',(tid,))
@@ -193,6 +222,7 @@ class IntentEngine:
                 expires=datetime.fromisoformat(e['expires_at'].replace('Z','+00:00'))
                 return not latest['invalid'] and not latest['skipped'] and current['enabled'] and created<=current_time<expires and (current_time-created).total_seconds()<=current['max_age_seconds'] and e['quantity']<=current['max_quantity']
             return True
+        self._trace(tid,'broker_submit_started',e['event_id'],client_order_id=cid,side=side,quantity=str(qty),order_type=request['type'],limit_price=request.get('limit_price'))
         try:
             if hasattr(self.broker,'submit_checked'):
                 self.broker.submit_checked(request, can_submit)
@@ -200,11 +230,14 @@ class IntentEngine:
                 if not can_submit(): raise BrokerSuperseded('Instruction changed')
                 self.broker.submit(request)
         except BrokerSuperseded:
+            self._trace(tid,'broker_submit_superseded',e['event_id'],client_order_id=cid)
             with self._db() as db: db.execute("UPDATE intent_orders SET status='skipped' WHERE cid=?",(cid,))
             return {'trade_id':tid,'state':'superseded'}
         except BrokerNotSubmitted:
+            self._trace(tid,'broker_submit_rejected',e['event_id'],client_order_id=cid)
             with self._db() as db: db.execute("UPDATE intent_orders SET status='rejected' WHERE cid=?",(cid,))
             return self._settle(tid,e,'manual_reconcile' if side=='sell' else 'rejected')
+        self._trace(tid,'broker_submit_returned',e['event_id'],client_order_id=cid)
         self._reconcile(next(o for o in self._orders(tid) if o['cid']==cid))
         if next(o for o in self._orders(tid) if o['cid']==cid)['status']=='rejected': return self._settle(tid,e,'manual_reconcile' if side=='sell' else 'rejected')
         return {'trade_id':tid,'state':'submitted'}
