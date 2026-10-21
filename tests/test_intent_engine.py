@@ -87,6 +87,48 @@ def test_cancel_is_requested_once(pair):
     e,b=pair; calls=[]; x=event(); e.accept(x); e.tick(); b.cancel=lambda oid:calls.append(oid)
     e.accept(event('cancel',2,x['trade_id'])); e.tick(); e.tick(); assert len(calls)==1
 
+def test_failed_cancel_is_retried_after_reconciliation(pair):
+    e,b=pair
+    x=event()
+    e.accept(x)
+    e.tick()
+    attempts=[]
+    original=b.cancel
+    def flaky_cancel(oid):
+        attempts.append(oid)
+        if len(attempts)==1:
+            raise TimeoutError('cancel outcome uncertain')
+        original(oid)
+    b.cancel=flaky_cancel
+    e.accept(event('cancel',2,x['trade_id']))
+    assert e.tick()[0]['state']=='reconcile_required'
+    assert next(iter(b.orders.values()))['status']=='new'
+    assert e.tick()[0]['state']=='cancel_pending'
+    assert len(attempts)==2
+    assert next(iter(b.orders.values()))['status']=='canceled'
+    e.tick()
+    assert len(attempts)==2
+
+
+def test_ambiguous_cancel_that_succeeded_does_not_repeat(pair):
+    e,b=pair
+    x=event()
+    e.accept(x)
+    e.tick()
+    attempts=[]
+    original=b.cancel
+    def cancel_then_timeout(oid):
+        attempts.append(oid)
+        original(oid)
+        raise TimeoutError('response lost after broker accepted cancel')
+    b.cancel=cancel_then_timeout
+    e.accept(event('cancel',2,x['trade_id']))
+    assert e.tick()[0]['state']=='reconcile_required'
+    e.tick()
+    assert len(attempts)==1
+    assert next(iter(b.orders.values()))['status']=='canceled'
+
+
 def test_broker_order_identity_mismatch(pair):
     e,b=pair; x=event(); e.accept(x); e.tick(); row=next(iter(b.orders.values())); row.update(symbol='MSFT',status='filled',filled_qty='10')
     e.accept(event('exit',2,x['trade_id'])); result=e.tick(); assert result[0]['state']=='reconcile_required'; assert len(b.sent)==1
