@@ -8,6 +8,7 @@ import sqlite3
 import threading
 import time
 from .intent_protocol import IntentEvent
+from .trade_diagnostics import validate_quote, trade_report
 from .lock import single_process, AlreadyRunningError
 
 DEFAULTS = dict(enabled=False, mode='exact_limit', max_slippage_bps=100,
@@ -50,6 +51,25 @@ class IntentEngine:
                          trade_id=r['trade_id'],event_id=r['event_id'],stage=r['stage'],
                          details=json.loads(r['details']))
                     for r in db.execute('SELECT * FROM intent_trace WHERE trade_id=? ORDER BY id',(trade_id,))]
+
+    def record_quote(self, trade_id, observation_stage, quote):
+        """Persist a real quote from an external market-data feed.
+
+        No broker request is made here; caller supplies the observed quote.
+        """
+        if observation_stage not in ('sender','receiver','broker_submit','fill'):
+            raise ValueError('Invalid quote observation stage')
+        normalized=validate_quote(quote)
+        with self._db() as db:
+            if not db.execute('SELECT 1 FROM intent_trades WHERE id=?',(trade_id,)).fetchone():
+                raise ValueError('Unknown trade')
+            db.execute('INSERT INTO intent_trace(timestamp,monotonic_ns,trade_id,event_id,stage,details) VALUES (?,?,?,?,?,?)',
+                       (datetime.now(timezone.utc).isoformat(),time.monotonic_ns(),trade_id,None,
+                        'market_quote_observed',json.dumps(dict(normalized,observation_stage=observation_stage),sort_keys=True)))
+        return normalized
+
+    def trade_report(self, trade_id, side='buy'):
+        return trade_report(self.trade_trace(trade_id),side)
 
     def load_settings(self):
         with self._db() as db: row=db.execute('SELECT data FROM intent_settings WHERE id=1').fetchone()
