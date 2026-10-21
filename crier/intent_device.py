@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import sqlite3
 import threading
+import time
 import random
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -26,7 +27,8 @@ class IntentDevice:
         with self.db() as db:
             db.executescript('''CREATE TABLE IF NOT EXISTS outgoing(id TEXT PRIMARY KEY,pair TEXT,trade_id TEXT,sequence INTEGER,action TEXT,payload TEXT,state TEXT);
             CREATE TABLE IF NOT EXISTS cursors(pair TEXT PRIMARY KEY,cursor INTEGER);
-            CREATE TABLE IF NOT EXISTS quarantined_events(pair TEXT,cursor INTEGER,payload TEXT,error TEXT,PRIMARY KEY(pair,cursor));''')
+            CREATE TABLE IF NOT EXISTS quarantined_events(pair TEXT,cursor INTEGER,payload TEXT,error TEXT,PRIMARY KEY(pair,cursor));
+            CREATE TABLE IF NOT EXISTS device_trace(id INTEGER PRIMARY KEY AUTOINCREMENT,timestamp TEXT,monotonic_ns INTEGER,trade_id TEXT,stage TEXT,details TEXT);''')
         secret=self.folder/'intent-pairing.secret'
         if secret.exists():
             self.pair=json.loads(load_secret(secret)); self._engine()
@@ -36,6 +38,23 @@ class IntentDevice:
         try:
             with db: yield db
         finally: db.close()
+    def _trace(self,trade_id,stage,**details):
+        """Diagnostic metadata only; never log pairing tokens or raw payloads."""
+        try:
+            with self.db() as db:
+                db.execute('INSERT INTO device_trace(timestamp,monotonic_ns,trade_id,stage,details) VALUES (?,?,?,?,?)',
+                           (datetime.now(timezone.utc).isoformat(),time.monotonic_ns(),trade_id,stage,json.dumps(details,sort_keys=True)))
+        except (sqlite3.Error,TypeError,ValueError):
+            pass
+
+    def trade_trace(self,trade_id):
+        with self.db() as db:
+            device=[dict(timestamp=r['timestamp'],monotonic_ns=r['monotonic_ns'],trade_id=r['trade_id'],
+                         stage=r['stage'],details=json.loads(r['details']))
+                    for r in db.execute('SELECT * FROM device_trace WHERE trade_id=? ORDER BY id',(trade_id,))]
+        engine=self.engine.trade_trace(trade_id) if self.engine and hasattr(self.engine,'trade_trace') else []
+        return sorted(device+engine,key=lambda row:row['timestamp'])
+
     @property
     def fingerprint(self): return sha256(json.dumps(self.pair,sort_keys=True).encode()).hexdigest() if self.pair else ''
     def _engine(self):
@@ -85,6 +104,7 @@ class IntentDevice:
                 event=IntentEvent(version=1,event_id=str(uuid4()),trade_id=trade_id,sequence=sequence,action=action,
                                   environment=self.pair['environment'],created_at=now,expires_at=now+timedelta(seconds=10),**values)
                 db.execute('INSERT INTO outgoing VALUES (?,?,?,?,?,?,?)',(event.event_id,self.fingerprint,trade_id,sequence,action,event.model_dump_json(),'pending'))
+            self._trace(event.trade_id,'sender_instruction_journaled',event_id=event.event_id,action=event.action,sequence=event.sequence,reference_limit_price=str(event.limit_price),quote_status='not_captured')
             self.engine.accept(event)
             self.changed.set()
             self.publish_changed.set()
@@ -108,9 +128,11 @@ class IntentDevice:
                             # Restore local execution after a crash between outbox commit and accept.
                             self.engine.accept(IntentEvent.model_validate_json(row['payload']))
                             pair=dict(self.pair)
+                            self._trace(row['trade_id'],'relay_publish_started',event_id=row['id'])
                             response=await client.post(pair['url'].rstrip('/')+'/api/sync/events',headers={'Authorization':'Bearer '+pair['token']},json=json.loads(row['payload']))
                             response.raise_for_status()
                             with self.db() as db: db.execute("UPDATE outgoing SET state='sent' WHERE id=?",(row['id'],))
+                            self._trace(row['trade_id'],'relay_publish_acknowledged',event_id=row['id'],http_status=response.status_code)
                             self.message='Intent delivered'
                             failures=0
                         except httpx.HTTPStatusError as exc:
@@ -160,7 +182,9 @@ class IntentDevice:
                             quarantined=True
                             continue
                         if event.environment!=pair['environment']: raise ValueError('Pair environment mismatch')
+                        self._trace(event.trade_id,'receiver_instruction_arrived',event_id=event.event_id,relay_cursor=item['cursor'],sender_created_at=event.created_at.isoformat(),reference_limit_price=str(event.limit_price),quote_status='not_captured')
                         engine.accept(event)
+                        self._trace(event.trade_id,'receiver_instruction_stored',event_id=event.event_id,relay_cursor=item['cursor'])
                         self.changed.set()
                         with self.db() as db: db.execute('INSERT OR REPLACE INTO cursors VALUES (?,?)',(fingerprint,item['cursor']))
                     self.message='Following; invalid relay event quarantined for inspection' if quarantined else 'Following; connected'
