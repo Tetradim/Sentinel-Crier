@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import sqlite3
 import threading
+import random
 from urllib.parse import urlsplit
 from uuid import uuid4
 import httpx
@@ -97,6 +98,7 @@ class IntentDevice:
             return [dict(r) for r in db.execute("SELECT * FROM outgoing WHERE pair=? AND state='pending' ORDER BY CASE WHEN action IN ('cancel','exit') THEN 0 ELSE 1 END,sequence",(self.fingerprint,))]
     async def publish_loop(self,stop):
         async with httpx.AsyncClient(timeout=10,follow_redirects=False,trust_env=False) as client:
+            failures=0
             while not stop.is_set():
                 self.publish_changed.clear()
                 if self.pair and self.pair['role']=='host' and self.engine:
@@ -110,8 +112,24 @@ class IntentDevice:
                             response.raise_for_status()
                             with self.db() as db: db.execute("UPDATE outgoing SET state='sent' WHERE id=?",(row['id'],))
                             self.message='Intent delivered'
+                            failures=0
+                        except httpx.HTTPStatusError as exc:
+                            failures+=1
+                            if exc.response.status_code in (401,403,409):
+                                self.message='Relay rejected delivery; check pairing or channel. Queue retained.'
+                            else:
+                                self.message='Relay delivery pending; retrying with backoff'
+                            break
                         except Exception:
-                            self.message='Relay delivery pending; same message will retry'; break
+                            failures+=1
+                            self.message='Relay delivery pending; retrying with backoff'
+                            break
+                if failures:
+                    # Preserve outbox order and avoid hammering an unavailable relay.
+                    delay=min(60,2**min(failures,6))+random.uniform(0,1)
+                    try: await asyncio.wait_for(stop.wait(),delay)
+                    except TimeoutError: pass
+                    continue
                 try: await asyncio.wait_for(self.publish_changed.wait(),.1 if self.outgoing() else .5)
                 except TimeoutError: pass
     async def receive_loop(self,stop):
