@@ -10,6 +10,7 @@ import threading
 from urllib.parse import urlsplit
 from uuid import uuid4
 import httpx
+from pydantic import ValidationError
 from .device_secrets import save_secret,load_secret
 from .intent_protocol import IntentEvent
 from .intent_engine import IntentEngine
@@ -23,7 +24,8 @@ class IntentDevice:
         self.publish_changed=asyncio.Event()
         with self.db() as db:
             db.executescript('''CREATE TABLE IF NOT EXISTS outgoing(id TEXT PRIMARY KEY,pair TEXT,trade_id TEXT,sequence INTEGER,action TEXT,payload TEXT,state TEXT);
-            CREATE TABLE IF NOT EXISTS cursors(pair TEXT PRIMARY KEY,cursor INTEGER);''')
+            CREATE TABLE IF NOT EXISTS cursors(pair TEXT PRIMARY KEY,cursor INTEGER);
+            CREATE TABLE IF NOT EXISTS quarantined_events(pair TEXT,cursor INTEGER,payload TEXT,error TEXT,PRIMARY KEY(pair,cursor));''')
         secret=self.folder/'intent-pairing.secret'
         if secret.exists():
             self.pair=json.loads(load_secret(secret)); self._engine()
@@ -125,13 +127,25 @@ class IntentDevice:
                     response=await client.get(pair['url'].rstrip('/')+'/api/sync/events',params={'after':row[0] if row else 0,'wait':20},headers={'Authorization':'Bearer '+pair['token']})
                     response.raise_for_status()
                     if fingerprint!=self.fingerprint: continue
+                    quarantined=False
                     for item in response.json()['events']:
-                        event=IntentEvent.model_validate(item['event'])
+                        try:
+                            event=IntentEvent.model_validate(item['event'])
+                        except (ValidationError, ValueError, TypeError) as exc:
+                            # Only schema-invalid events are quarantined. Do not
+                            # bypass environment, identity, or execution errors.
+                            with self.db() as db:
+                                db.execute('BEGIN IMMEDIATE')
+                                db.execute('INSERT OR IGNORE INTO quarantined_events VALUES (?,?,?,?)',
+                                           (fingerprint,item['cursor'],json.dumps(item.get('event'),default=str),type(exc).__name__))
+                                db.execute('INSERT OR REPLACE INTO cursors VALUES (?,?)',(fingerprint,item['cursor']))
+                            quarantined=True
+                            continue
                         if event.environment!=pair['environment']: raise ValueError('Pair environment mismatch')
                         engine.accept(event)
                         self.changed.set()
                         with self.db() as db: db.execute('INSERT OR REPLACE INTO cursors VALUES (?,?)',(fingerprint,item['cursor']))
-                    self.message='Following; connected'
+                    self.message='Following; invalid relay event quarantined for inspection' if quarantined else 'Following; connected'
                 except Exception:
                     self.message='Receiver disconnected; reconnecting without replaying expired entries'
                     try: await asyncio.wait_for(stop.wait(),1)
