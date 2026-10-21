@@ -126,13 +126,25 @@ class IntentEngine:
                     with self._db() as db:
                         db.execute('INSERT INTO intent_cancel_requested VALUES (?)',(order['cid'],))
                         db.execute("UPDATE intent_orders SET status='cancel_unknown' WHERE cid=?",(order['cid'],))
-                    self.broker.cancel(order['broker_id'])
+                    try:
+                        self.broker.cancel(order['broker_id'])
+                    except Exception:
+                        # The request may have reached the broker. Leave the order
+                        # nonterminal, but permit another cancellation attempt only
+                        # after the next tick has reconciled broker state.
+                        with self._db() as db:
+                            db.execute('DELETE FROM intent_cancel_requested WHERE cid=?',(order['cid'],))
+                        raise
             return {'trade_id':tid,'state':'cancel_pending'}
         if active: return {'trade_id':tid,'state':'working'}
         settings=self.load_settings(); action=e['action']; side='sell' if action=='exit' else 'buy'
         if action=='cancel' or (side=='buy' and (row['invalid'] or row['skipped'])): return self._settle(tid,e,'invalidated')
         now=datetime.now(timezone.utc)
-        if side=='buy' and (now<datetime.fromisoformat(e['created_at'].replace('Z','+00:00')) or not settings['enabled'] or now>=datetime.fromisoformat(e['expires_at'].replace('Z','+00:00')) or (now-datetime.fromisoformat(e['created_at'].replace('Z','+00:00'))).total_seconds()>settings['max_age_seconds'] or e['quantity']>settings['max_quantity']):
+        if side=='buy' and now<datetime.fromisoformat(e['created_at'].replace('Z','+00:00')):
+            # A future-dated event is not permanently invalid: wait for its
+            # validity window. Later revisions must remain eligible.
+            return {'trade_id':tid,'state':'waiting_for_start'}
+        if side=='buy' and (not settings['enabled'] or now>=datetime.fromisoformat(e['expires_at'].replace('Z','+00:00')) or (now-datetime.fromisoformat(e['created_at'].replace('Z','+00:00'))).total_seconds()>settings['max_age_seconds'] or e['quantity']>settings['max_quantity']):
             with self._db() as db: db.execute('UPDATE intent_trades SET skipped=1 WHERE id=?',(tid,))
             return self._settle(tid,e,'skipped')
         bought=sum((Decimal(o['filled']) for o in orders if o['side']=='buy'),Decimal(0))

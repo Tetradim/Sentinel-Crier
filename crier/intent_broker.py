@@ -56,6 +56,18 @@ class AlpacaIntentBroker:
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code in (400,401,403,404):
                 raise BrokerNotSubmitted('Broker rejected submission') from exc
+            if exc.response.status_code==422:
+                # A duplicate client_order_id may mean an earlier POST succeeded.
+                # Only explicitly identified validation failures are definitive.
+                try:
+                    detail=exc.response.json()
+                except ValueError:
+                    detail={}
+                message=str(detail.get('message','')).lower() if isinstance(detail,dict) else ''
+                duplicate=any(word in message for word in ('client_order_id','duplicate','already exists','must be unique'))
+                validation=any(word in message for word in ('invalid qty','invalid quantity','quantity must','invalid limit_price','invalid limit price','price must'))
+                if validation and not duplicate:
+                    raise BrokerNotSubmitted('Broker rejected order parameters') from exc
             raise
     def lookup(self, client_order_id):
         try: return self._request('GET','/v2/orders:by_client_order_id',params={'client_order_id':client_order_id})
