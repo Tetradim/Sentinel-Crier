@@ -74,6 +74,7 @@ def test_receiver_quarantines_bad_event_and_processes_next(tmp_path,monkeypatch)
     def respond(request):
         nonlocal calls
         calls+=1
+        if calls>1: return httpx.Response(200,json={'events':[]})
         return httpx.Response(200,json={'events':[{'cursor':1,'event':{'version':99}},
                                                   {'cursor':2,'event':valid}]})
     transport=httpx.MockTransport(respond)
