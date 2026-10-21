@@ -6,6 +6,11 @@ an order is not a fill and does not produce a filled-trade alert.
 
 ## Ways to run
 
+- **Windows desktop app:** launch `SentinelCrier.exe`, paste the iPhone channel's
+  follower pairing, and connect your own Alpaca account. Native controls handle
+  Follow/Pause, pricing and broker order status without environment variables or a
+  Python installation. Uses the submission-time intent protocol.
+  See [Windows setup and download/build instructions](desktop/README.md).
 - **Native iPhone app:** connect a personal Alpaca account directly, review and
   confirm stock or standard single-leg option day-limit orders, reconcile orders,
   view positions, and publish fills to Discord. Paper is the default. Live requires

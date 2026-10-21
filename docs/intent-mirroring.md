@@ -12,6 +12,10 @@ Crier now has a separate **intent** path: the host creates a durable instruction
 
 ## Platform setup
 
+- **Windows desktop executable:** use the [native desktop app](../desktop/README.md)
+  for an on-screen pairing/account form, encrypted saved credentials, execution
+  settings and activity. The desktop discovers the account ID automatically and
+  starts each connection paused. The browser/service option below remains available.
 - **iOS:** build/sign the current native project using `ios/BUILD.md`. In account settings, save an intent host/follower pairing while disconnected, then reconnect Alpaca. Follower settings start paused. Use Trade to submit a host buy and the tracked intent trade controls to modify/cancel/exit. Keep Crier active; iOS can suspend its network execution in the background. This is native local execution, not the old PC-only receiver.
 - **Android:** see `android/README.md`. The native app has its own account, pairing, order entry and follower execution. Android Keystore protects local secrets. An explicit foreground service receives while active; Android can still stop it or limit background data-sync time. The build workflow produces a debug APK for device testing, not a published Play Store release.
 - **PC:** set `CRIER_INTENT_ENV` (`paper`/`live`), `CRIER_INTENT_ALPACA_KEY`, `CRIER_INTENT_ALPACA_SECRET` and `CRIER_INTENT_ALPACA_ACCOUNT` (the account UUID returned by Alpaca's account endpoint), then restart `python -m crier serve`. Open `/intent`, paste this PC's pairing and configure execution. The console runs in a browser; Python performs execution locally. On Windows the pairing secret is user-bound DPAPI encrypted; on other platforms it is stored in a mode-0600 file. Broker credentials stay in process environment. No `.env` auto-loading is added.

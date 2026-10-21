@@ -1,0 +1,154 @@
+"""Desktop lifecycle. All methods run on one background asyncio loop."""
+import asyncio
+from concurrent.futures import Future
+import json
+import os
+from pathlib import Path
+import threading
+from urllib.parse import urlsplit
+
+import httpx
+
+from .device_secrets import load_secret, save_secret
+from .intent_broker import AlpacaIntentBroker, HOSTS
+from .intent_device import IntentDevice
+from .intent_routes import Pair
+
+
+def data_directory():
+    return Path(os.getenv('LOCALAPPDATA', str(Path.home()/'.local/share'))) / 'SentinelCrier' / 'Desktop'
+
+
+async def discover_account(environment, key, secret, client=None):
+    if environment not in HOSTS or not key.strip() or not secret.strip():
+        raise ValueError('Select an environment and enter both Alpaca credentials.')
+    owned = client is None
+    client = client or httpx.AsyncClient(timeout=15, trust_env=False, follow_redirects=False)
+    try:
+        response = await client.get(HOSTS[environment]+'/v2/account', headers={
+            'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret}, follow_redirects=False)
+        response.raise_for_status()
+        row = response.json()
+        if not row.get('id') or row.get('status') != 'ACTIVE' or row.get('account_blocked') or row.get('trading_blocked'):
+            raise ValueError('The selected Alpaca account is unavailable for trading.')
+        return row['id']
+    except (httpx.HTTPError, json.JSONDecodeError):
+        raise ValueError('Cannot verify Alpaca account. Check credentials, environment and connection.') from None
+    finally:
+        if owned:
+            await client.aclose()
+
+
+class DesktopSession:
+    def __init__(self, folder, account_lookup=discover_account,
+                 broker_factory=AlpacaIntentBroker, start_workers=True):
+        self.folder = Path(folder)
+        self.folder.mkdir(parents=True, exist_ok=True)
+        self.credentials = self.folder/'desktop-credentials.secret'
+        self.account_lookup = account_lookup
+        self.broker_factory = broker_factory
+        self.start_workers = start_workers
+        self.broker = None
+        self.device = None
+        self.tasks = []
+        self.stop = None
+        self.account = ''
+        self.closing = False
+        self.lifecycle = asyncio.Lock()
+
+    async def connect(self, pairing_text, key, secret, allow_live=False):
+        async with self.lifecycle:
+            if self.device:
+                raise ValueError('Disconnect before changing connection settings.')
+            saved = json.loads(load_secret(self.credentials)) if self.credentials.exists() else {}
+            try:
+                pair = Pair.model_validate(json.loads(pairing_text) if pairing_text.strip() else saved.get('pair', {})).model_dump()
+            except (ValueError, TypeError):
+                raise ValueError('Paste the complete host or follower pairing JSON.') from None
+            url = urlsplit(pair['url'])
+            if (url.scheme != 'https' or not url.hostname or url.username or url.password
+                    or url.query or url.fragment or url.path not in ('', '/') or not 32 <= len(pair['token']) <= 256):
+                raise ValueError('Pairing must contain an HTTPS relay origin and valid token.')
+            if pair['environment'] == 'live' and not allow_live:
+                raise ValueError('Select Allow live account to connect a live pairing.')
+            if bool(key.strip()) != bool(secret.strip()):
+                raise ValueError('Enter both credentials, or leave both blank to reuse saved credentials.')
+            key, secret = (key.strip(), secret.strip()) if key.strip() else (saved.get('key', ''), saved.get('secret', ''))
+            account = await self.account_lookup(pair['environment'], key, secret)
+            if saved and (saved['account'] != account or saved['pair'] != pair):
+                raise ValueError('This desktop journal is pinned to its original account and channel. Reuse that pairing.')
+            broker = self.broker_factory(pair['environment'], key, secret, account)
+            try:
+                device = IntentDevice(self.folder/'journal', broker)
+                device.configure(pair)
+                device.engine.save_settings({'enabled': False})
+                save_secret(self.credentials, json.dumps(dict(pair=pair, key=key, secret=secret, account=account)))
+            except Exception:
+                broker.close()
+                raise
+            self.device, self.broker, self.account = device, broker, account
+            self.stop = asyncio.Event()
+            if self.start_workers:
+                self.tasks = [asyncio.create_task(device.publish_loop(self.stop)),
+                              asyncio.create_task(device.receive_loop(self.stop)),
+                              asyncio.create_task(device.execute_loop(self.stop))]
+            return self.status()
+
+    def status(self):
+        state = self.device.status() if self.device else {'pair': {}, 'execution': None, 'message': 'Disconnected'}
+        return dict(state, connected=self.device is not None and not self.closing,
+                    account=self.account, saved=self.credentials.exists())
+
+    def settings(self, settings):
+        if not self.device or self.closing:
+            raise ValueError('Connect first.')
+        result = self.device.engine.save_settings(settings)
+        self.device.changed.set()
+        return result
+
+    def command(self, action, **values):
+        if not self.device or self.closing:
+            raise ValueError('Connect first.')
+        return self.device.command(action, **values).to_dict()
+
+    async def disconnect(self):
+        async with self.lifecycle:
+            if not self.device:
+                return
+            self.closing = True
+            try:
+                self.device.engine.save_settings({'enabled': False})
+                self.stop.set()
+                self.device.changed.set()
+                self.device.publish_changed.set()
+                for task in self.tasks[:2]:
+                    task.cancel()
+                # Do not cancel a to_thread broker mutation while it is committing.
+                await asyncio.gather(*self.tasks, return_exceptions=True)
+                self.broker.close()
+                self.device = None
+                self.broker = None
+                self.tasks = []
+            finally:
+                self.closing = False
+
+
+class DesktopWorker:
+    """Bridge Tk to the asyncio loop without executing UI calls off the Tk thread."""
+    def __init__(self, folder):
+        self.loop = asyncio.new_event_loop()
+        self.session = DesktopSession(folder)
+        self.thread = threading.Thread(target=self.loop.run_forever, name='Crier desktop', daemon=False)
+        self.thread.start()
+
+    def call(self, method, *args, **kwargs) -> Future:
+        async def invoke():
+            result = getattr(self.session, method)(*args, **kwargs)
+            return await result if asyncio.iscoroutine(result) else result
+        return asyncio.run_coroutine_threadsafe(invoke(), self.loop)
+
+    def close(self):
+        self.loop.call_soon_threadsafe(self.loop.stop)
+        self.thread.join()
+        self.loop.run_until_complete(self.loop.shutdown_default_executor())
+        self.loop.close()
