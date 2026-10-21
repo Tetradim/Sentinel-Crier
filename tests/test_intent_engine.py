@@ -252,3 +252,27 @@ def test_unknown_422_remains_ambiguous():
     broker=AlpacaIntentBroker('paper','key','secret','pinned',httpx.Client(transport=httpx.MockTransport(handler)))
     with pytest.raises(httpx.HTTPStatusError):
         broker.submit({'symbol':'AAPL','asset':'stock','side':'buy'})
+
+
+def test_future_entry_waits_without_permanent_skip(pair):
+    e,b=pair
+    now=datetime.now(timezone.utc)
+    x=event(created_at=(now+timedelta(seconds=5)).isoformat(),
+            expires_at=(now+timedelta(seconds=25)).isoformat())
+    e.accept(x)
+    assert e.tick()[0]['state']=='waiting_for_start'
+    assert not e.status()['trades'][0]['skipped']
+    assert not b.sent
+
+
+def test_future_entry_does_not_poison_later_revision(pair):
+    e,b=pair
+    now=datetime.now(timezone.utc)
+    x=event(created_at=(now+timedelta(seconds=5)).isoformat(),
+            expires_at=(now+timedelta(seconds=25)).isoformat())
+    e.accept(x)
+    e.tick()
+    replacement=event('replace',2,x['trade_id'])
+    e.accept(replacement)
+    assert e.tick()[0]['state']=='submitted'
+    assert len(b.sent)==1
