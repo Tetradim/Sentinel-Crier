@@ -126,7 +126,15 @@ class IntentEngine:
                     with self._db() as db:
                         db.execute('INSERT INTO intent_cancel_requested VALUES (?)',(order['cid'],))
                         db.execute("UPDATE intent_orders SET status='cancel_unknown' WHERE cid=?",(order['cid'],))
-                    self.broker.cancel(order['broker_id'])
+                    try:
+                        self.broker.cancel(order['broker_id'])
+                    except Exception:
+                        # The request may have reached the broker. Leave the order
+                        # nonterminal, but permit another cancellation attempt only
+                        # after the next tick has reconciled broker state.
+                        with self._db() as db:
+                            db.execute('DELETE FROM intent_cancel_requested WHERE cid=?',(order['cid'],))
+                        raise
             return {'trade_id':tid,'state':'cancel_pending'}
         if active: return {'trade_id':tid,'state':'working'}
         settings=self.load_settings(); action=e['action']; side='sell' if action=='exit' else 'buy'
