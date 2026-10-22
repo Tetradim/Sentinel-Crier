@@ -17,6 +17,21 @@ struct DiagnosticClock {
 }
 struct DiagnosticQuote: Codable {
     var source: String; var quote_timestamp: String; var bid: String?; var ask: String?; var last: String?
+    var hasValidPrices: Bool {
+        var prices: [String: Decimal] = [:]
+        for (field, text) in [("bid", bid), ("ask", ask), ("last", last)] {
+            guard let text else { continue }
+            guard text.count <= 40,
+                  text.range(of: #"^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$"#, options: .regularExpression) != nil,
+                  let price = Decimal(string: text, locale: Locale(identifier: "en_US_POSIX")),
+                  NSDecimalNumber(decimal: price).doubleValue.isFinite,
+                  price >= 0, price <= Decimal(1_000_000_000_000 as Int64) else { return false }
+            prices[field] = price
+        }
+        guard prices.values.contains(where: { $0 > 0 }) else { return false }
+        if let bid = prices["bid"], let ask = prices["ask"], ask < bid { return false }
+        return true
+    }
 }
 struct DiagnosticObservation: Codable {
     var stage: String; var observed_at: String; var clock_offset_ms: Double?; var clock_uncertainty_ms: Double?; var clock_sampled_at: String?
@@ -25,13 +40,13 @@ struct DiagnosticObservation: Codable {
 struct DiagnosticRemote: Codable { var actor: String; var observation: DiagnosticObservation }
 struct DiagnosticLatency {
     var milliseconds: Double; var uncertainty: Double
-    static func measure(_ sender: DiagnosticObservation, _ receiver: DiagnosticObservation) -> Self? {
-        func corrected(_ observation: DiagnosticObservation) -> (Double, Double)? {
+    static func corrected(_ observation: DiagnosticObservation) -> (Double, Double)? {
             guard let time = IntentEvent.date(observation.observed_at), let sampled = observation.clock_sampled_at.flatMap(IntentEvent.date),
                   (0...60).contains(time.timeIntervalSince(sampled)), let offset = observation.clock_offset_ms, let uncertainty = observation.clock_uncertainty_ms,
                   offset.isFinite, abs(offset) <= 604_800_000, uncertainty.isFinite, (0...30_000).contains(uncertainty) else { return nil }
             return (time.timeIntervalSince1970 * 1000 + offset, uncertainty)
-        }
+    }
+    static func measure(_ sender: DiagnosticObservation, _ receiver: DiagnosticObservation) -> Self? {
         guard sender.stage == "sender", receiver.stage == "receiver", let s = corrected(sender), let r = corrected(receiver), r.0 - s.0 >= -(s.1 + r.1) else { return nil }
         return Self(milliseconds: r.0 - s.0, uncertainty: s.1 + r.1)
     }
@@ -44,7 +59,7 @@ struct IntentDiagnosticRecord: Codable {
         let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return formatter.string(from: date)
     }
     static func csvCell(_ value: String) -> String {
-        let safe = ["=", "+", "-", "@", "\t", "\r"].contains(where: value.hasPrefix) ? "'" + value : value
+        let safe = ["=", "+", "-", "@", "\t", "\r", "\n"].contains(where: value.hasPrefix) ? "'" + value : value
         return "\"" + safe.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
     var latencyText: String {
@@ -53,7 +68,8 @@ struct IntentDiagnosticRecord: Codable {
         return String(format: "Estimated delivery %.1f ms ± %.1f ms", value.milliseconds, value.uncertainty)
     }
     static func premium(_ observation: DiagnosticObservation, sell: Bool) -> Decimal? {
-        guard observation.quote_error == nil, let quote = observation.quote, ["alpaca:iex", "alpaca:opra"].contains(quote.source),
+        guard DiagnosticLatency.corrected(observation) != nil,
+              observation.quote_error == nil, let quote = observation.quote, quote.hasValidPrices, ["alpaca:iex", "alpaca:opra"].contains(quote.source),
               let quoteTime = IntentEvent.date(quote.quote_timestamp), let observed = IntentEvent.date(observation.observed_at),
               let offset = observation.clock_offset_ms, let sampled = observation.clock_sampled_at.flatMap(IntentEvent.date),
               (0...60).contains(observed.timeIntervalSince(sampled)),

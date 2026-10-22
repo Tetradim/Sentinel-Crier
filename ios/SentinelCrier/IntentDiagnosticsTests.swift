@@ -31,6 +31,24 @@ final class IntentDiagnosticsTests: XCTestCase {
         record.remote[0].observation.quote?.source = "alpaca:iex"
         XCTAssertTrue(record.premiumText.contains("unavailable"))
     }
+    func testPremiumRejectsMalformedCrossedAndUnboundedQuotes() {
+        for price in ["-1", "1000000000001", "NaN", "Infinity", "1oops"] {
+            var value = observation(); value.quote?.bid = price
+            XCTAssertNil(IntentDiagnosticRecord.premium(value, sell: false), price)
+        }
+        var value = observation(); value.quote?.bid = "1.26"
+        XCTAssertNil(IntentDiagnosticRecord.premium(value, sell: false))
+        value = observation(); value.quote?.bid = "0"; value.quote?.ask = "0"
+        XCTAssertFalse(value.quote!.hasValidPrices)
+        value = observation(); value.quote?.bid = nil; value.quote?.ask = "1000000000000"
+        XCTAssertEqual(IntentDiagnosticRecord.premium(value, sell: false), Decimal(string: "1000000000000"))
+        for uncertainty in [Double.nan, Double.infinity, -1, 30001] {
+            value = observation(); value.clock_uncertainty_ms = uncertainty
+            XCTAssertNil(IntentDiagnosticRecord.premium(value, sell: false))
+        }
+        value = observation(); value.clock_uncertainty_ms = nil
+        XCTAssertNil(IntentDiagnosticRecord.premium(value, sell: false))
+    }
     func testExplicitOPRAAndPermissionFailureNeverFallsBack() async throws {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [DiagnosticQuoteProtocol.self]
@@ -64,6 +82,7 @@ final class IntentDiagnosticsTests: XCTestCase {
     func testCSVQuotesFormulaAndNewline() {
         XCTAssertEqual(IntentDiagnosticRecord.csvCell("=SUM(1,2)"), "\"'=SUM(1,2)\"")
         XCTAssertEqual(IntentDiagnosticRecord.csvCell("a\"b\nc"), "\"a\"\"b\nc\"")
+        XCTAssertEqual(IntentDiagnosticRecord.csvCell("\n=1"), "\"'\n=1\"")
     }
 }
 private final class DiagnosticQuoteProtocol: URLProtocol {

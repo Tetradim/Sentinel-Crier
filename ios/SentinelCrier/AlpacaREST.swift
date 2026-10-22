@@ -135,7 +135,9 @@ final class AlpacaREST {
         struct Response: Decodable { var quote: Quote?; var quotes: [String: Quote]? }
         let body = try JSONDecoder().decode(Response.self, from: data)
         guard let quote = option ? body.quotes?[symbol] : body.quote, IntentEvent.date(quote.t) != nil else { throw AlpacaError.invalid("Quote missing for exact contract.") }
-        return DiagnosticQuote(source: option ? "alpaca:opra" : "alpaca:iex", quote_timestamp: quote.t, bid: quote.bp.map { NSDecimalNumber(decimal: $0).stringValue }, ask: quote.ap.map { NSDecimalNumber(decimal: $0).stringValue }, last: nil)
+        let result = DiagnosticQuote(source: option ? "alpaca:opra" : "alpaca:iex", quote_timestamp: quote.t, bid: quote.bp.map { NSDecimalNumber(decimal: $0).stringValue }, ask: quote.ap.map { NSDecimalNumber(decimal: $0).stringValue }, last: nil)
+        guard result.hasValidPrices else { throw AlpacaError.invalid("Quote contains invalid or crossed prices.") }
+        return result
     }
     func account() async throws -> AlpacaAccount { try JSONDecoder().decode(AlpacaAccount.self, from: await request("v2/account")) }
     func positions() async throws -> [AlpacaPosition] { try JSONDecoder().decode([AlpacaPosition].self, from: await request("v2/positions")) }

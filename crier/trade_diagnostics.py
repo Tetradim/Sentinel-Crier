@@ -82,7 +82,7 @@ def _latency(sender, receiver):
             uncertainty = observation['clock_uncertainty_ms']
             if any(isinstance(x, bool) or not isinstance(x, (int,float)) or not math.isfinite(x) for x in (offset,uncertainty)):
                 raise ValueError('Invalid clock')
-            if not 0 <= observed-sampled <= 60000 or uncertainty < 0:
+            if not 0 <= observed-sampled <= 60000 or not 0 <= uncertainty <= 30000 or abs(offset) > 604800000:
                 raise ValueError('Stale clock')
             corrected.append(observed+offset)
             uncertainties.append(uncertainty)
@@ -97,9 +97,11 @@ def _latency(sender, receiver):
 
 def _fresh_quote(observation):
     try:
-        if _latency(observation, observation)[0] is None:
+        if observation.get('quote_error') is not None or _latency(observation, observation)[0] is None:
             return None
         quote = validate_quote(observation['quote'])
+        if quote['source'] not in ('alpaca:iex', 'alpaca:opra'):
+            return None
         observed = _millis(observation['observed_at']) + (observation.get('clock_offset_ms') or 0)
         if abs(observed-_millis(quote['quote_timestamp'])) > 5000:
             return None

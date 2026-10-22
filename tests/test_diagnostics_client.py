@@ -163,3 +163,18 @@ def test_real_relay_host_to_follower_diagnostics(tmp_path,monkeypatch):
             for task in tasks: task.cancel()
             await asyncio.gather(*tasks,return_exceptions=True)
     asyncio.run(run())
+
+def test_report_rejects_provider_error_unknown_feed_and_unbounded_clock():
+    from crier.trade_diagnostics import _fresh_quote
+    obs=observation('sender')
+    obs['quote_error']='Stale at fetch completion'
+    assert _fresh_quote(obs) is None
+    obs['quote_error']=None
+    obs['quote']['source']='alpaca:indicative'
+    assert _fresh_quote(obs) is None
+    obs['quote']['source']='alpaca:iex'
+    obs['clock_uncertainty_ms']=30001
+    assert _latency(obs,obs)==(None,None)
+    obs['clock_uncertainty_ms']=2
+    obs['clock_offset_ms']=604800001
+    assert _latency(obs,obs)==(None,None)
