@@ -116,6 +116,16 @@ class DesktopSession:
         return dict(state, connected=self.device is not None and not self.closing,
                     account=self.account, saved=self.credentials.exists())
 
+    async def diagnostics(self, trade_id, side='buy'):
+        if not self.device or self.closing:
+            raise ValueError('Connect first.')
+        return await asyncio.to_thread(self.device.trade_report, trade_id, side)
+
+    async def export_diagnostics(self, trade_id, format='json', side='buy'):
+        if not self.device or self.closing:
+            raise ValueError('Connect first.')
+        return await asyncio.to_thread(self.device.export_trade, trade_id, format, side)
+
     def settings(self, settings):
         if not self.device or self.closing:
             raise ValueError('Connect first.')

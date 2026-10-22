@@ -7,6 +7,19 @@ from crier.device_secrets import load_secret
 
 PAIR = dict(url='https://relay.example', token='t'*40, environment='paper', role='follower')
 
+def test_desktop_diagnostics_include_transport_and_export(tmp_path):
+    async def run():
+        session = DesktopSession(tmp_path, account_lookup=account, broker_factory=Broker, start_workers=False)
+        with pytest.raises(ValueError, match='Connect'):
+            await session.diagnostics('trade')
+        await session.connect(json.dumps(PAIR), 'key', 'secret')
+        session.device._trace('trade', 'receiver_instruction_arrived', event_id='event')
+        report = await session.diagnostics('trade')
+        assert report['timeline'][0]['stage'] == 'receiver_instruction_arrived'
+        assert json.loads(await session.export_diagnostics('trade', 'json')) == report
+        await session.disconnect()
+    asyncio.run(run())
+
 class Broker:
     def __init__(self, environment, key, secret, account):
         self.environment = environment

@@ -65,6 +65,13 @@ instructions. Select a tracked trade before changing it. Replace and Exit use th
 quantity/price fields; Cancel uses the existing trade identity. Followers cannot
 originate mirrored commands. Standard single-leg long options and whole shares only.
 
+## Inspect execution evidence
+
+Select a tracked trade in **Trading & activity**, open **Diagnostics**, and click
+**Load selected trade**. Export JSON or CSV to keep the local relay and broker
+timeline. Missing market quotes and unmeasured cross-device latency are labeled
+explicitly. See [execution diagnostics](../docs/execution-diagnostics.md).
+
 ## Build from source
 
 On Windows with Python 3.11+ (including Tcl/Tk):

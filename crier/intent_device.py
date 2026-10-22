@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from .device_secrets import save_secret,load_secret
 from .intent_protocol import IntentEvent
 from .intent_engine import IntentEngine
+from .trade_diagnostics import trade_report, export_trade_json, export_trade_csv
 
 class IntentDevice:
     def __init__(self,folder,broker=None):
@@ -53,7 +54,22 @@ class IntentDevice:
                          stage=r['stage'],details=json.loads(r['details']))
                     for r in db.execute('SELECT * FROM device_trace WHERE trade_id=? ORDER BY id',(trade_id,))]
         engine=self.engine.trade_trace(trade_id) if self.engine and hasattr(self.engine,'trade_trace') else []
+        for entry in device:
+            entry['event_id'] = entry['details'].get('event_id')
         return sorted(device+engine,key=lambda row:row['timestamp'])
+
+    def trade_report(self, trade_id, side='buy'):
+        return trade_report(self.trade_trace(trade_id), side)
+
+    def export_trade(self, trade_id, format='json', side='buy'):
+        report = self.trade_report(trade_id, side)
+        if not report['timeline']:
+            raise ValueError('Unknown trade or no recorded diagnostic events')
+        if format == 'json':
+            return export_trade_json(report)
+        if format == 'csv':
+            return export_trade_csv(report)
+        raise ValueError('Unsupported diagnostics export format')
 
     @property
     def fingerprint(self): return sha256(json.dumps(self.pair,sort_keys=True).encode()).hexdigest() if self.pair else ''

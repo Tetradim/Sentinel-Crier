@@ -81,7 +81,7 @@ def trade_report(events, side='buy'):
 
 def export_trade_json(report):
     """Portable UTF-8 JSON evidence bundle."""
-    return json.dumps(report,sort_keys=True,indent=2,ensure_ascii=False)+'\\n'
+    return json.dumps(report,sort_keys=True,indent=2,ensure_ascii=False)+'\n'
 
 
 def export_trade_csv(report):
@@ -93,7 +93,7 @@ def export_trade_csv(report):
         # Prefix spreadsheet formula characters to prevent CSV formula execution.
         def safe(value):
             value='' if value is None else str(value)
-            return "'" + value if value.startswith(('=','+','-','@','\\t','\\r')) else value
+            return "'" + value if value.startswith(('=','+','-','@','\t','\r','\n')) else value
         writer.writerow((safe(entry.get('timestamp')),safe(entry.get('trade_id')),
                          safe(entry.get('event_id')),safe(entry.get('stage')),
                          safe(entry.get('monotonic_ns')),

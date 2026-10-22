@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 import webbrowser
 
 from .desktop_runtime import DesktopWorker, data_directory
@@ -42,10 +42,13 @@ class DesktopApp:
         tabs.add(self.activity, text='Trading & activity')
         tabs.add(setup, text='Host / Receive')
         tabs.add(pricing, text='Pricing')
+        diagnostics = ttk.Frame(tabs, padding=14)
+        tabs.add(diagnostics, text='Diagnostics')
         tabs.select(setup)
         self._setup(setup)
         self._pricing(pricing)
         self._activity(self.activity)
+        self._diagnostics(diagnostics)
         self.notice = tk.StringVar(value='Host shares an invitation. Receive joins it. Saved devices reconnect with the same button.')
         ttk.Label(outer, textvariable=self.notice, wraplength=1000).pack(anchor='w', pady=(12,0))
         ttk.Label(outer, text='Keep this PC awake and Crier running. Closing stops mirroring; existing broker orders remain.',
@@ -158,6 +161,65 @@ class DesktopApp:
             button.pack(side='left', padx=4)
             button.configure(state='disabled')
             self.host_buttons.append(button)
+
+    def _diagnostics(self, frame):
+        ttk.Label(frame, text='Execution evidence', font=('Segoe UI', 12, 'bold')).pack(anchor='w')
+        ttk.Label(frame, text='Select a trade in Trading & activity, then load its local timeline. Remote device records are not merged.',
+                  wraplength=950).pack(anchor='w', pady=6)
+        controls = ttk.Frame(frame)
+        controls.pack(fill='x', pady=6)
+        self.diagnostic_side = tk.StringVar(value='buy')
+        ttk.Combobox(controls, textvariable=self.diagnostic_side, values=('buy', 'sell'),
+                     state='readonly', width=8).pack(side='left')
+        ttk.Button(controls, text='Load selected trade', command=self.load_diagnostics).pack(side='left', padx=8)
+        for format in ('json', 'csv'):
+            ttk.Button(controls, text='Export ' + format.upper(),
+                       command=lambda f=format: self.save_diagnostics(f)).pack(side='left', padx=4)
+        self.diagnostic_text = tk.Text(frame, wrap='word', state='disabled', font=('Consolas', 10))
+        self.diagnostic_text.pack(fill='both', expand=True)
+
+    def selected_diagnostic_trade(self):
+        selected = self.trades.selection()
+        if not selected:
+            self.notice.set('Select a tracked trade in Trading & activity first.')
+            return None
+        return selected[0]
+
+    def load_diagnostics(self):
+        trade_id = self.selected_diagnostic_trade()
+        if trade_id:
+            self.submit('diagnostics', trade_id, self.diagnostic_side.get(), callback=self.render_diagnostics)
+
+    def render_diagnostics(self, report):
+        premium = report['premium_movement']
+        lines = [f"Trade: {report['trade_id'] or 'No recorded events'}",
+                 'Local evidence only. Quotes require a connected data source.',
+                 'Premium comparison: ' + json.dumps(premium),
+                 'Cross-device latency: unavailable — verified clock synchronization required.', '']
+        for event in report['timeline']:
+            lines.extend([f"{event['timestamp']}  {event['stage']}",
+                          json.dumps(event['details'], sort_keys=True), ''])
+        self.diagnostic_text.configure(state='normal')
+        self.diagnostic_text.delete('1.0', 'end')
+        self.diagnostic_text.insert('1.0', '\n'.join(lines))
+        self.diagnostic_text.configure(state='disabled')
+
+    def save_diagnostics(self, format):
+        trade_id = self.selected_diagnostic_trade()
+        if not trade_id:
+            return
+        path = filedialog.asksaveasfilename(parent=self.root, defaultextension='.' + format,
+            initialfile='crier-' + trade_id + '.' + format,
+            filetypes=[(format.upper(), '*.' + format)])
+        if not path:
+            return
+        def save(content):
+            try:
+                with open(path, 'w', encoding='utf-8', newline='') as stream:
+                    stream.write(content)
+            except OSError:
+                messagebox.showerror('Export failed', 'Cannot write the selected file.', parent=self.root)
+        self.submit('export_diagnostics', trade_id, format, self.diagnostic_side.get(), callback=save)
 
     def submit(self, method, *args, callback=None, **kwargs):
         if self.closing:
@@ -293,6 +355,9 @@ def smoke_test(report=None):
             state = worker.call('status').result(timeout=5)
             assert not state['connected']
             app.render(state)
+            app.render_diagnostics({'trade_id': 'offline-smoke', 'timeline': [],
+                                    'premium_movement': {'status': 'unavailable'}})
+            assert 'offline-smoke' in app.diagnostic_text.get('1.0', 'end')
             root.update_idletasks()
         finally:
             worker.call('disconnect').result(timeout=5)

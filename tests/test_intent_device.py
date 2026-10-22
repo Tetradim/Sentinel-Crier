@@ -71,8 +71,11 @@ def test_receiver_quarantines_bad_event_and_processes_next(tmp_path,monkeypatch)
     # Existing relay fixtures return a wire-format dictionary.
     valid=good if isinstance(good,dict) else good.to_dict()
     calls=0
-    def respond(request):
+    async def respond(request):
         nonlocal calls
+        # Model actual network scheduling so an empty long-poll response cannot
+        # starve the test's stop task when MockTransport returns immediately.
+        await asyncio.sleep(.001)
         calls+=1
         if calls>1: return httpx.Response(200,json={'events':[]})
         return httpx.Response(200,json={'events':[{'cursor':1,'event':{'version':99}},
