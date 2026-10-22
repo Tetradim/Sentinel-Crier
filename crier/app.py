@@ -57,7 +57,7 @@ def create_app(config=None):
             app.state.monitor = None
             device_stop = asyncio.Event()
             device_tasks = [asyncio.create_task(work(device_stop)) for work in
-                            (app.state.device.publish_loop, app.state.device.receive_loop, app.state.device.execute_loop)]
+                            (app.state.device.publish_loop, app.state.device.receive_loop, app.state.device.execute_loop, app.state.device.diagnostics_loop)]
             try:
                 app.state.monitor = start_monitor(config)
                 yield
@@ -66,7 +66,7 @@ def create_app(config=None):
                 device_stop.set()
                 app.state.device.changed.set()
                 # Long-poll and relay I/O can stop; let broker mutation reconcile durably before releasing ownership.
-                for pending in device_tasks[:2]: pending.cancel()
+                for pending in device_tasks[:2] + device_tasks[3:]: pending.cancel()
                 await asyncio.gather(*device_tasks, return_exceptions=True)
                 await asyncio.to_thread(stop_monitor, app.state.monitor)
                 # Let an in-flight HTTP request settle before releasing ownership.

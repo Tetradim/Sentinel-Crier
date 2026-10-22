@@ -105,6 +105,7 @@ struct IntentTradeRow: View {
         VStack(alignment: .leading) {
             Text("\(event.symbol) • \(event.action) • owned \(owned)")
             Text(tradeID).font(.caption).textSelection(.enabled)
+            NavigationLink("Execution diagnostics") { IntentDiagnosticsView(controller: controller, tradeID: tradeID) }
             if controller.hosting {
                 Stepper("Target / exit quantity: \(quantity)", value: $quantity, in: 1...1000)
                 TextField("Limit price", text: $price).keyboardType(.decimalPad)

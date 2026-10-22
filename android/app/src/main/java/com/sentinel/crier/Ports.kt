@@ -1,6 +1,7 @@
 package com.sentinel.crier
 import org.json.JSONObject
 interface IntentStore {
+ fun diagnostic(id:String,stage:String,detail:String) {}
  fun meta(key:String):String
  fun setMeta(key:String,value:String)
  fun revision(trade:String):Pair<Int,Boolean>

@@ -21,6 +21,7 @@ targets:
       - path: SentinelCrier/AlpacaJournal.swift
       - path: SentinelCrier/AlpacaWorkspace.swift
       - path: SentinelCrier/MirrorConnection.swift
+      - path: SentinelCrier/IntentDiagnostics.swift
       - path: SentinelCrier/IntentMirroring.swift
       - path: SentinelCrier/IntentViews.swift
       - path: SentinelCrier/QuickConnection.swift
@@ -59,6 +60,7 @@ targets:
     sources:
       - path: SentinelCrier/AlpacaTests.swift
       - path: SentinelCrier/MirrorTests.swift
+      - path: SentinelCrier/IntentDiagnosticsTests.swift
       - path: SentinelCrier/IntentTests.swift
       - path: SentinelCrier/QuickConnectionTests.swift
       - path: SentinelCrier/AlpacaAlertFormatterTests.swift

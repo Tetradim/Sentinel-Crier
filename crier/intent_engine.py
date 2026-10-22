@@ -61,10 +61,11 @@ class IntentEngine:
             raise ValueError('Invalid quote observation stage')
         normalized=validate_quote(quote)
         with self._db() as db:
-            if not db.execute('SELECT 1 FROM intent_trades WHERE id=?',(trade_id,)).fetchone():
+            trade=db.execute('SELECT data FROM intent_trades WHERE id=?',(trade_id,)).fetchone()
+            if not trade:
                 raise ValueError('Unknown trade')
             db.execute('INSERT INTO intent_trace(timestamp,monotonic_ns,trade_id,event_id,stage,details) VALUES (?,?,?,?,?,?)',
-                       (datetime.now(timezone.utc).isoformat(),time.monotonic_ns(),trade_id,None,
+                       (datetime.now(timezone.utc).isoformat(),time.monotonic_ns(),trade_id,json.loads(trade[0])['event_id'],
                         'market_quote_observed',json.dumps(dict(normalized,observation_stage=observation_stage),sort_keys=True)))
         return normalized
 

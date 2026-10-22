@@ -108,7 +108,8 @@ class DesktopSession:
             if self.start_workers:
                 self.tasks = [asyncio.create_task(device.publish_loop(self.stop)),
                               asyncio.create_task(device.receive_loop(self.stop)),
-                              asyncio.create_task(device.execute_loop(self.stop))]
+                              asyncio.create_task(device.execute_loop(self.stop)),
+                              asyncio.create_task(device.diagnostics_loop(self.stop))]
             return self.status()
 
     def status(self):
@@ -148,7 +149,7 @@ class DesktopSession:
                 self.stop.set()
                 self.device.changed.set()
                 self.device.publish_changed.set()
-                for task in self.tasks[:2]:
+                for task in self.tasks[:2] + self.tasks[3:]:
                     task.cancel()
                 # Do not cancel a to_thread broker mutation while it is committing.
                 await asyncio.gather(*self.tasks, return_exceptions=True)

@@ -6,11 +6,13 @@ import json
 from pathlib import Path
 import secrets
 import sqlite3
+import time
 from uuid import uuid4
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from typing import Literal
 from .intent_protocol import IntentEvent
+from .diagnostic_protocol import DiagnosticRequest
 
 class IntentRelay:
     def __init__(self,path):
@@ -22,6 +24,7 @@ class IntentRelay:
             CREATE TABLE IF NOT EXISTS intents(cursor INTEGER PRIMARY KEY AUTOINCREMENT,channel TEXT,event_id TEXT,trade_id TEXT,sequence INTEGER,identity TEXT,payload TEXT,UNIQUE(channel,event_id),UNIQUE(channel,trade_id,sequence));
             CREATE INDEX IF NOT EXISTS stream_cursor ON intents(channel,cursor);
             CREATE TABLE IF NOT EXISTS receivers(id TEXT PRIMARY KEY,channel TEXT,token_digest TEXT UNIQUE,created REAL,revoked INTEGER DEFAULT 0,start_cursor INTEGER DEFAULT 0);
+            CREATE TABLE IF NOT EXISTS diagnostics(channel TEXT,event_id TEXT,actor TEXT,observation TEXT,PRIMARY KEY(channel,event_id,actor));
             ''')
             if 'start_cursor' not in {row['name'] for row in db.execute('PRAGMA table_info(receivers)')}:
                 db.execute('ALTER TABLE receivers ADD COLUMN start_cursor INTEGER DEFAULT 0')
@@ -74,6 +77,46 @@ class IntentRelay:
     def channels(self):
         with self.db() as db: return [dict(r) for r in db.execute('SELECT id,name,environment,revoked FROM channels')]
 
+    def diagnostic_identity(self, db, token):
+        try:
+            return self.authenticate(db, token, 'host'), 'host', 0
+        except PermissionError:
+            channel = self.authenticate(db, token, 'follower')
+            receiver = db.execute('SELECT id,start_cursor FROM receivers WHERE token_digest=?',
+                                  (sha256(token.encode()).hexdigest(),)).fetchone()
+            return channel, receiver['id'] if receiver else 'legacy_receiver', receiver['start_cursor'] if receiver else 0
+
+    def diagnostic_access(self, db, token, event_id):
+        channel, actor, start = self.diagnostic_identity(db, token)
+        event = db.execute('SELECT cursor FROM intents WHERE channel=? AND event_id=?',
+                           (channel['id'], event_id)).fetchone()
+        if event is None or (actor != 'host' and event['cursor'] <= start):
+            raise LookupError('Event unavailable')
+        return channel, actor
+
+    def save_diagnostic(self, token, request):
+        payload = json.dumps(request.observation.model_dump(), sort_keys=True, separators=(',', ':'))
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            channel, actor = self.diagnostic_access(db, token, request.event_id)
+            if request.observation.stage != ('sender' if actor == 'host' else 'receiver'):
+                raise HTTPException(403, 'Observation stage does not match device role')
+            prior = db.execute('SELECT observation FROM diagnostics WHERE channel=? AND event_id=? AND actor=?',
+                               (channel['id'], request.event_id, actor)).fetchone()
+            if prior and prior['observation'] != payload:
+                raise ValueError('Diagnostic evidence is immutable')
+            if prior is None:
+                db.execute('INSERT INTO diagnostics VALUES (?,?,?,?)',
+                           (channel['id'], request.event_id, actor, payload))
+        return {'stored': True}
+
+    def read_diagnostics(self, token, event_id):
+        with self.db() as db:
+            channel, actor = self.diagnostic_access(db, token, event_id)
+            rows = db.execute('SELECT actor,observation FROM diagnostics WHERE channel=? AND event_id=? AND actor IN (?,?) ORDER BY actor',
+                              (channel['id'], event_id, 'host', actor)).fetchall()
+        return {'observations': [{'actor': r['actor'], 'observation': json.loads(r['observation'])} for r in rows]}
+
 class ChannelRequest(BaseModel):
     name: str=Field(min_length=1,max_length=60)
     environment: Literal['paper','live']='paper'
@@ -83,6 +126,47 @@ def sync_router(relay,auth):
     def token(authorization):
         if not authorization.startswith('Bearer '): raise HTTPException(401,'Pair first')
         return authorization[7:]
+    @router.get('/clock')
+    def clock(response:Response, authorization:str=Header(default='')):
+        response.headers['Cache-Control'] = 'no-store'
+        try:
+            with relay.db() as db:
+                relay.diagnostic_identity(db, token(authorization))
+            return {'server_time_ms': time.time() * 1000}
+        except PermissionError as exc:
+            raise HTTPException(401, str(exc))
+
+    @router.post('/diagnostics')
+    async def save_diagnostic(request:Request, authorization:str=Header(default='')):
+        raw = bytearray()
+        async for chunk in request.stream():
+            raw.extend(chunk)
+            if len(raw) > 8192:
+                raise HTTPException(413, 'Diagnostic observation too large')
+        try:
+            value = DiagnosticRequest.model_validate_json(raw)
+        except ValueError:
+            # Do not echo untrusted values (including non-finite JSON numbers)
+            # in FastAPI's default validation response.
+            raise HTTPException(422, 'Invalid diagnostic observation') from None
+        try:
+            return relay.save_diagnostic(token(authorization), value)
+        except PermissionError as exc:
+            raise HTTPException(401, str(exc))
+        except LookupError as exc:
+            raise HTTPException(404, str(exc))
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+
+    @router.get('/diagnostics')
+    def read_diagnostic(response:Response, event_id:str=Query(max_length=36), authorization:str=Header(default='')):
+        response.headers['Cache-Control'] = 'no-store'
+        try:
+            return relay.read_diagnostics(token(authorization), event_id)
+        except PermissionError as exc:
+            raise HTTPException(401, str(exc))
+        except LookupError as exc:
+            raise HTTPException(404, str(exc))
     @router.post('/channels',dependencies=[Depends(auth)])
     def create(value:ChannelRequest): return relay.create(value.name,value.environment)
     @router.get('/channels',dependencies=[Depends(auth)])

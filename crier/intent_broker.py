@@ -20,6 +20,7 @@ class AlpacaIntentBroker:
         if environment not in HOSTS or not all(isinstance(x,str) and x.strip() for x in (key,secret,account)):
             raise ValueError('Environment, credentials and pinned account are required')
         self.environment, self.account = environment, account
+        self.data_headers={'APCA-API-KEY-ID':key,'APCA-API-SECRET-KEY':secret}
         self.url=HOSTS[environment]
         self.client=client or httpx.Client(headers={'APCA-API-KEY-ID':key,'APCA-API-SECRET-KEY':secret},timeout=15,trust_env=False,follow_redirects=False)
     def _request(self, method, path, **kwargs):

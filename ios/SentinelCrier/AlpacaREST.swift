@@ -122,6 +122,21 @@ final class AlpacaREST {
         guard (200..<300).contains(http.statusCode) else { throw AlpacaError.http(http.statusCode) }
         return data
     }
+    func diagnosticQuote(symbol: String, option: Bool) async throws -> DiagnosticQuote {
+        var parts = URLComponents(string: "https://data.alpaca.markets" + (option ? "/v1beta1/options/quotes/latest" : "/v2/stocks/\(symbol)/quotes/latest"))!
+        parts.queryItems = [URLQueryItem(name: "feed", value: option ? "opra" : "iex")]
+        if option { parts.queryItems!.append(URLQueryItem(name: "symbols", value: symbol)) }
+        var request = URLRequest(url: parts.url!); request.timeoutInterval = 10
+        request.setValue(credentials.key, forHTTPHeaderField: "APCA-API-KEY-ID")
+        request.setValue(credentials.secret, forHTTPHeaderField: "APCA-API-SECRET-KEY")
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw AlpacaError.invalid("Live quote unavailable (feed permission or transport failure).") }
+        struct Quote: Decodable { var t: String; var bp: Decimal?; var ap: Decimal? }
+        struct Response: Decodable { var quote: Quote?; var quotes: [String: Quote]? }
+        let body = try JSONDecoder().decode(Response.self, from: data)
+        guard let quote = option ? body.quotes?[symbol] : body.quote, IntentEvent.date(quote.t) != nil else { throw AlpacaError.invalid("Quote missing for exact contract.") }
+        return DiagnosticQuote(source: option ? "alpaca:opra" : "alpaca:iex", quote_timestamp: quote.t, bid: quote.bp.map { NSDecimalNumber(decimal: $0).stringValue }, ask: quote.ap.map { NSDecimalNumber(decimal: $0).stringValue }, last: nil)
+    }
     func account() async throws -> AlpacaAccount { try JSONDecoder().decode(AlpacaAccount.self, from: await request("v2/account")) }
     func positions() async throws -> [AlpacaPosition] { try JSONDecoder().decode([AlpacaPosition].self, from: await request("v2/positions")) }
     func contracts(underlying: String, expiration: String) async throws -> [AlpacaContract] {

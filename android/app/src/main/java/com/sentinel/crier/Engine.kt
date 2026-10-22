@@ -5,12 +5,13 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
 
  private val terminal=setOf("filled","canceled","expired","rejected","replaced","superseded")
  fun step(e:JSONObject) {
+  journal.diagnostic(e.getString("event_id"),"execution_started","Account validation and reconciliation")
   require(broker.account()==config.getString("account")) { "Account changed" }
   val trade=e.getString("trade_id"); val seq=e.getInt("sequence"); val action=e.getString("action")
   var orders=journal.orders(trade)
   for(o in orders) if(o.state !in terminal) {
    val remote=broker.order(o.client)
-   if(remote==null) return // An ambiguous POST must never be repeated, even on a 404.
+   if(remote==null) { journal.diagnostic(e.getString("event_id"),"reconciliation_wait","Broker outcome unknown; submission blocked"); return } // An ambiguous POST must never be repeated, even on a 404.
    validate(remote,o.client,e.getString("symbol"),o.side,journal.meta("quantity:${o.client}").toIntOrNull(),o.filled)
    journal.update(o.client,remote)
   }
@@ -22,6 +23,7 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
     if(journal.meta("cancel:${o.client}")!="requested") {
      journal.setMeta("cancel:${o.client}","requested")
      journal.state(o.client,"cancel_unknown")
+     journal.diagnostic(e.getString("event_id"),"cancel_requested",o.client)
      broker.cancel(o.broker)
     }
    }

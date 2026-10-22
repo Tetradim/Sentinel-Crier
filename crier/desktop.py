@@ -193,7 +193,7 @@ class DesktopApp:
     def render_diagnostics(self, report):
         premium = report['premium_movement']
         lines = [f"Trade: {report['trade_id'] or 'No recorded events'}",
-                 'Local evidence only. Quotes require a connected data source.',
+                 'Observed market data and synchronized relay evidence.',
                  'Premium comparison: ' + json.dumps(premium),
                  'Cross-device latency: unavailable — verified clock synchronization required.', '']
         for event in report['timeline']:

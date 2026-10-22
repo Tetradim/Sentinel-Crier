@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from .device_secrets import save_secret,load_secret
 from .intent_protocol import IntentEvent
 from .intent_engine import IntentEngine
+from .diagnostics_client import DiagnosticsClient
 from .trade_diagnostics import trade_report, export_trade_json, export_trade_csv
 
 class IntentDevice:
@@ -30,6 +31,7 @@ class IntentDevice:
             CREATE TABLE IF NOT EXISTS cursors(pair TEXT PRIMARY KEY,cursor INTEGER);
             CREATE TABLE IF NOT EXISTS quarantined_events(pair TEXT,cursor INTEGER,payload TEXT,error TEXT,PRIMARY KEY(pair,cursor));
             CREATE TABLE IF NOT EXISTS device_trace(id INTEGER PRIMARY KEY AUTOINCREMENT,timestamp TEXT,monotonic_ns INTEGER,trade_id TEXT,stage TEXT,details TEXT);''')
+        self.diagnostics=DiagnosticsClient(self)
         secret=self.folder/'intent-pairing.secret'
         if secret.exists():
             self.pair=json.loads(load_secret(secret)); self._engine()
@@ -121,6 +123,8 @@ class IntentDevice:
                                   environment=self.pair['environment'],created_at=now,expires_at=now+timedelta(seconds=10),**values)
                 db.execute('INSERT INTO outgoing VALUES (?,?,?,?,?,?,?)',(event.event_id,self.fingerprint,trade_id,sequence,action,event.model_dump_json(),'pending'))
             self._trace(event.trade_id,'sender_instruction_journaled',event_id=event.event_id,action=event.action,sequence=event.sequence,reference_limit_price=str(event.limit_price),quote_status='not_captured')
+            try: self.diagnostics.observe(event,'sender')
+            except Exception: pass
             self.engine.accept(event)
             self.changed.set()
             self.publish_changed.set()
@@ -198,7 +202,9 @@ class IntentDevice:
                             quarantined=True
                             continue
                         if event.environment!=pair['environment']: raise ValueError('Pair environment mismatch')
-                        self._trace(event.trade_id,'receiver_instruction_arrived',event_id=event.event_id,relay_cursor=item['cursor'],sender_created_at=event.created_at.isoformat(),reference_limit_price=str(event.limit_price),quote_status='not_captured')
+                        self._trace(event.trade_id,'receiver_instruction_arrived',event_id=event.event_id,sequence=event.sequence,relay_cursor=item['cursor'],sender_created_at=event.created_at.isoformat(),reference_limit_price=str(event.limit_price),quote_status='not_captured')
+                        try: self.diagnostics.observe(event,'receiver')
+                        except Exception: pass
                         engine.accept(event)
                         self._trace(event.trade_id,'receiver_instruction_stored',event_id=event.event_id,relay_cursor=item['cursor'])
                         self.changed.set()
@@ -208,6 +214,9 @@ class IntentDevice:
                     self.message='Receiver disconnected; reconnecting without replaying expired entries'
                     try: await asyncio.wait_for(stop.wait(),1)
                     except TimeoutError: pass
+    async def diagnostics_loop(self,stop):
+        await self.diagnostics.run(stop)
+
     async def execute_loop(self,stop):
         while not stop.is_set():
             self.changed.clear()

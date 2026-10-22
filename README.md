@@ -19,6 +19,7 @@ Sentinel Crier is an open-source project with three distinct workflows:
 | Discord alerts | Confirmed fills via durable local outbox; delivery requires explicit configuration |
 | Submission-time mirroring | iOS, Android, Windows, and Python intent device/relay; followers execute with their own Alpaca credentials |
 | Remote Host / Receive | Expiring, single-use invitations via an operator-deployed HTTPS connection service |
+| Execution diagnostics | Windows/iOS/Android timelines and JSON/CSV export; automatic near-event Alpaca quotes and clock-corrected delivery estimates on receivers ([setup and limits](docs/execution-diagnostics.md)) |
 | Legacy fill-based mirroring | Separate optional iPhone-to-PC flow; **not** the submission-time protocol |
 | Webull | Connect integration pending; PC SDK observer experimental and requires validation |
 | Tradier | Read-only PC polling adapter; account-specific validation required |

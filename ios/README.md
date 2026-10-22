@@ -65,3 +65,28 @@ An operator must first deploy the connection service; see
 [remote setup](../docs/remote-connect-setup.md). The shared
 `crier/connection-service.json` resource can supply its public origin in distributed
 builds. No default service has been invented or deployed. Keep iOS foregrounded.
+
+### Intent execution diagnostics
+
+Open **Execution diagnostics** on a tracked intent trade to see each revision's
+journal/arrival, relay acceptance, order dispatch, broker response and reconciled
+status/fill evidence. JSON and CSV sharing creates files containing the exact event
+and authorized local/remote observations; account credentials are never included.
+Existing journals without diagnostics remain readable.
+
+Quotes are asynchronous near-event snapshots, not exact button-time prices or
+fills. Stock capture explicitly requests Alpaca IEX; option capture explicitly
+requests OPRA and does not fall back to indicative data. Missing permissions,
+failed capture, stale quotes, and unavailable clocks remain visible as unavailable.
+Premium comparisons use ask for entry/replace and bid for exit, matching event and
+feed, quotes within five seconds of the corrected event time, and quotes fresh at
+capture completion. Broker cumulative fill/average-price evidence is shown separately.
+
+Delivery latency uses independent midpoint relay clock samples, monotonic RTT,
+and summed uncertainty. Samples expire after 60 seconds; wall-clock jumps invalidate
+them. The receiver can compare the host and its own observation. The host cannot
+see receiver observations. A first event before clock calibration has unavailable
+latency. Diagnostics never await quotes before dispatching orders. Quote requests
+are capped at eight concurrently; observation upload retries stop after six tries,
+remote fetches after twelve, with at most twenty records processed per pass.
+Restarted incomplete captures are marked unavailable rather than recreated later.

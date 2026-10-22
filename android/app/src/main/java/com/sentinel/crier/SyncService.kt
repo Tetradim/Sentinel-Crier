@@ -6,7 +6,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 class SyncService: Service() {
  companion object { @Volatile var active=false; private set }
- private val pool=Executors.newFixedThreadPool(3)
+ private val pool=Executors.newFixedThreadPool(4)
  @Volatile private var running=true
  override fun onBind(intent:Intent?):IBinder?=null
  override fun onCreate() {
@@ -27,12 +27,14 @@ class SyncService: Service() {
    } else Thread.sleep(1000)
   }
   worker {
-   if(config.getString("role")=="host") for(e in journal.events(true).sortedBy { if(it.getString("action") in setOf("cancel","exit")) 0 else 1 }) { val revision=journal.revision(e.getString("trade_id")); if(e.getString("action") in setOf("enter","replace") && (revision.second || e.getInt("sequence")<revision.first || java.time.Instant.now()>java.time.Instant.parse(e.getString("expires_at")))) { journal.mark(e.getString("event_id"),true); continue }; Network.request("$url/api/sync/events","POST",headers,e); journal.mark(e.getString("event_id"),true) }
+   if(config.getString("role")=="host") for(e in journal.events(true).sortedBy { if(it.getString("action") in setOf("cancel","exit")) 0 else 1 }) { val revision=journal.revision(e.getString("trade_id")); if(e.getString("action") in setOf("enter","replace") && (revision.second || e.getInt("sequence")<revision.first || java.time.Instant.now()>java.time.Instant.parse(e.getString("expires_at")))) { journal.mark(e.getString("event_id"),true); continue }; Network.request("$url/api/sync/events","POST",headers,e); journal.evidence(e.getString("event_id"),"relay_ack"); journal.mark(e.getString("event_id"),true) }
    Thread.sleep(100)
   }
+  val diagnostics=Diagnostics(journal,config)
+  worker { diagnostics.tick(); Thread.sleep(250) }
   val engine=Engine(journal,config) { getSharedPreferences("controls",MODE_PRIVATE).getBoolean("paused",true) }
   worker {
-   for(e in journal.events(false)) { try { engine.step(e) } catch(error:Exception) { journal.setMeta("status","Reconciliation needed: ${error.message}") } }
+   for(e in journal.events(false)) { try { engine.step(e) } catch(error:Exception) { journal.diagnostic(e.getString("event_id"),"reconciliation_error",if(error is HttpError) "HTTP ${error.status}" else "Broker reconciliation needs attention"); journal.setMeta("status","Reconciliation needed: ${error.message}") } }
    Thread.sleep(300)
   }
  }

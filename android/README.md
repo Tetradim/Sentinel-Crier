@@ -25,6 +25,16 @@ Local verification on 2026-10-20: all production Kotlin sources compiled directl
 
 Account, environment, role and pairing identity are pinned to the journal. Settings/credentials cannot change while workers may be in flight. To update pricing or rotate credentials for the same account, force-stop Crier in Android settings, reopen, save, and enable again. Use a separate Android app installation/profile for a different channel/account; clearing app data destroys its order-ownership records and must not be used while trades are outstanding.
 
+## Diagnostics
+
+Open **Diagnostics · timeline, premiums and latency** to inspect the latest 200
+events. The app captures Alpaca IEX stock quotes or explicit OPRA option quotes
+asynchronously, and exchanges clock/quote observations through the relay.
+Receiver reports compare matching event revisions and feeds, with clock uncertainty
+shown beside estimated delivery time. Missing permissions, stale quotes and invalid
+clock evidence are displayed as unavailable. Use **Share diagnostics** or **Save
+diagnostics** for JSON/CSV. See [execution diagnostics](../docs/execution-diagnostics.md).
+
 ## Execution safeguards and limits
 
 SQLite commits each event, newest sequence, permanent cancel/exit invalidation and receiver cursor before broker execution. Host outbox and broker work run independently; publishing never waits for fills. Queued invalidations are dispatched first, and obsolete or expired queued entries are skipped. Events received by followers are never republished.

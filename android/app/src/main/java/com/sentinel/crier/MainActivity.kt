@@ -9,6 +9,7 @@ import java.net.URI
 import java.util.concurrent.Executors
 class MainActivity:Activity() {
  private val io=Executors.newSingleThreadExecutor()
+ private var pendingExport:String?=null
  private lateinit var panel:LinearLayout
  private lateinit var status:TextView
  private lateinit var journal:Journal
@@ -57,8 +58,16 @@ class MainActivity:Activity() {
    val e=if(action=="enter") journal.create(action,symbol.text.toString().trim().uppercase(),asset.text.toString(),qty.text.toString().toInt(),price.text.toString(),c.getString("environment")) else journal.create(action,symbol.text.toString().trim().uppercase(),asset.text.toString(),qty.text.toString().toInt(),price.text.toString(),c.getString("environment"),trade.text.toString())
    trade.setText(e.getString("trade_id")); journal.setMeta("lastTrade",e.getString("trade_id")); startForegroundService(Intent(this,SyncService::class.java)); status.text="Journaled $action; broker and relay dispatch independently"
   }
+  button("Diagnostics · timeline, premiums and latency") { val records=Diagnostics.export(journal); android.app.AlertDialog.Builder(this).setTitle("Execution diagnostics").setItems((0 until records.length()).map { val e=records.getJSONObject(it).getJSONObject("event"); "${e.getString("symbol")} ${e.getString("action")} · ${e.getString("event_id").take(8)}" }.toTypedArray()) { _, i -> android.app.AlertDialog.Builder(this).setTitle("Event evidence").setMessage(Diagnostics.describe(records.getJSONObject(i))).setPositiveButton("Close",null).show() }.show() }
+  button("Share diagnostics JSON") { shareDiagnostics(false) }
+  button("Share diagnostics CSV") { shareDiagnostics(true) }
+  button("Save diagnostics JSON file") { saveDiagnostics(false) }
+  button("Save diagnostics CSV file") { saveDiagnostics(true) }
   button("Refresh journal status") { status.text=journal.meta("status")+"\n"+journal.summary() }
   panel.addView(TextView(this).apply { text="Keep Crier running for mirroring. Android may stop background data sync; reopen to resume. Unknown broker outcomes remain blocked until reconciled. Cancel stops the unfilled remainder; Exit closes only this trade’s acquired holdings." })
  }
+ private fun saveDiagnostics(csv:Boolean) { val records=Diagnostics.export(journal); pendingExport=if(csv) Diagnostics.csv(records) else records.toString(2); startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type=if(csv) "text/csv" else "application/json"; putExtra(Intent.EXTRA_TITLE,if(csv) "crier-diagnostics.csv" else "crier-diagnostics.json") },41) }
+ override fun onActivityResult(request:Int,result:Int,data:Intent?) { super.onActivityResult(request,result,data); if(request==41 && result==RESULT_OK) { val text=pendingExport ?: return; data?.data?.let { uri -> background { contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray(Charsets.UTF_8)) } ?: error("Unable to write export"); "Diagnostics exported" } }; pendingExport=null } }
+ private fun shareDiagnostics(csv:Boolean) { val records=Diagnostics.export(journal); val text=if(csv) Diagnostics.csv(records) else records.toString(2); startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type=if(csv) "text/csv" else "application/json"; putExtra(Intent.EXTRA_SUBJECT,"Crier execution diagnostics"); putExtra(Intent.EXTRA_TEXT,text) },"Share diagnostics")) }
  override fun onDestroy() { io.shutdown(); super.onDestroy() }
 }

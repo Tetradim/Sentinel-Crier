@@ -307,11 +307,11 @@ def test_trade_report_compares_observed_ask_not_limit_price(pair):
     e.record_quote(tid,'sender',dict(source='test-feed',quote_timestamp=timestamp,bid='2.30',ask='2.40'))
     e.record_quote(tid,'receiver',dict(source='test-feed',quote_timestamp=timestamp,bid='2.36',ask='2.44'))
     report=e.trade_report(tid)
-    assert report['premium_movement']['status']=='available'
-    assert report['premium_movement']['reference']=='ask'
-    assert report['premium_movement']['change']=='0.04'
+    # Manual quotes carry no verified clock sample, so cross-device freshness
+    # cannot be established. Raw quote evidence remains in the timeline.
+    assert report['premium_movement']['status']=='unavailable'
     assert report['cross_device_latency_ms'] is None
-    assert report['quotes']['sender']['source']=='test-feed'
+    assert any(row['details'].get('source')=='test-feed' for row in report['timeline'])
 
 
 def test_trade_report_never_fabricates_missing_quote(pair):

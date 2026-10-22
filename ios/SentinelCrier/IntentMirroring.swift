@@ -8,7 +8,7 @@ struct IntentEvent: Codable, Equatable {
     var environment: AlpacaEnvironment; var symbol: String; var asset: String
     var quantity: Int; var limit_price: String; var created_at: String; var expires_at: String
     static func make(trade: String, sequence: Int, action: String, environment: AlpacaEnvironment, symbol: String, asset: String, quantity: Int, price: String) -> Self {
-        let now = Date(); let f = ISO8601DateFormatter()
+        let now = Date(); let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return Self(event_id: UUID().uuidString.lowercased(), trade_id: trade, sequence: sequence, action: action, environment: environment, symbol: symbol, asset: asset, quantity: quantity, limit_price: price, created_at: f.string(from: now), expires_at: f.string(from: now.addingTimeInterval(30)))
     }
     static func date(_ text: String) -> Date? {
@@ -80,6 +80,7 @@ struct IntentTrade: Codable {
 struct IntentState: Codable {
     var cursor = 0; var accountID = ""; var pairingID = ""; var trades: [String: IntentTrade] = [:]
     var outgoing: [IntentEvent] = []; var received: [String: IntentEvent] = [:]
+    var diagnostics: [String: IntentDiagnosticRecord]?
     var preferences = IntentPreferences()
     mutating func discardSupersededEntries() {
         let invalidations = outgoing.filter { ["cancel", "exit"].contains($0.action) }
@@ -114,6 +115,10 @@ struct IntentPairing: Codable {
     private let file: URL
     private var api: AlpacaREST?; private var pair: IntentPairing?
     private var receiver: Task<Void, Never>?; private var worker: Task<Void, Never>?; private var transmitter: Task<Void, Never>?
+    private var diagnosticWorker: Task<Void, Never>?
+    private var diagnosticClock: DiagnosticClock?
+    private var diagnosticSession = UUID()
+    private var quoteCaptures = Set<String>()
     private var processing = false; private var publishing = false
     init(file: URL) throws {
         self.file = file
@@ -136,25 +141,30 @@ struct IntentPairing: Codable {
         guard state.accountID.isEmpty || (state.accountID == account && state.pairingID == pair.fingerprint) else { throw AlpacaError.invalid("Intent journal is pinned to its original account and pairing. Recover its trades before changing channels.") }
         try commit { $0.accountID = account; $0.pairingID = pair.fingerprint }
         self.api = api; self.pair = pair
+        diagnosticClock = nil
+        diagnosticSession = UUID()
         receiver?.cancel(); worker?.cancel(); transmitter?.cancel()
         if pair.role == "follower" { receiver = Task { await receiveLoop() } }
         transmitter = Task { while !Task.isCancelled { await publish(); try? await Task.sleep(nanoseconds: 500_000_000) } }
         worker = Task { while !Task.isCancelled { await process(); try? await Task.sleep(nanoseconds: 2_000_000_000) } }
+        diagnosticWorker?.cancel()
+        diagnosticWorker = Task { while !Task.isCancelled { await syncDiagnostics(); try? await Task.sleep(nanoseconds: 5_000_000_000) } }
         message = "\(pair.role.capitalized) connected. Keep Crier open for delivery."
     }
-    func disconnect() { receiver?.cancel(); worker?.cancel(); transmitter?.cancel(); receiver = nil; worker = nil; transmitter = nil; api = nil; pair = nil }
+    func disconnect() { diagnosticSession = UUID(); diagnosticWorker?.cancel(); diagnosticWorker = nil; diagnosticClock = nil; receiver?.cancel(); worker?.cancel(); transmitter?.cancel(); receiver = nil; worker = nil; transmitter = nil; api = nil; pair = nil }
     var hosting: Bool { pair?.role == "host" }
     func host(symbol: String, asset: String, quantity: Int, price: String, tradeID: String? = nil, action: String = "enter") throws -> String {
         guard let pair, hosting else { throw AlpacaError.invalid("Connect an intent host pairing first.") }
         let id = tradeID ?? UUID().uuidString.lowercased()
         let e = IntentEvent.make(trade: id, sequence: (state.trades[id]?.desired?.sequence ?? 0) + 1, action: action, environment: pair.environment, symbol: symbol, asset: asset, quantity: quantity, price: price)
         try commit { s in var t = s.trades[id] ?? IntentTrade(); try t.accept(e); s.trades[id] = t; s.outgoing.append(e) }
+        beginDiagnostic(e, stage: "sender", observed: IntentEvent.date(e.created_at) ?? Date())
         Task { await publish() }; Task { await process() }
         return id
     }
-    private func relay(_ query: String = "", body: Data? = nil) async throws -> Data {
+    private func relay(_ query: String = "", body: Data? = nil, resource: String = "events") async throws -> Data {
         guard let pair else { throw AlpacaError.invalid("Disconnected.") }
-        var request = URLRequest(url: URL(string: pair.url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/api/sync/events" + query)!)
+        var request = URLRequest(url: URL(string: pair.url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/api/sync/" + resource + query)!)
         request.httpMethod = body == nil ? "GET" : "POST"; request.httpBody = body; request.timeoutInterval = 30
         request.setValue("Bearer " + pair.token, forHTTPHeaderField: "Authorization"); request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let (data, response) = try await CrierHTTPSession.shared.data(for: request)
@@ -168,6 +178,7 @@ struct IntentPairing: Codable {
                 if !state.outgoing.isEmpty { try commit { $0.discardSupersededEntries() } }
                 guard let e = state.outgoing.first(where: { ["cancel", "exit"].contains($0.action) }) ?? state.outgoing.first else { break }
                 _ = try await relay(body: JSONEncoder().encode(e))
+                diagnosticStep(e.event_id, "relay_accepted", "Relay durably accepted event")
                 try commit { $0.outgoing.removeAll { $0.event_id == e.event_id } }
             }
         }
@@ -179,6 +190,7 @@ struct IntentPairing: Codable {
             do {
                 let page = try JSONDecoder().decode(Page.self, from: await relay("?after=\(state.cursor)&wait=20"))
                 try Task.checkCancellation()
+                let arrival = Date()
                 for item in page.events {
                     guard item.event.environment == pair?.environment else { throw AlpacaError.invalid("Relay environment mismatch.") }
                     try commit { s in
@@ -186,6 +198,7 @@ struct IntentPairing: Codable {
                         var t = s.trades[item.event.trade_id] ?? IntentTrade(); try t.accept(item.event, paused: s.preferences.paused)
                         s.trades[item.event.trade_id] = t; s.received[item.event.event_id] = item.event; s.cursor = max(s.cursor, item.cursor)
                     }
+                    beginDiagnostic(item.event, stage: "receiver", observed: arrival)
                 }
                 Task { await process() }
             } catch { message = error.localizedDescription; try? await Task.sleep(nanoseconds: 2_000_000_000) }
@@ -195,7 +208,100 @@ struct IntentPairing: Codable {
         guard !processing, let api else { return }; processing = true; defer { processing = false }
         for id in Array(state.trades.keys) {
             do { try Task.checkCancellation(); try await execute(id, api: api) }
-            catch { message = "Trade \(id.prefix(8)): \(error.localizedDescription)" }
+            catch { if let event = state.trades[id]?.desired { diagnosticStep(event.event_id, "execution_pending", error.localizedDescription) }; message = "Trade \(id.prefix(8)): \(error.localizedDescription)" }
+        }
+    }
+    private func diagnosticStep(_ eventID: String, _ stage: String, _ detail: String, at: Date = Date()) {
+        try? commit { state in
+            guard var record = state.diagnostics?[eventID] else { return }
+            if record.timeline.last?.stage == stage && record.timeline.last?.detail == detail { return }
+            record.timeline.append(DiagnosticStep(at: IntentDiagnosticRecord.timestamp(at), stage: stage, detail: detail))
+            state.diagnostics?[eventID] = record
+        }
+    }
+    private func beginDiagnostic(_ event: IntentEvent, stage: String, observed: Date) {
+        guard state.diagnostics?[event.event_id] == nil else { return }
+        let clock = diagnosticClock.flatMap { $0.fresh(at: observed) ? $0 : nil }
+        let observation = DiagnosticObservation(stage: stage, observed_at: IntentDiagnosticRecord.timestamp(observed), clock_offset_ms: clock?.offset, clock_uncertainty_ms: clock?.uncertainty, clock_sampled_at: clock.map { IntentDiagnosticRecord.timestamp($0.sampled) })
+        try? commit { state in
+            if state.diagnostics == nil { state.diagnostics = [:] }
+            state.diagnostics?[event.event_id] = IntentDiagnosticRecord(event: event, observation: observation, timeline: [DiagnosticStep(at: observation.observed_at, stage: stage == "sender" ? "journaled" : "received", detail: "Exact event revision persisted")])
+        }
+        guard let api else { return }
+        guard quoteCaptures.count < 8 else {
+            try? commit { $0.diagnostics?[event.event_id]?.observation.quote_error = "Quote capture capacity reached"; $0.diagnostics?[event.event_id]?.quoteComplete = true }
+            return
+        }
+        quoteCaptures.insert(event.event_id)
+        let session = diagnosticSession
+        // Independent task: neither quote capture nor diagnostics gates broker dispatch.
+        Task {
+            defer { quoteCaptures.remove(event.event_id) }
+            do {
+                let quote = try await api.diagnosticQuote(symbol: event.symbol, option: event.asset == "option")
+                guard self.api === api, self.pair != nil, diagnosticSession == session else { return }
+                let finished = Date()
+                let clock = diagnosticClock.flatMap { $0.fresh(at: finished) ? $0 : nil }
+                let age = IntentEvent.date(quote.quote_timestamp).map { finished.addingTimeInterval((clock?.offset ?? 0) / 1000).timeIntervalSince($0) }
+                let quoteError = clock == nil ? "Quote freshness unverified: clock unavailable" : ((age.map { (0...5).contains($0) } ?? false) ? nil : "Stale or future quote; excluded from comparison")
+                try? commit {
+                    guard $0.diagnostics?[event.event_id]?.quoteComplete == false else { return }
+                    $0.diagnostics?[event.event_id]?.observation.quote = quote
+                    $0.diagnostics?[event.event_id]?.observation.quote_error = quoteError
+                    $0.diagnostics?[event.event_id]?.quoteComplete = true
+                }
+            } catch {
+                guard self.api === api, self.pair != nil, diagnosticSession == session else { return }
+                try? commit {
+                    guard $0.diagnostics?[event.event_id]?.quoteComplete == false else { return }
+                    $0.diagnostics?[event.event_id]?.observation.quote_error = "Alpaca quote unavailable (permission, transport, or malformed response)"
+                    $0.diagnostics?[event.event_id]?.quoteComplete = true
+                }
+            }
+        }
+    }
+    private func syncDiagnostics() async {
+        guard let activePair = pair else { return }
+        let session = diagnosticSession
+        if diagnosticClock?.fresh(at: Date()) != true {
+            let start = Date(), uptime = ProcessInfo.processInfo.systemUptime
+            struct ClockResponse: Decodable { var server_time_ms: Double }
+            if let data = try? await relay(resource: "clock"), let response = try? JSONDecoder().decode(ClockResponse.self, from: data) {
+                guard !Task.isCancelled, diagnosticSession == session, pair?.fingerprint == activePair.fingerprint else { return }
+                diagnosticClock = DiagnosticClock.make(start: start, end: Date(), elapsed: ProcessInfo.processInfo.systemUptime - uptime, server: response.server_time_ms)
+            }
+        }
+        let pending = (state.diagnostics ?? [:]).values.filter { !$0.quoteComplete || (!$0.uploaded && $0.attempts < 6) || $0.fetchAttempts < 12 }
+            .sorted { $0.event.created_at < $1.event.created_at }.prefix(20)
+        for id in pending.map({ $0.event.event_id }) {
+            guard !Task.isCancelled, diagnosticSession == session, pair?.fingerprint == activePair.fingerprint, let record = state.diagnostics?[id] else { return }
+            guard !state.outgoing.contains(where: { $0.event_id == id }) else { continue }
+            // Wait for capture; after restart a missing capture becomes explicit unavailable.
+            if !record.quoteComplete {
+                if Date().timeIntervalSince(IntentEvent.date(record.observation.observed_at) ?? Date()) > 20 {
+                    try? commit { $0.diagnostics?[id]?.observation.quote_error = "Quote capture interrupted"; $0.diagnostics?[id]?.quoteComplete = true }
+                }
+                continue
+            }
+            if !record.uploaded && record.attempts < 6 {
+                struct Upload: Encodable { var event_id: String; var observation: DiagnosticObservation }
+                try? commit { $0.diagnostics?[id]?.attempts += 1 }
+                do {
+                    _ = try await relay(body: JSONEncoder().encode(Upload(event_id: id, observation: record.observation)), resource: "diagnostics")
+                    guard !Task.isCancelled, diagnosticSession == session else { return }
+                    try? commit { $0.diagnostics?[id]?.uploaded = true }
+                } catch {
+                    guard !Task.isCancelled, diagnosticSession == session else { return }
+                    diagnosticStep(id, "diagnostics_pending", "Relay diagnostics upload pending")
+                }
+            }
+            guard record.fetchAttempts < 12 else { continue }
+            try? commit { $0.diagnostics?[id]?.fetchAttempts += 1 }
+            struct Download: Decodable { var observations: [DiagnosticRemote] }
+            if let data = try? await relay("?event_id=" + id, resource: "diagnostics"), let response = try? JSONDecoder().decode(Download.self, from: data) {
+                guard !Task.isCancelled, diagnosticSession == session else { return }
+                try? commit { $0.diagnostics?[id]?.remote = response.observations }
+            }
         }
     }
     private func terminal(_ order: AlpacaOrder) -> Bool { ["filled", "canceled", "expired", "rejected", "replaced"].contains(order.status) }
@@ -210,6 +316,7 @@ struct IntentPairing: Codable {
             if let old = m.order, terminal(old) { continue }
             let order = try await api.order(clientID: m.clientID)
             try m.validate(order, symbol: desired.symbol)
+            diagnosticStep(m.eventID, "reconciled", "client=\(m.clientID) broker=\(order.id) status=\(order.status) filled=\(order.filled_qty) average=\(order.filled_avg_price ?? "unavailable")")
             try commit { $0.trades[id]!.mutations[index].order = order }
             if order.status == "rejected", hosting, state.trades[id]?.desired?.action != "cancel" {
                 _ = try host(symbol: desired.symbol, asset: desired.asset, quantity: desired.quantity, price: desired.limit_price, tradeID: id, action: "cancel")
@@ -225,13 +332,17 @@ struct IntentPairing: Codable {
                     guard self.api === api, pair != nil else { return }
                     if !m.cancelUnknown {
                         try commit { $0.trades[id]!.mutations[index].cancelUnknown = true }
+                        diagnosticStep(e.event_id, "cancel_dispatch", "broker=\(order.id)")
                         try await api.cancel(orderID: order.id)
                     }
                     return // Wait for terminal broker status, including racing fills.
                 }
             }
         }
-        if e.action == "cancel" || (trade.invalidated && e.action != "exit") { return }
+        if e.action == "cancel" || (trade.invalidated && e.action != "exit") {
+            diagnosticStep(e.event_id, "entry_invalidated", "Entry remainder canceled or superseded; tracked fills retained")
+            return
+        }
         if trade.completed == e.event_id { return }
         let sell = e.action == "exit"
         let existing = trade.mutations.filter { $0.eventID == e.event_id }
@@ -241,7 +352,10 @@ struct IntentPairing: Codable {
             guard trade.entrySkipped != true, hosting || !state.preferences.paused,
                   let created = IntentEvent.date(e.created_at), let expires = IntentEvent.date(e.expires_at), created <= Date(), expires > Date(),
                   Date().timeIntervalSince(created) <= Double(hosting ? 30 : state.preferences.maxAgeSeconds),
-                  e.quantity <= (hosting ? 1000 : state.preferences.maxQuantity) else { try commit { $0.trades[id]!.completed = e.event_id }; return }
+                  e.quantity <= (hosting ? 1000 : state.preferences.maxQuantity) else {
+                diagnosticStep(e.event_id, "entry_skipped", "Paused, expired, future dated, or outside local quantity/age limits")
+                try commit { $0.trades[id]!.completed = e.event_id }; return
+            }
         }
         let soldForRevision = trade.sold(for: e.event_id)
         var quantity = sell ? min(max(0, e.quantity - soldForRevision), trade.owned) : max(0, e.quantity - trade.owned)
@@ -262,12 +376,16 @@ struct IntentPairing: Codable {
         let clientID = "si-" + e.event_id + (sell ? "-s\(existing.count)" : "-b")
         let mutation = IntentMutation(clientID: clientID, eventID: e.event_id, sell: sell, quantity: quantity)
         try commit { $0.trades[id]!.mutations.append(mutation) }
+        let dispatched = Date()
+        Task { diagnosticStep(e.event_id, "order_dispatch", "client=\(clientID) quantity=\(quantity) limit=\(price ?? "market")", at: dispatched) }
         do {
             let order = try await api.submitIntent(symbol: e.symbol, quantity: quantity, price: price, sell: sell, option: e.asset == "option", clientID: clientID)
             try mutation.validate(order, symbol: e.symbol)
+            diagnosticStep(e.event_id, "broker_response", "client=\(clientID) broker=\(order.id) status=\(order.status) filled=\(order.filled_qty) average=\(order.filled_avg_price ?? "unavailable")")
             try commit { s in let index = s.trades[id]!.mutations.firstIndex { $0.clientID == clientID }!; s.trades[id]!.mutations[index].order = order }
             if order.status == "rejected", hosting { _ = try host(symbol: e.symbol, asset: e.asset, quantity: e.quantity, price: e.limit_price, tradeID: id, action: "cancel") }
         } catch AlpacaError.http(let code) where [400, 401, 403, 429].contains(code) {
+            diagnosticStep(e.event_id, "broker_rejected", "HTTP \(code)")
             // Definitive rejection has no owned quantity; retain a terminal broker-shaped record.
             let rejected = AlpacaOrder(id: clientID, client_order_id: clientID, symbol: e.symbol, status: "rejected", qty: String(quantity), limit_price: price, filled_qty: "0", filled_avg_price: nil, side: sell ? "sell" : "buy")
             try commit { s in let index = s.trades[id]!.mutations.firstIndex { $0.clientID == clientID }!; s.trades[id]!.mutations[index].order = rejected }
