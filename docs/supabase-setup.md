@@ -14,6 +14,14 @@ As checked on October 23, 2026, the [Free plan](https://supabase.com/pricing) li
 
 ## Apply the schema and function
 
+Windows users can run the guided deployment from the repository root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/deploy_supabase.ps1 -ProjectRef YOUR_PROJECT_REF
+```
+
+It uses interactive CLI authentication/password prompts, applies migrations, deploys the function, and saves the public gateway address only after a successful readiness check. Use `-SkipLogin` with an existing authenticated CLI session and `-Python` to select your project Python environment. Run it only against the dedicated Crier test project. It does not change the Supabase plan or purchase resources.
+
 Run these commands from the repository root with Node.js installed. The [Supabase CLI documentation](https://supabase.com/docs/guides/local-development/cli/getting-started) describes account login and project linking. These commands are instructions for the project owner; merely checking out this repository does not deploy anything.
 
 ```powershell
