@@ -1,10 +1,12 @@
-# Phase 2 integration status
+# Phase 2 implementation evidence
 
-Customer-flow implementation is ready for CI validation. The Phase 2 acceptance checklist is in `phase2-acceptance.md`.
+Phase 2 software implementation and automated validation are complete. The Phase 2 acceptance checklist is in `phase2-acceptance.md`.
 
 Implemented: native invitation setup and receiver controls; Discord card/plain presets or templates, field controls, previews, labeled test messages, delivery status and explicit resolution; authoritative fill ingestion on desktop; journal-preserving credential recovery; per-event quarantine; startup/resume reconciliation; Android service timeout handling; common wire fixtures and platform recovery regressions.
 
-Local evidence: full Python suite passed 367 tests before the final destination-binding regression; that regression and the full Discord settings group passed separately. Windows controls construct successfully; browser walkthrough passes with all requests intercepted. Android production and test compilation passes locally. iOS native validation requires macOS CI.
+Validation: backend CI passed 367 tests with one platform-specific skip; Android production/test compilation and 41 JUnit tests passed, with APK build successful; iOS simulator compiled and all 82 tests passed. Windows packaging passed; Windows controls construct successfully, and the browser walkthrough passed with all requests intercepted.
+
+Implementation commit: `2e03e3c`; numeric price test correction: `c7045c0`. iOS/backend rerun: https://github.com/Tetradim/Sentinel-Crier/actions/runs/39957885426 . Android build: https://github.com/Tetradim/Sentinel-Crier/actions/runs/39956516748 . Windows package: https://github.com/Tetradim/Sentinel-Crier/actions/runs/39956516774 .
 
 Recovery intentionally preserves account/channel pins. A channel or account cannot replace unresolved ownership evidence. Android offers separate saved profiles; iOS can archive resolved channels. Windows retains its pinned account/channel and permits verified same-account key rotation. The advanced browser service still obtains broker credentials from service configuration; the native Windows app provides account setup controls.
 

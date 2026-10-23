@@ -34,7 +34,7 @@ Already implemented: durable execution timeline, sender/receiver tracking, recon
 
 Remaining: cancellation crash recovery and native future-time deferral; consistent setup and Discord experience; invalid-event/rejection recovery coverage; deployed public relay; release signing and update paths; physical acceptance; approved Webull integration. The bundled connection-service URL is empty at this baseline. Android debug APKs, iOS simulator builds, and an unsigned Windows ZIP are development artifacts.
 
-## Phase 1 — recovery correctness (execute now)
+## Phase 1 â€” recovery correctness (execute now)
 
 Changes: `crier/intent_engine.py`, Android `Engine.kt`, iOS `IntentMirroring.swift`, and corresponding regression tests.
 
@@ -48,7 +48,7 @@ Changes: `crier/intent_engine.py`, Android `Engine.kt`, iOS `IntentMirroring.swi
 
 Exit gate: targeted regressions and complete Python suite pass; native compile/tests pass in CI; no broker connections or live orders are used by these checks. A physical cancellation/reconnect trial remains part of Phase 5.
 
-## Phase 2 — finish the customer flows and protocol parity
+## Phase 2 â€” finish the customer flows and protocol parity
 
 1. Bring Android Host/Receive setup to the invitation-based flow used by other clients; remove manual JSON as the normal customer path.
 2. Provide consistent Discord destination setup, card/plain-text preview, templates, field selection, test-message action, and delivery/retry status across platforms. Preserve explicit distinctions between intent, manual observation, and broker fill.
@@ -59,7 +59,7 @@ Exit gate: targeted regressions and complete Python suite pass; native compile/t
 
 Exit gate: a fresh user can connect an account, host/join, configure alerts, see execution status, recover a disconnect, and revoke a receiver without editing files. All supported clients pass identical lifecycle fixtures.
 
-## Phase 3 — make remote connections operational
+## Phase 3 â€” make remote connections operational
 
 1. Provision an actual HTTPS endpoint and configure it in released apps. Hosting provider/account selection is an owner dependency; this plan does not create paid services.
 2. Deploy the existing relay with persistent storage and one worker while SQLite is used. Validate authentication, invitation expiry, revocation, rate limits, replay protections, and device isolation.
@@ -69,7 +69,7 @@ Exit gate: a fresh user can connect an account, host/join, configure alerts, see
 
 Exit gate: two remote clients can discover the configured service; restart/restore retains channels and journals; measured capacity and latency are published. A provisioned service and its operational owner are required.
 
-## Phase 4 — release and distribution
+## Phase 4 â€” release and distribution
 
 1. Resolve Apple distribution eligibility for a trading/mirroring app before assuming public App Store approval. Establish the developer identity, signing, provisioning, privacy disclosures, support contact, and review explanation.
 2. Produce signed iPhone device builds and a TestFlight testing route; signed Android release packages; a versioned Windows installer/update route with publisher signing where available.
@@ -78,13 +78,13 @@ Exit gate: two remote clients can discover the configured service; restart/resto
 
 Exit gate: reproducible release artifacts, provenance/checksums, distribution credentials, upgrade tests, and store/distribution requirements are satisfied. Approval cannot be guaranteed by compilation.
 
-## Phase 5 — release acceptance
+## Phase 5 â€” release acceptance
 
 Run `docs/intent-paper-acceptance.md` on real iPhone/Android/Windows devices across separate networks with authorized paper accounts. Compare contract, side, quantity, price, fills, cancellations, and positions against brokerage UI and authoritative records. Exercise lock/background, service timeout, network switching, force quit, restart, latency/slippage, and Discord outage recovery. Set measurable pass/fail limits before testing and retain redacted evidence.
 
 Exit gate: all supported platform combinations pass; unresolved mismatches are fixed; customer-visible latency is reported honestly; signed artifacts match the tested commit. Any live-account validation requires explicit scope and authorization separately.
 
-## Phase 6 — Webull and additional brokerage support
+## Phase 6 â€” Webull and additional brokerage support
 
 1. Use the already-submitted Connect application; obtain approved scopes, redirect URI, sandbox access, order-event capabilities, and permitted market-data use. Do not submit a duplicate application.
 2. Confirm Webull's approved native-client architecture. Its documented OAuth flow includes server-held application secrets; never embed these in the open-source mobile binaries. A token-exchange service may expand the current relay's responsibilities and needs separate isolation and credential handling.
@@ -105,4 +105,4 @@ Exit gate: approved access, tested adapter, customer authorization/revocation fl
 
 ## Completion rule
 
-Call the Alpaca release complete only after Phases 1–5 pass with retained evidence. Call the full Webull-inclusive product complete only after Phase 6 also passes. Optional future brokers do not silently expand the release promise. Track unresolved defects and external dependencies separately from implemented features.
+Call the Alpaca release complete only after Phases 1â€“5 pass with retained evidence. Call the full Webull-inclusive product complete only after Phase 6 also passes. Optional future brokers do not silently expand the release promise. Track unresolved defects and external dependencies separately from implemented features.
