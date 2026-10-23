@@ -77,7 +77,7 @@ For the browser/Python intent device, open `/intent`. Its optional Alpaca execut
 
 Clients use durable journals and client order IDs to avoid blindly reposting an order after an uncertain submission. Broker network failures and cancellations can still leave outcomes **unresolved**; check the broker before taking further action. A stale instruction may expire instead of executing. The [intent protocol](docs/protocol/intent-v1.md) and [paper acceptance procedure](docs/intent-paper-acceptance.md) describe the contract and required validation.
 
-**Known engineering work:** A recent source review identified cancellation retry/reconciliation, definitive HTTP rejection handling, future-timestamp recovery, and malformed relay-event processing as areas needing corrective tests and fixes. Until those changes are verified, do **not** rely on unattended live-money mirroring. See repository issues/changes for the actual remediation status; a review is not proof that a fix has shipped.
+**Completion work:** Cancellation recovery now persists retry timing and requires a fresh broker lookup, including after restart. Future-created entries wait for their validity window. The [completion roadmap and phase graph](docs/project-completion-roadmap.md) track remaining protocol/rejection coverage, client setup and Discord parity, hosting, signed releases, Webull access, and real-device acceptance. Automated regression tests do not establish unattended live-money readiness.
 
 ## Data and security
 
@@ -103,6 +103,7 @@ Tests primarily use fixtures and mocked transports; they do **not** establish li
 
 ## Documentation
 
+- [Completion roadmap and implementation phases](docs/project-completion-roadmap.md)
 - [Intent mirroring and execution behavior](docs/intent-mirroring.md)
 - [Remote connection deployment](docs/remote-connect-setup.md)
 - [Windows desktop](desktop/README.md) · [iOS](ios/BUILD.md) · [Android](android/README.md)

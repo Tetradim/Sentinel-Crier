@@ -16,8 +16,9 @@ DEFAULTS = dict(enabled=False, mode='exact_limit', max_slippage_bps=100,
 TERMINAL = {'filled', 'canceled', 'expired', 'rejected', 'replaced', 'skipped'}
 
 class IntentEngine:
-    def __init__(self, path, broker):
+    def __init__(self, path, broker, clock=None):
         self.path, self.broker = str(path), broker
+        self.clock = clock or time.time
         self.worker = threading.Lock()
         with self._db() as db:
             db.executescript('''CREATE TABLE IF NOT EXISTS intent_events(id TEXT PRIMARY KEY, data TEXT NOT NULL);
@@ -28,6 +29,8 @@ class IntentEngine:
             CREATE TABLE IF NOT EXISTS intent_cancel_requested(cid TEXT PRIMARY KEY);
             CREATE TABLE IF NOT EXISTS intent_settled(id TEXT PRIMARY KEY, data TEXT);
             CREATE TABLE IF NOT EXISTS intent_trace(id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, monotonic_ns INTEGER NOT NULL, trade_id TEXT NOT NULL, event_id TEXT, stage TEXT NOT NULL, details TEXT NOT NULL);''')
+            if 'attempted_at' not in {r[1] for r in db.execute('PRAGMA table_info(intent_cancel_requested)')}:
+                db.execute('ALTER TABLE intent_cancel_requested ADD COLUMN attempted_at REAL')
     @contextmanager
     def _db(self):
         db=sqlite3.connect(self.path, timeout=30)
@@ -139,6 +142,7 @@ class IntentEngine:
         with self._db() as db:
             db.execute('UPDATE intent_orders SET status=?, broker_id=?, filled=? WHERE cid=?',(snap['status'],snap['id'],str(filled),order['cid']))
         self._trace(order['trade_id'],'broker_reconciled',client_order_id=order['cid'],status=snap['status'],filled_qty=str(filled),avg_fill_price=str(snap.get('filled_avg_price')) if snap.get('filled_avg_price') is not None else None,broker_created_at=snap.get('created_at'),broker_filled_at=snap.get('filled_at'))
+        return True
     def tick(self):
         try:
             with single_process(self.path+'.worker.lock'): return self._tick_locked()
@@ -172,27 +176,26 @@ class IntentEngine:
             pin=db.execute('SELECT environment,account FROM intent_pin WHERE id=1').fetchone()
             if pin and tuple(pin)!=(e['environment'],account): raise ValueError('Persisted account/environment mismatch')
             if not pin: db.execute('INSERT INTO intent_pin VALUES (1,?,?)',(e['environment'],account))
-        for order in self._orders(tid): self._reconcile(order)
+        reconciled={order['cid'] for order in self._orders(tid) if self._reconcile(order)}
         orders=self._orders(tid); active=[o for o in orders if o['status'] not in TERMINAL]
         cancel=[o for o in active if o['side']=='buy' and (row['invalid'] or row['skipped'] or o['sequence']!=e['sequence'])]
         if cancel:
             for order in cancel:
                 with self._db() as db:
-                    requested=db.execute('SELECT cid FROM intent_cancel_requested WHERE cid=?',(order['cid'],)).fetchone()
-                if order['broker_id'] and not requested:
+                    requested=db.execute('SELECT attempted_at FROM intent_cancel_requested WHERE cid=?',(order['cid'],)).fetchone()
+                now=self.clock()
+                due=not requested or requested['attempted_at'] is None or now-requested['attempted_at']>=5
+                if order['broker_id'] and order['cid'] in reconciled and order['status']!='pending_cancel' and due:
                     with self._db() as db:
-                        db.execute('INSERT INTO intent_cancel_requested VALUES (?)',(order['cid'],))
+                        db.execute('INSERT OR REPLACE INTO intent_cancel_requested(cid,attempted_at) VALUES (?,?)',(order['cid'],now))
                         db.execute("UPDATE intent_orders SET status='cancel_unknown' WHERE cid=?",(order['cid'],))
                     self._trace(tid,'cancel_requested',e['event_id'],client_order_id=order['cid'])
                     try:
                         self.broker.cancel(order['broker_id'])
                     except Exception as exc:
                         self._trace(tid,'cancel_uncertain',e['event_id'],client_order_id=order['cid'],error_type=type(exc).__name__)
-                        # The request may have reached the broker. Leave the order
-                        # nonterminal, but permit another cancellation attempt only
-                        # after the next tick has reconciled broker state.
-                        with self._db() as db:
-                            db.execute('DELETE FROM intent_cancel_requested WHERE cid=?',(order['cid'],))
+                        # Preserve the cooldown across failures and process restarts.
+                        # A retry always needs another validated broker snapshot.
                         raise
             return {'trade_id':tid,'state':'cancel_pending'}
         if active: return {'trade_id':tid,'state':'working'}

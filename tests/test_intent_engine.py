@@ -89,6 +89,7 @@ def test_cancel_is_requested_once(pair):
 
 def test_failed_cancel_is_retried_after_reconciliation(pair):
     e,b=pair
+    clock=[100.0]; e.clock=lambda:clock[0]
     x=event()
     e.accept(x)
     e.tick()
@@ -104,10 +105,46 @@ def test_failed_cancel_is_retried_after_reconciliation(pair):
     assert e.tick()[0]['state']=='reconcile_required'
     assert next(iter(b.orders.values()))['status']=='new'
     assert e.tick()[0]['state']=='cancel_pending'
+    assert len(attempts)==1
+    clock[0]+=5
+    e.tick()
     assert len(attempts)==2
     assert next(iter(b.orders.values()))['status']=='canceled'
     e.tick()
     assert len(attempts)==2
+
+@pytest.mark.parametrize('status,known,expected', [('new',True,1),('pending_cancel',True,0),('filled',True,0),('new',False,0)])
+def test_cancel_marker_recovers_after_restart_only_with_fresh_active_order(pair,status,known,expected):
+    e,b=pair; x=event(); e.accept(x); e.tick()
+    cid=b.sent[0]['client_order_id']; calls=[]; b.cancel=lambda oid:calls.append(oid)
+    e.accept(event('cancel',2,x['trade_id']))
+    # Legacy marker also represents a crash between durable reservation and DELETE.
+    with e._db() as db:
+        db.execute('INSERT INTO intent_cancel_requested(cid) VALUES (?)',(cid,))
+    b.orders[cid]['status']=status
+    if status=='filled': b.orders[cid]['filled_qty']='10'
+    if not known: b.orders.clear()
+    e=IntentEngine(e.path,b); e.tick()
+    assert len(calls)==expected
+    assert len(b.sent)==1
+
+def test_cancel_cooldown_survives_restart(pair):
+    e,b=pair; e.clock=lambda:100.0; x=event(); e.accept(x); e.tick()
+    calls=[]; b.cancel=lambda oid:calls.append(oid)
+    e.accept(event('cancel',2,x['trade_id'])); e.tick()
+    e=IntentEngine(e.path,b,clock=lambda:104.99); e.tick(); assert len(calls)==1
+    e.clock=lambda:105.0; e.tick(); assert len(calls)==2
+
+def test_legacy_cancellation_schema_is_migrated(tmp_path):
+    import sqlite3
+    path=tmp_path/'legacy.db'
+    with sqlite3.connect(path) as db:
+        db.execute('CREATE TABLE intent_cancel_requested(cid TEXT PRIMARY KEY)')
+        db.execute("INSERT INTO intent_cancel_requested VALUES ('legacy-client')")
+    engine=IntentEngine(path,Broker())
+    with engine._db() as db:
+        row=db.execute('SELECT cid,attempted_at FROM intent_cancel_requested').fetchone()
+    assert tuple(row)==('legacy-client',None)
 
 
 def test_ambiguous_cancel_that_succeeded_does_not_repeat(pair):

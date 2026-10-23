@@ -44,6 +44,12 @@ struct IntentPreferences: Codable {
 struct IntentMutation: Codable {
     var clientID: String; var eventID: String; var sell: Bool; var quantity: Int
     var order: AlpacaOrder?; var cancelUnknown = false
+    var cancelAttemptedAt: Date?
+    // Call only after validating a fresh broker lookup for this mutation.
+    func mayRetryCancellation(now: Date) -> Bool {
+        guard let order, !["filled", "canceled", "expired", "rejected", "replaced", "pending_cancel"].contains(order.status) else { return false }
+        return cancelAttemptedAt.map { now.timeIntervalSince($0) >= 5 } ?? true
+    }
     func validate(_ incoming: AlpacaOrder, symbol: String) throws {
         guard incoming.client_order_id == clientID, incoming.symbol == symbol,
               incoming.side == (sell ? "sell" : "buy"), !incoming.id.isEmpty,
@@ -113,6 +119,7 @@ struct IntentPairing: Codable {
     @Published private(set) var state: IntentState
     @Published private(set) var message = "Intent mirroring disconnected."
     private let file: URL
+    private let now: () -> Date
     private var api: AlpacaREST?; private var pair: IntentPairing?
     private var receiver: Task<Void, Never>?; private var worker: Task<Void, Never>?; private var transmitter: Task<Void, Never>?
     private var diagnosticWorker: Task<Void, Never>?
@@ -120,8 +127,9 @@ struct IntentPairing: Codable {
     private var diagnosticSession = UUID()
     private var quoteCaptures = Set<String>()
     private var processing = false; private var publishing = false
-    init(file: URL) throws {
+    init(file: URL, now: @escaping () -> Date = Date.init) throws {
         self.file = file
+        self.now = now
         state = FileManager.default.fileExists(atPath: file.path) ? try JSONDecoder().decode(IntentState.self, from: Data(contentsOf: file)) : IntentState()
     }
     static func local() throws -> IntentController {
@@ -135,8 +143,8 @@ struct IntentPairing: Codable {
         state = next
     }
     func settings(_ p: IntentPreferences) throws { _ = try p.price("1", sell: false); try commit { $0.preferences = p } }
-    func connect(api: AlpacaREST, account: String) throws {
-        guard let pair = try IntentPairing.load() else { return }
+    func connect(api: AlpacaREST, account: String, pairing: IntentPairing? = nil, startWorkers: Bool = true) throws {
+        guard let pair = try pairing ?? IntentPairing.load() else { return }
         guard pair.environment == api.environment else { throw AlpacaError.invalid("Pairing environment differs from broker.") }
         guard state.accountID.isEmpty || (state.accountID == account && state.pairingID == pair.fingerprint) else { throw AlpacaError.invalid("Intent journal is pinned to its original account and pairing. Recover its trades before changing channels.") }
         try commit { $0.accountID = account; $0.pairingID = pair.fingerprint }
@@ -144,6 +152,8 @@ struct IntentPairing: Codable {
         diagnosticClock = nil
         diagnosticSession = UUID()
         receiver?.cancel(); worker?.cancel(); transmitter?.cancel()
+        diagnosticWorker?.cancel()
+        guard startWorkers else { return }
         if pair.role == "follower" { receiver = Task { await receiveLoop() } }
         transmitter = Task { while !Task.isCancelled { await publish(); try? await Task.sleep(nanoseconds: 500_000_000) } }
         worker = Task { while !Task.isCancelled { await process(); try? await Task.sleep(nanoseconds: 2_000_000_000) } }
@@ -204,7 +214,7 @@ struct IntentPairing: Codable {
             } catch { message = error.localizedDescription; try? await Task.sleep(nanoseconds: 2_000_000_000) }
         }
     }
-    private func process() async {
+    func process() async {
         guard !processing, let api else { return }; processing = true; defer { processing = false }
         for id in Array(state.trades.keys) {
             do { try Task.checkCancellation(); try await execute(id, api: api) }
@@ -330,8 +340,12 @@ struct IntentPairing: Codable {
                 if let order = m.order, !terminal(order), m.eventID != e.event_id || e.action == "cancel" || e.action == "exit" && !m.sell {
                     try Task.checkCancellation()
                     guard self.api === api, pair != nil else { return }
-                    if !m.cancelUnknown {
-                        try commit { $0.trades[id]!.mutations[index].cancelUnknown = true }
+                    let attemptTime = now()
+                    if m.mayRetryCancellation(now: attemptTime) {
+                        try commit {
+                            $0.trades[id]!.mutations[index].cancelUnknown = true
+                            $0.trades[id]!.mutations[index].cancelAttemptedAt = attemptTime
+                        }
                         diagnosticStep(e.event_id, "cancel_dispatch", "broker=\(order.id)")
                         try await api.cancel(orderID: order.id)
                     }
@@ -349,11 +363,16 @@ struct IntentPairing: Codable {
         if !sell && !existing.isEmpty { return }
         if sell && existing.contains(where: { $0.order?.status != "filled" }) { message = "Exit is working or needs broker reconciliation; no duplicate sell submitted."; return }
         if !sell {
+            let currentTime = now()
+            if let created = IntentEvent.date(e.created_at), created > currentTime {
+                diagnosticStep(e.event_id, "entry_deferred", "Waiting for event creation time")
+                return
+            }
             guard trade.entrySkipped != true, hosting || !state.preferences.paused,
-                  let created = IntentEvent.date(e.created_at), let expires = IntentEvent.date(e.expires_at), created <= Date(), expires > Date(),
-                  Date().timeIntervalSince(created) <= Double(hosting ? 30 : state.preferences.maxAgeSeconds),
+                  let created = IntentEvent.date(e.created_at), let expires = IntentEvent.date(e.expires_at), expires > currentTime,
+                  currentTime.timeIntervalSince(created) <= Double(hosting ? 30 : state.preferences.maxAgeSeconds),
                   e.quantity <= (hosting ? 1000 : state.preferences.maxQuantity) else {
-                diagnosticStep(e.event_id, "entry_skipped", "Paused, expired, future dated, or outside local quantity/age limits")
+                diagnosticStep(e.event_id, "entry_skipped", "Paused, expired, or outside local quantity/age limits")
                 try commit { $0.trades[id]!.completed = e.event_id }; return
             }
         }

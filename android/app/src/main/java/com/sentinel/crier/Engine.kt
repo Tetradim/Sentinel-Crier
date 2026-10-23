@@ -1,7 +1,7 @@
 package com.sentinel.crier
 import org.json.JSONObject
 import java.time.Instant
-class Engine(private val journal:IntentStore,private val config:JSONObject,private val broker:BrokerPort=Broker(config),private val paused:()->Boolean) {
+class Engine(private val journal:IntentStore,private val config:JSONObject,private val broker:BrokerPort=Broker(config),private val clock:()->Instant={ Instant.now() },private val paused:()->Boolean) {
 
  private val terminal=setOf("filled","canceled","expired","rejected","replaced","superseded")
  fun step(e:JSONObject) {
@@ -12,7 +12,7 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
   for(o in orders) if(o.state !in terminal) {
    val remote=broker.order(o.client)
    if(remote==null) { journal.diagnostic(e.getString("event_id"),"reconciliation_wait","Broker outcome unknown; submission blocked"); return } // An ambiguous POST must never be repeated, even on a 404.
-   validate(remote,o.client,e.getString("symbol"),o.side,journal.meta("quantity:${o.client}").toIntOrNull(),o.filled)
+   validate(remote,o.client,e.getString("symbol"),o.side,journal.meta("quantity:${o.client}").toIntOrNull(),o.filled,o.broker)
    journal.update(o.client,remote)
   }
   orders=journal.orders(trade)
@@ -20,7 +20,10 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
   val shouldCancel=action in setOf("replace","cancel","exit") || seq<revision.first || revision.second
   if(shouldCancel) {
    for(o in orders.filter { it.side=="buy" && it.state !in terminal && (it.sequence!=seq || action in setOf("cancel","exit") || revision.second) }) {
-    if(journal.meta("cancel:${o.client}")!="requested") {
+    val lastAttempt=journal.meta("cancel_attempt_ms:${o.client}").toLongOrNull()
+    val now=clock().toEpochMilli()
+    if(o.state!="pending_cancel" && (lastAttempt==null || now-lastAttempt>=5000)) {
+     journal.setMeta("cancel_attempt_ms:${o.client}",now.toString())
      journal.setMeta("cancel:${o.client}","requested")
      journal.state(o.client,"cancel_unknown")
      journal.diagnostic(e.getString("event_id"),"cancel_requested",o.client)
@@ -43,8 +46,10 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
    return
   }
   if(!sell) {
-   val age=Instant.now().epochSecond-Instant.parse(e.getString("created_at")).epochSecond
-   if(!Policy.canEnter(revision.second,paused(),seq,revision.first,age,config.optInt("age",10)) || Instant.now()>Instant.parse(e.getString("expires_at")) || e.getInt("quantity")>config.optInt("maxQuantity",1000)) { journal.mark(e.getString("event_id"),false); return }
+   val now=clock(); val created=Instant.parse(e.getString("created_at"))
+   if(now<created) return // A future-created entry remains pending until its lifetime begins.
+   val age=java.time.Duration.between(created,now).seconds
+   if(!Policy.canEnter(revision.second,paused(),seq,revision.first,age,config.optInt("age",10)) || now>created.plusSeconds(config.optInt("age",10).toLong()) || now>=Instant.parse(e.getString("expires_at")) || e.getInt("quantity")>config.optInt("maxQuantity",1000)) { journal.mark(e.getString("event_id"),false); return }
   }
   if(orders.any { it.state !in terminal }) return
   val remaining=e.getInt("quantity")-orders.filter { it.sequence==seq && it.side=="sell" }.sumOf { it.filled }
@@ -59,7 +64,7 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
    journal.setMeta("quantity:$client",qty.toString())
    journal.unknown(client,trade,seq,if(sell) "sell" else "buy")
   }
-  try { val result=broker.submit(e,client,qty,sell) { val current=journal.revision(trade); current.first==seq && (sell || (!current.second && !paused() && Instant.now()<=Instant.parse(e.getString("expires_at")))) }; validate(result,client,e.getString("symbol"),if(sell) "sell" else "buy",qty,0); journal.update(client,result) }
+  try { val result=broker.submit(e,client,qty,sell) { val current=journal.revision(trade); val now=clock(); current.first==seq && (sell || (!current.second && !paused() && now>=Instant.parse(e.getString("created_at")) && now<=Instant.parse(e.getString("created_at")).plusSeconds(config.optInt("age",10).toLong()) && now<Instant.parse(e.getString("expires_at")))) }; validate(result,client,e.getString("symbol"),if(sell) "sell" else "buy",qty,0); journal.update(client,result) }
   catch(_:Superseded) { journal.state(client,"superseded") }
   catch(error:HttpError) {
    if(error.status in setOf(400,401,403)) {
@@ -69,7 +74,8 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
    throw error
   }
  }
- private fun validate(order:JSONObject,client:String,symbol:String,side:String,quantity:Int?,previous:Int) {
+ private fun validate(order:JSONObject,client:String,symbol:String,side:String,quantity:Int?,previous:Int,expectedBroker:String="") {
+  require(order.getString("id").isNotBlank() && (expectedBroker.isBlank() || order.getString("id")==expectedBroker)) { "Broker order ID changed" }
   require(quantity!=null && order.getString("client_order_id")==client && order.getString("symbol")==symbol && order.getString("side")==side && order.getString("qty").toBigDecimal()==quantity.toBigDecimal()) { "Broker order identity mismatch" }
   val filled=order.getString("filled_qty").toBigDecimal()
   require(filled>=previous.toBigDecimal() && filled<=quantity.toBigDecimal() && filled.stripTrailingZeros().scale()<=0) { "Invalid cumulative fill" }
