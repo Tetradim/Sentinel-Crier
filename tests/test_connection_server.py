@@ -19,3 +19,11 @@ def test_standalone_relay_has_no_broker_control_and_can_pair(tmp_path):
 def test_body_limit_rejects_large_chunked_requests(tmp_path):
     with TestClient(create_connection_app(Config(data_dir=tmp_path,token='o'*32))) as client:
         assert client.post('/api/connect/host',content=iter([b'x'*20000,b'x'*20000])).status_code==413
+
+def test_startup_cannot_initialize_database_while_restore_lock_is_owned(tmp_path):
+    import pytest
+    from crier.lock import single_process, AlreadyRunningError
+    config=Config(data_dir=tmp_path,token='o'*32)
+    with single_process(tmp_path/'connection-server.lock'):
+        with pytest.raises(AlreadyRunningError): create_connection_app(config)
+    assert not (tmp_path/'intent-relay.sqlite3').exists()

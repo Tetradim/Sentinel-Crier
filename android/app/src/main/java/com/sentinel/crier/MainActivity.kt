@@ -27,7 +27,7 @@ class MainActivity:Activity() {
   var candidate=JSONObject(old.toString())
   var newConnection=false
   val environment=field("Account environment: paper / live",old.optString("environment","paper"))
-  val service=field("Connection service HTTPS URL (Advanced; or use invitation link)",old.optString("url"))
+  val service=field("Connection service HTTPS URL (Advanced; or use invitation link)",old.optString("url",QuickConnection.defaultOrigin(this)))
   val invitation=field("Receiver invitation link or 16-character code","",true)
   val key=field("Your Alpaca API key",old.optString("key"),true); val secret=field("Your Alpaca secret",old.optString("secret"),true)
   val mode=field("Pricing: exact_limit / bounded_limit / market",old.optString("mode","exact_limit"))

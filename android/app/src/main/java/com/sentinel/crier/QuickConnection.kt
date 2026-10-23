@@ -4,6 +4,10 @@ import org.json.JSONObject
 import org.json.JSONArray
 
 object QuickConnection {
+ fun defaultOrigin(context:android.content.Context):String = runCatching {
+  val value=context.assets.open("connection-service.json").bufferedReader().use { JSONObject(it.readText()).optString("url") }
+  if(value.isBlank()) "" else origin(value)
+ }.getOrDefault("")
  data class Invitation(val origin:String,val code:String)
  fun origin(text:String):String {
   val u=URI(text.trim())

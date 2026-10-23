@@ -1,13 +1,15 @@
 """Dedicated internet relay: pairing and transport only, no brokerage workers."""
 from contextlib import asynccontextmanager
+import asyncio
 import hmac
 import os
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from .config import Config
 from .intent_relay import IntentRelay, sync_router
 from .quick_connect import ConnectionService, connection_router
 from .lock import single_process
+from .relay_ops import RelayOperations, RequestMetrics
 
 
 class BodyLimit:
@@ -39,19 +41,33 @@ class BodyLimit:
 
 def create_connection_app(config=None):
     config=config or Config.from_env()
-    relay=IntentRelay(config.data_dir/'intent-relay.sqlite3')
+    # Schema setup also writes SQLite; serialize it with offline restore.
+    with single_process(config.data_dir/'connection-server.lock'):
+        relay=IntentRelay(config.data_dir/'intent-relay.sqlite3')
     @asynccontextmanager
     async def lifespan(app):
         # Long-poll notifications are in-process: deploy exactly one worker.
         with single_process(config.data_dir/'connection-server.lock'):
-            yield
+            from .relay_backup import create_backup
+            from .relay_maintenance import backup_options, backup_loop
+            destination, interval, retention = backup_options(config.data_dir)
+            stop = asyncio.Event()
+            maintenance = asyncio.create_task(backup_loop(config.data_dir,destination,interval,retention,stop,app.state.relay_ops,create_backup))
+            try:
+                yield
+            finally:
+                stop.set()
+                # Finish any online snapshot before releasing the process lock.
+                await maintenance
     app=FastAPI(title='Crier Connection Service',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
     app.add_middleware(BodyLimit)
     def owner(authorization:str=Header(default='')):
         if not hmac.compare_digest(authorization.encode(),('Bearer '+config.token).encode()):
             raise HTTPException(401,'Owner authorization required')
-    app.include_router(sync_router(relay,owner))
-    app.include_router(connection_router(ConnectionService(relay),config.public_pairing_enabled))
+    transport_routes = sync_router(relay,owner)
+    pairing_routes = connection_router(ConnectionService(relay),config.public_pairing_enabled)
+    app.include_router(transport_routes)
+    app.include_router(pairing_routes)
 
     @app.middleware('http')
     async def private_responses(request,call_next):
@@ -62,15 +78,28 @@ def create_connection_app(config=None):
         response.headers['Content-Security-Policy']="default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
         return response
 
+    operations = RelayOperations(relay)
+    app.state.relay = relay
+    app.state.relay_ops = operations
+
+    @app.get('/api/ops', dependencies=[Depends(owner)])
+    def operational_status():
+        status = operations.snapshot()
+        return JSONResponse(status, status_code=200 if status['ready'] else 503)
+
     @app.get('/health')
     def health():
-        with relay.db() as db: db.execute('SELECT 1').fetchone()
-        return {'status':'ok','pairing_enabled':config.public_pairing_enabled,'protocol':1}
+        ready = operations.public_ready()
+        return JSONResponse({'status': 'ok' if ready else 'unavailable',
+                             'pairing_enabled': config.public_pairing_enabled, 'protocol': 1},
+                            status_code=200 if ready else 503)
 
     @app.get('/connect',response_class=HTMLResponse)
     def invitation_page():
         return '<!doctype html><title>Sentinel Crier invitation</title><h1>Open Sentinel Crier</h1><p>Copy the full invitation address, paste it into the app, and press Receive. Invitations are private, single use, and expire after ten minutes.</p>'
 
+    known_routes = frozenset(getattr(route,'path',None) for route in [*app.routes,*transport_routes.routes,*pairing_routes.routes]) - {None}
+    app.add_middleware(RequestMetrics, operations=operations, routes=known_routes)
     return app
 
 

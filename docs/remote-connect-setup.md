@@ -24,10 +24,10 @@ Render Blueprint for a dedicated relay. It starts no brokerage or Discord worker
 5. For distributions with no customer service setting, run:
 
    ```powershell
-   python scripts/configure_connection_service.py https://YOUR-ASSIGNED-HOST
+   python scripts/configure_connection_service.py https://YOUR-ASSIGNED-HOST --verify
    ```
 
-   Rebuild/distribute Windows and iOS. Both bundle `crier/connection-service.json`.
+   Rebuild/distribute Windows, Android, and iOS. All three bundle `crier/connection-service.json`.
    The resource contains only a public URL, never an owner or brokerage key.
 
 The template does not auto-deploy on every source commit. Schedule manual upgrades;
@@ -67,8 +67,7 @@ fails after pairing, the app preserves the pairing so login can be retried.
 
 Keep iOS foregrounded and the PC awake. Internet/broker latency still exists. No
 physical interstate paper trial has been performed by automated tests. Run the
-[paper acceptance checks](intent-paper-acceptance.md). Android remains compatible
-with the existing manual intent pairing; this change adds quick buttons to iOS and Windows.
+[paper acceptance checks](intent-paper-acceptance.md). Android also supports invitation-based Host/Receive and keeps separate saved connection profiles.
 
 ## Operator receiver controls
 
@@ -78,3 +77,14 @@ Revoking one receiver blocks future reads without affecting others. The owner ca
 revoke a full channel with the existing `/api/sync/revoke/{id}` endpoint. Revocation
 does not cancel broker orders that already exist. The service must be trusted: it
 can see trade instructions and pairing credentials when serving requests.
+
+
+## Operational acceptance before customer use
+
+Use the relay-specific `Dockerfile.relay` when deploying a container. The default Dockerfile starts the broader monitor application. Preserve the data volume and deploy a single relay process. Run the online backup/verification and restoration procedure in [relay backups](relay-backups.md); keep an encrypted off-host copy separately from the service disk.
+
+Scheduled backups run at startup and every `CRIER_BACKUP_INTERVAL_SECONDS` (default 86400). `CRIER_BACKUP_RETAIN` defaults to 7 snapshots; `CRIER_BACKUP_DIR` defaults to the data directory's `backups` folder. Configure a separate persistent mount if using a different directory. Same-disk backups protect against accidental database changes, not disk or account loss.
+
+Use [operational status](relay-operations.md) for readiness, disk thresholds, authenticated metrics and last backup outcome. Configure the hosting provider's health/failure notifications and ensure an operator receives them; this repository does not send unsolicited email, Discord or brokerage notifications.
+
+Run the [declared-load benchmark](relay-capacity.md), then repeat real-client cross-network acceptance against the actual HTTPS service. Local ASGI timings do not measure cellular, interstate internet, TLS proxy, brokerage, or fill latency. A Render persistent-disk deployment can interrupt service during maintenance: reconnecting receivers retain their cursors; expired entries are not replayed as fresh trades.
