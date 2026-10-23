@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 import threading
-from urllib.parse import urlsplit
+from .service_url import service_url
 
 import httpx
 
@@ -142,10 +142,9 @@ class DesktopSession:
             provisional=self.connection_client().saved()
             if provisional and pair!=provisional:
                 raise ValueError('This device is pinned to its saved pairing; replacing it would abandon its journal.')
-            url = urlsplit(pair['url'])
-            if (url.scheme != 'https' or not url.hostname or url.username or url.password
-                    or url.query or url.fragment or url.path not in ('', '/') or not 32 <= len(pair['token']) <= 256):
-                raise ValueError('Pairing must contain an HTTPS relay origin and valid token.')
+            service_url(pair['url'])
+            if not 32 <= len(pair['token']) <= 256:
+                raise ValueError('Pairing must contain an HTTPS service address and valid token.')
             if pair['environment'] == 'live' and not allow_live:
                 raise ValueError('Select Allow live account to connect a live pairing.')
             if bool(key.strip()) != bool(secret.strip()):

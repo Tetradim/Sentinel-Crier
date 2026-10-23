@@ -31,6 +31,14 @@ class Phase2FlowTest {
   for(text in listOf("http://relay.example","https://user:secret@relay.example","https://relay.example/path","https://relay.example?token=x","https://relay.example#x")) assertTrue(text,runCatching { QuickConnection.origin(text) }.isFailure)
   assertTrue(runCatching { QuickConnection.invitation("https://relay.example/connect?secret=x#ABCDEFGHIJKLMNOP","") }.isFailure)
  }
+ @Test fun supabaseGatewayPreservesInvitationBaseAndEndpointPath() {
+  val base="https://project.supabase.co/functions/v1/crier"
+  assertEquals(base,QuickConnection.origin("$base/"))
+  assertEquals(QuickConnection.Invitation(base,"ABCDEFGHIJKLMNOP"),QuickConnection.invitation("$base/connect#ABCDEFGHIJKLMNOP",""))
+  assertEquals("/functions/v1/crier/api/sync/events",java.net.URI("${QuickConnection.origin(base)}/api/sync/events").path)
+  for(suffix in listOf("/other","?","#","/../other","//","/%63onnect")) assertTrue(suffix,runCatching { QuickConnection.origin(base+suffix) }.isFailure)
+  assertTrue(runCatching { QuickConnection.invitation("$base/other/connect#ABCDEFGHIJKLMNOP","") }.isFailure)
+ }
  private fun config()=JSONObject().put("account","account").put("environment","paper").put("role","host").put("url","https://relay.example").put("token","token").put("key","old-key").put("secret","old-secret")
  @Test fun settingsMigrationAndCredentialRotationKeepLegacyJournalAndIdentity() {
   val r=Settings.migrate(config()); assertEquals("intent.db",Settings.journalName(Settings.active(r)))

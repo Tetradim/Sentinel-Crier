@@ -1,0 +1,48 @@
+name: Supabase relay tests
+on:
+  push:
+    paths: ['supabase/**', '.github/workflows/supabase-tests.yml']
+  pull_request:
+    paths: ['supabase/**', '.github/workflows/supabase-tests.yml']
+permissions:
+  contents: read
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: local-test-only
+          POSTGRES_DB: crier_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: PostgreSQL compatible local tests
+        run: npm ci --prefix supabase/tests && npm test --prefix supabase/tests
+      - name: Real PostgreSQL migration and security tests
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGPASSWORD: local-test-only
+          PGDATABASE: crier_test
+        run: |
+          psql -v ON_ERROR_STOP=1 -c 'CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role; CREATE SCHEMA extensions;'
+          for migration in supabase/migrations/*.sql; do psql -v ON_ERROR_STOP=1 -f "$migration"; done
+          for test in supabase/tests/*.sql; do psql -v ON_ERROR_STOP=1 -f "$test"; done
+          psql -v ON_ERROR_STOP=1 -c "SET crier.test_dsn = 'host=127.0.0.1 port=5432 dbname=crier_test user=postgres password=local-test-only';" -f supabase/tests/integration/concurrency.sql
+      - name: Edge gateway tests and type checks
+        run: |
+          npm exec --yes --package deno@2.9.6 -- deno test supabase/functions/crier/gateway_test.ts
+          npm exec --yes --package deno@2.9.6 -- deno check supabase/functions/crier/index.ts
+          npm exec --yes --package deno@2.9.6 -- deno lint supabase/functions/crier

@@ -9,9 +9,8 @@ struct MirrorPairing: Codable {
     let environment: AlpacaEnvironment
     static func decode(_ text: String) throws -> MirrorPairing {
         let pair = try JSONDecoder().decode(Self.self, from: Data(text.utf8))
-        guard pair.url.scheme == "https", pair.url.host != nil, pair.url.user == nil,
-              pair.url.password == nil, pair.url.query == nil, pair.url.fragment == nil,
-              ["", "/"].contains(pair.url.path), pair.token.count >= 32 else {
+        _ = try QuickConnection.origin(pair.url.absoluteString)
+        guard pair.token.count >= 32 else {
             throw AlpacaError.invalid("Paste the HTTPS pairing from the receiver's Mirror page.")
         }
         return pair

@@ -9,8 +9,8 @@ from urllib.parse import urlsplit
 def validate(value):
     value=value.strip().rstrip('/')
     url=urlsplit(value)
-    if url.scheme!='https' or not url.hostname or url.username or url.password or url.path or url.query or url.fragment:
-        raise ValueError('Provide the deployed HTTPS origin, without a path or credentials.')
+    if url.scheme!='https' or not url.hostname or url.username or url.password or url.path not in ('','/functions/v1/crier') or url.query or url.fragment:
+        raise ValueError('Provide an HTTPS origin or exact /functions/v1/crier gateway, without credentials.')
     if url.port is not None and not 1 <= url.port <= 65535:
         raise ValueError('Invalid HTTPS port')
     return value

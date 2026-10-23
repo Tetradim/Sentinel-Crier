@@ -40,10 +40,12 @@ def test_account_discovery_uses_selected_broker_and_checks_status():
             assert await discover_account('paper','key','secret',client=client) == 'account-one'
     asyncio.run(run())
 
-def test_desktop_connection_is_paused_and_secrets_protected(tmp_path):
+@pytest.mark.parametrize('base',['https://relay.example','https://project.supabase.co/functions/v1/crier'])
+def test_desktop_connection_is_paused_and_secrets_protected(tmp_path, base):
     async def run():
         session = DesktopSession(tmp_path, account_lookup=account, broker_factory=Broker, start_workers=False)
-        await session.connect(json.dumps(PAIR), 'private-key', 'private-secret')
+        await session.connect(json.dumps(dict(PAIR, url=base+'/')), 'private-key', 'private-secret')
+        assert session.device.pair['url'] == base+'/'
         assert not session.status()['execution']['settings']['enabled']
         assert session.status()['account'] == 'account-one'
         assert 'private-secret' not in json.dumps(session.status())
@@ -101,7 +103,8 @@ def test_manual_pair_cannot_replace_provisional_quick_pair(tmp_path):
         assert not session.status()['connected']
     asyncio.run(run())
 
-def test_ios_wire_event_reaches_desktop_broker_without_waiting_for_fill(tmp_path, monkeypatch):
+@pytest.mark.parametrize('prefix',['','/functions/v1/crier'])
+def test_ios_wire_event_reaches_desktop_broker_without_waiting_for_fill(tmp_path, monkeypatch, prefix):
     from fastapi import FastAPI
     from crier.intent_relay import IntentRelay, sync_router
     from test_intent_relay import event
@@ -126,9 +129,9 @@ def test_ios_wire_event_reaches_desktop_broker_without_waiting_for_fill(tmp_path
     async def run():
         relay = IntentRelay(tmp_path/'relay.sqlite3')
         app = FastAPI()
-        app.include_router(sync_router(relay, lambda: None))
+        app.include_router(sync_router(relay, lambda: None), prefix=prefix)
         channel = relay.create('iPhone to desktop', 'paper')
-        pairing = dict(PAIR, token=channel['follower_token'])
+        pairing = dict(PAIR, url=PAIR['url']+prefix, token=channel['follower_token'])
         client_type = httpx.AsyncClient
         transport = httpx.ASGITransport(app=app)
         monkeypatch.setattr(intent_device.httpx, 'AsyncClient',
@@ -140,7 +143,7 @@ def test_ios_wire_event_reaches_desktop_broker_without_waiting_for_fill(tmp_path
             # Same JSON contract as IntentEvent.make in the native iOS app.
             instruction = event(symbol='SPY261212C00750000', asset='option', quantity=2, limit_price='0.20')
             async with client_type(transport=transport, base_url=PAIR['url']) as client:
-                response = await client.post('/api/sync/events', json=instruction.to_dict(),
+                response = await client.post(prefix+'/api/sync/events', json=instruction.to_dict(),
                     headers={'Authorization':'Bearer '+channel['host_token']})
                 assert response.status_code == 200
                 async def received():

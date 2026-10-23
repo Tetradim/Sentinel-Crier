@@ -9,12 +9,8 @@ from .quick_connect import normalize_code
 
 
 def validate_origin(value):
-    value=value.strip()
-    parsed=urlsplit(value)
-    if (parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password
-            or parsed.query or parsed.fragment or parsed.path not in ('','/')):
-        raise ValueError('Set the deployed HTTPS connection-service address first.')
-    return value.rstrip('/')
+    from .service_url import service_url
+    return service_url(value)
 
 
 def default_origin():
@@ -29,9 +25,9 @@ def parse_invitation(text, origin):
     text=text.strip()
     if '://' in text:
         url=urlsplit(text)
-        if url.path!='/connect' or url.query or url.username or url.password:
+        if url.path not in ('/connect','/functions/v1/crier/connect') or '?' in text or url.username is not None or url.password is not None:
             raise ValueError('Paste the invitation shared by the host.')
-        return validate_origin(f'{url.scheme}://{url.netloc}'),normalize_code(url.fragment)
+        return validate_origin(f'{url.scheme}://{url.netloc}{url.path[:-len("/connect")]}'),normalize_code(url.fragment)
     return validate_origin(origin),normalize_code(text)
 
 

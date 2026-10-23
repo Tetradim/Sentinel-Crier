@@ -175,9 +175,8 @@ struct IntentPairing: Codable {
     var url: URL; var token: String; var environment: AlpacaEnvironment; var role: String
     static func decode(_ text: String) throws -> Self {
         let p = try JSONDecoder().decode(Self.self, from: Data(text.utf8))
-        guard p.url.scheme == "https", p.url.host != nil, p.url.user == nil, p.url.password == nil,
-              p.url.query == nil, p.url.fragment == nil, ["", "/"].contains(p.url.path),
-              ["host", "follower"].contains(p.role), p.token.count >= 32 else { throw AlpacaError.invalid("Use an HTTPS intent pairing with host or follower role.") }
+        _ = try QuickConnection.origin(p.url.absoluteString)
+        guard ["host", "follower"].contains(p.role), p.token.count >= 32 else { throw AlpacaError.invalid("Use an HTTPS intent pairing with host or follower role.") }
         return p
     }
     var fingerprint: String { SHA256.hash(data: Data((url.absoluteString + token + role).utf8)).map { String(format: "%02x", $0) }.joined() }

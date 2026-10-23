@@ -263,9 +263,14 @@ final class Phase2RecoveryTests: XCTestCase {
             if request.httpMethod == "POST" { return (200, Data(#"{"revoked":true}"#.utf8)) }
             return (200, try JSONSerialization.data(withJSONObject: [["id": id, "created": 1_800_000_000, "revoked": 0]]))
         }
-        let receivers = try await QuickConnection.receivers(pair("host"), session: session())
-        try await QuickConnection.revoke(XCTUnwrap(receivers.first), pairing: pair("host"), session: session())
-        XCTAssertEqual(requests, ["/api/connect/receivers", "/api/connect/receivers/" + id + "/revoke"])
+        for prefix in ["", "/functions/v1/crier"] {
+            requests.removeAll()
+            var pairing = pair("host")
+            pairing.url = URL(string: "https://project.supabase.co" + prefix)!
+            let receivers = try await QuickConnection.receivers(pairing, session: session())
+            try await QuickConnection.revoke(XCTUnwrap(receivers.first), pairing: pairing, session: session())
+            XCTAssertEqual(requests, [prefix + "/api/connect/receivers", prefix + "/api/connect/receivers/" + id + "/revoke"])
+        }
     }
 }
 

@@ -9,7 +9,7 @@ import sqlite3
 import threading
 import time
 import random
-from urllib.parse import urlsplit
+from .service_url import service_url
 from uuid import uuid4
 import httpx
 from pydantic import ValidationError
@@ -79,10 +79,7 @@ class IntentDevice:
         self.engine=IntentEngine(self.folder/('intent-'+self.fingerprint+'.sqlite3'),self.broker) if self.broker and self.pair else None
     def configure(self,pair):
         if set(pair)!={'url','token','environment','role'}: raise ValueError('Paste a complete intent pairing')
-        url=urlsplit(pair['url'])
-        local=url.scheme=='http' and url.hostname in ('127.0.0.1','localhost','::1')
-        if ((url.scheme!='https' and not local) or not url.hostname or url.username or url.password or url.query or url.fragment or url.path not in ('','/')):
-            raise ValueError('Use an HTTPS origin (localhost HTTP for PC development only)')
+        service_url(pair['url'], allow_local=True)
         if not isinstance(pair['token'],str) or not 32<=len(pair['token'])<=256 or pair['environment'] not in ('paper','live') or pair['role'] not in ('host','follower'):
             raise ValueError('Invalid intent pairing')
         with self.lock:

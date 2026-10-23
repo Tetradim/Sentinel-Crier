@@ -4,7 +4,11 @@ The iPhone and Windows apps connect **outward** to one shared HTTPS service. The
 are no customer router changes, exposed trading ports or Discord parsing. Each
 receiver gets its own read-only channel credential; brokerage keys stay on-device.
 
-## One-time operator deployment
+## Supabase Free testing
+
+The selected cross-network testing backend is Supabase Free. Follow [Supabase setup](supabase-setup.md) to create a dedicated project, deploy the PostgreSQL migration and Edge Function, and configure the exact `/functions/v1/crier` gateway URL. No Supabase project or hosted endpoint has been created by these repository changes. The initial transport is durable bounded HTTP polling; Supabase Realtime push and shared-user login are not added implicitly.
+
+## Alternative: one-time Python operator deployment
 
 There is **no hosted Sentinel service configured yet**. The repository includes a
 Render Blueprint for a dedicated relay. It starts no brokerage or Discord workers.

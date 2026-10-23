@@ -15,10 +15,11 @@ enum QuickConnection {
         guard !value.isEmpty else { throw AlpacaError.invalid("Set up a hosted connection service and enter its HTTPS URL in Advanced, or paste a receiver invitation link.") }
         guard var parts = URLComponents(string: value), parts.scheme == "https", let host = parts.host, !host.isEmpty,
               parts.user == nil, parts.password == nil, parts.query == nil, parts.fragment == nil,
-              ["", "/"].contains(parts.path), parts.port == nil || (1...65535).contains(parts.port!) else {
-            throw AlpacaError.invalid("Connection service must be an HTTPS origin without credentials, path, query or fragment.")
+              ["", "/", "/functions/v1/crier", "/functions/v1/crier/"].contains(parts.percentEncodedPath), parts.port == nil || (1...65535).contains(parts.port!) else {
+            throw AlpacaError.invalid("Connection service must be an HTTPS origin or /functions/v1/crier gateway base without credentials, query or fragment.")
         }
-        parts.path = ""
+        parts.path = parts.path == "/" ? "" : parts.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        if !parts.path.isEmpty { parts.path = "/" + parts.path }
         guard let url = parts.url else { throw AlpacaError.invalid("Invalid connection service URL.") }
         return url
     }
@@ -32,10 +33,10 @@ enum QuickConnection {
     static func invitation(_ text: String, service: String) throws -> Invitation {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if value.contains("://") {
-            guard var parts = URLComponents(string: value), parts.path == "/connect", parts.query == nil, let fragment = parts.fragment else {
+            guard var parts = URLComponents(string: value), ["/connect", "/functions/v1/crier/connect"].contains(parts.percentEncodedPath), parts.query == nil, let fragment = parts.fragment else {
                 throw AlpacaError.invalid("Invalid invitation link.")
             }
-            parts.path = ""; parts.fragment = nil
+            parts.percentEncodedPath = String(parts.percentEncodedPath.dropLast("/connect".count)); parts.fragment = nil
             return Invitation(url: try origin(parts.string ?? ""), code: try code(fragment))
         }
         return Invitation(url: try origin(service), code: try code(value))

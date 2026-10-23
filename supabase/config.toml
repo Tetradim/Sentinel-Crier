@@ -1,0 +1,6 @@
+project_id = "sentinel-crier"
+
+[functions.crier]
+# Crier uses its own opaque host/receiver tokens, validated by the DB RPC on
+# every protected call. Supabase JWT validation would reject those tokens.
+verify_jwt = false

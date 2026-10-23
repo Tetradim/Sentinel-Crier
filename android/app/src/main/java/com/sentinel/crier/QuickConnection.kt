@@ -11,14 +11,14 @@ object QuickConnection {
  data class Invitation(val origin:String,val code:String)
  fun origin(text:String):String {
   val u=URI(text.trim())
-  require(u.scheme=="https" && !u.host.isNullOrBlank() && u.userInfo==null && u.query==null && u.fragment==null && u.path in listOf("","/") && (u.port==-1 || u.port in 1..65535)) { "Enter an HTTPS connection service origin without a path, query or credentials." }
+  require(u.scheme=="https" && !u.host.isNullOrBlank() && u.userInfo==null && u.query==null && u.fragment==null && u.rawPath in listOf("","/","/functions/v1/crier","/functions/v1/crier/") && (u.port==-1 || u.port in 1..65535)) { "Enter an HTTPS connection service address or /functions/v1/crier gateway base without query or credentials." }
   return u.toString().trimEnd('/')
  }
  fun code(text:String):String = text.uppercase(java.util.Locale.ROOT).filter { !it.isWhitespace() && it!='-' }.also { require(it.matches(Regex("[A-Z2-7]{16}"))) { "Enter a 16-character invitation code or complete invitation link." } }
  fun invitation(text:String,service:String):Invitation {
   if(!text.contains("://")) return Invitation(origin(service),code(text))
-  val u=URI(text.trim()); require(u.path=="/connect" && u.query==null && u.fragment!=null) { "Invalid invitation link" }
-  return Invitation(origin(URI(u.scheme,u.authority,"",null,null).toString()),code(u.fragment))
+  val u=URI(text.trim()); require(u.rawPath in listOf("/connect","/functions/v1/crier/connect") && u.query==null && u.fragment!=null) { "Invalid invitation link" }
+  return Invitation(origin(u.toString().substringBefore('#').removeSuffix("/connect")),code(u.fragment))
  }
  private fun credential(value:JSONObject,origin:String,role:String,environment:String):JSONObject {
   require(value.getString("role")==role && value.getString("environment")==environment && value.getString("token").isNotBlank()) { "Invitation environment or role differs. Select the matching environment." }
