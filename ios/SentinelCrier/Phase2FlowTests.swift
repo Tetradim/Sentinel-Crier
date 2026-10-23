@@ -31,7 +31,8 @@ final class Phase2SettingsTests: XCTestCase {
         let preferences = try JSONDecoder().decode(IntentPreferences.self, from: Data(#"{"mode":"bounded_limit","maxQuantity":5}"#.utf8))
         XCTAssertTrue(preferences.paused)
         XCTAssertEqual(preferences.maxQuantity, 5)
-        XCTAssertEqual(try preferences.price("0.20", sell: false), "0.20")
+        let price = try XCTUnwrap(preferences.price("0.20", sell: false))
+        XCTAssertEqual(Decimal(string: price), Decimal(string: "0.20"))
         XCTAssertThrowsError(try JSONDecoder().decode(IntentPreferences.self, from: Data(#"{"mode":"unsafe"}"#.utf8)))
     }
     func testAlertSettingsPersistWithoutWebhookOrAccountAndProvenanceIsPinned() throws {
