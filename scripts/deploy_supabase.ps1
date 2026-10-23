@@ -15,7 +15,7 @@ try {
     }
     & npx --yes supabase@2.122.0 link --project-ref $ProjectRef
     if ($LASTEXITCODE -ne 0) { throw 'Could not link the selected Supabase project.' }
-    & npx --yes supabase@2.122.0 db push
+    & npx --yes supabase@2.122.0 db push --linked
     if ($LASTEXITCODE -ne 0) { throw 'Database migration failed; connection URL was not changed.' }
     & npx --yes supabase@2.122.0 functions deploy crier --project-ref $ProjectRef
     if ($LASTEXITCODE -ne 0) { throw 'Function deployment failed; connection URL was not changed.' }

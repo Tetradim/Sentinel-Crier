@@ -76,3 +76,14 @@ npx --yes --package deno@2.9.6 deno check supabase/functions/crier/index.ts
 ```
 
 They cover route prefixes, token forwarding, missing/malformed credentials, streamed body limits, safe errors, database health, bounded durable polling, and revocation while polling. Database integration tests are separate; passing gateway tests does not establish that a real project was migrated or deployed successfully.
+
+
+## Configured test project
+
+As of October 23, 2026, the backend is deployed to the owner-created test project. The shared native configuration points to:
+
+`https://afvumgzbfqyrugjqrteu.supabase.co/functions/v1/crier`
+
+A hosted synthetic PAPER check passed health, two independent receiver invitations, exact payload delivery, idempotent publication, unauthorized/wrong-role rejection, and independent receiver revocation. Both test receivers were revoked at completion. No brokerage connection or order was made. The aggregate publish + duplicate + two-read sequence took 1490.631 ms on this run; it is not a per-order latency claim. The redacted local report is `dist/supabase-hosted-check.json`.
+
+Run the isolated hosted check deliberately with `python -m scripts.check_hosted_relay <gateway>`. It provisions a new synthetic channel and revokes its receivers; it consumes Free test quotas. Rebuild each platform to bundle the configured address. Real iPhone/Android/Windows cross-network lifecycle, background behavior, broker accuracy, and latency acceptance are still required. Management login credentials and temporary CLI state are excluded from source control.

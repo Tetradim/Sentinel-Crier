@@ -6,7 +6,7 @@ receiver gets its own read-only channel credential; brokerage keys stay on-devic
 
 ## Supabase Free testing
 
-The selected cross-network testing backend is Supabase Free. Follow [Supabase setup](supabase-setup.md) to create a dedicated project, deploy the PostgreSQL migration and Edge Function, and configure the exact `/functions/v1/crier` gateway URL. No Supabase project or hosted endpoint has been created by these repository changes. The initial transport is durable bounded HTTP polling; Supabase Realtime push and shared-user login are not added implicitly.
+The selected cross-network testing backend is Supabase Free. Follow [Supabase setup](supabase-setup.md) to create a dedicated project, deploy the PostgreSQL migration and Edge Function, and configure the exact `/functions/v1/crier` gateway URL. The owner-created Supabase project is now deployed and its gateway URL is bundled; see the hosted-check evidence in the setup guide. The initial transport is durable bounded HTTP polling; Supabase Realtime push and shared-user login are not added implicitly.
 
 ## Alternative: one-time Python operator deployment
 

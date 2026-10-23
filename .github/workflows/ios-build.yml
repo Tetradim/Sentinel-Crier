@@ -3,11 +3,13 @@ on:
   push:
     paths:
       - 'ios/**'
+      - 'crier/connection-service.json'
       - '.github/workflows/ios-build.yml'
       - 'scripts/select_xcode.sh'
   pull_request:
     paths:
       - 'ios/**'
+      - 'crier/connection-service.json'
       - '.github/workflows/ios-build.yml'
       - 'scripts/select_xcode.sh'
 jobs:
