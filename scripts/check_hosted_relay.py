@@ -4,6 +4,7 @@ No broker client, trading credentials, Discord destination or real orders are us
 Credentials remain in memory and are never included in the aggregate report.
 """
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
@@ -49,6 +50,26 @@ def check(base):
                 assert read['events'][0]['cursor']==published['cursor']
             report['checks']['exact_payload_and_idempotency']=True
             report['publish_duplicate_and_two_reads_ms']=round((time.perf_counter()-started)*1000,3)
+            option=dict(event,event_id=str(uuid4()),trade_id=str(uuid4()),
+                        symbol='SPY261212C00750000',asset='option',quantity=2,limit_price='0.20')
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                waiting=pool.submit(request,'GET',f"api/sync/events?after={published['cursor']}&wait=5",receivers[1])
+                time.sleep(.2)
+                option_cursor=request('POST','api/sync/events',host,option)['cursor']
+                received=waiting.result(timeout=35)
+            assert received['events'][0]['event']==option
+            assert received['events'][0]['cursor']==option_cursor
+            report['checks']['hosted_long_poll_option_delivery']=True
+            revisions=[option]
+            for sequence,action in enumerate(('replace','cancel','exit'),2):
+                revision=dict(option,event_id=str(uuid4()),sequence=sequence,action=action,
+                              quantity=3,limit_price='0.21')
+                request('POST','api/sync/events',host,revision)
+                revisions.append(revision)
+            for receiver in receivers:
+                read=request('GET',f"api/sync/events?after={published['cursor']}&wait=0",receiver)
+                assert [row['event'] for row in read['events']]==revisions
+            report['checks']['option_enter_replace_cancel_exit_exact_fields']=True
             rows=request('GET','api/connect/receivers',host)
             request('POST','api/connect/receivers/'+rows[0]['id']+'/revoke',host)
             codes=[client.get('api/sync/events?after=0&wait=0',headers={'Authorization':'Bearer '+token}).status_code for token in receivers]
