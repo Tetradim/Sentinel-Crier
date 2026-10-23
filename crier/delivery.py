@@ -10,9 +10,9 @@ def validate_webhook(url):
     return url
 
 
-def deliver_once(store: Store, webhook: str, client: httpx.Client):
+def deliver_once(store: Store, webhook: str, client: httpx.Client, job_id=None):
     validate_webhook(webhook)
-    job = store.claim()
+    job = store.claim(job_id)
     if not job: return False
     try:
         response = client.post(webhook + "?wait=true", json=job["payload"], timeout=15, follow_redirects=False)

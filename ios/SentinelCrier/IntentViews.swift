@@ -9,6 +9,7 @@ struct IntentConnectionForm: View {
     @State private var shareLink = ""
     @State private var message = ""
     @State private var working = false
+    @State private var receivers: [QuickConnection.Receiver] = []
     private func connect(host: Bool, newInvite: Bool = false) {
         working = true; message = ""
         Task { @MainActor in
@@ -17,6 +18,18 @@ struct IntentConnectionForm: View {
                 if let link = try await model.quickConnect(host: host, service: service, invitation: invitation, newInvite: newInvite) { shareLink = link }
                 if !host { invitation = "" }
                 message = model.message
+            } catch { message = error.localizedDescription }
+        }
+    }
+    private func receiverAction(_ receiver: QuickConnection.Receiver? = nil) {
+        working = true
+        Task { @MainActor in
+            defer { working = false }
+            do {
+                guard let pair = try IntentPairing.load() else { throw AlpacaError.invalid("Connect a host first.") }
+                if let receiver { try await QuickConnection.revoke(receiver, pairing: pair) }
+                receivers = try await QuickConnection.receivers(pair)
+                message = receiver == nil ? "Receiver list refreshed." : "Receiver revoked. Existing broker orders still require reconciliation."
             } catch { message = error.localizedDescription }
         }
     }
@@ -29,6 +42,14 @@ struct IntentConnectionForm: View {
             Button("Receive") { connect(host: false) }.disabled(model.busy || working)
             if (try? IntentPairing.load())?.role == "host" {
                 Button("Invite another receiver") { connect(host: true, newInvite: true) }.disabled(model.busy || working)
+                Button("Refresh receivers") { receiverAction() }.disabled(working)
+                ForEach(receivers) { receiver in
+                    VStack(alignment: .leading) {
+                        Text(receiver.id).font(.caption).textSelection(.enabled)
+                        Text(receiver.revoked == 1 ? "Revoked" : "Connected receiver")
+                        if receiver.revoked == 0 { Button("Revoke receiver", role: .destructive) { receiverAction(receiver) }.disabled(working) }
+                    }
+                }
             }
             if !shareLink.isEmpty {
                 Text(shareLink).font(.caption).textSelection(.enabled)
@@ -36,6 +57,11 @@ struct IntentConnectionForm: View {
                 Button("Copy invitation") { UIPasteboard.general.string = shareLink }
                 Text("Single use; expires after 10 minutes. Each additional receiver needs a new invitation.").font(.caption)
             }
+            Text(model.lifecycle).font(.footnote)
+            Button("Archive resolved channel and change connection", role: .destructive) {
+                do { try model.changeChannel(); shareLink = ""; receivers = []; message = model.message }
+                catch { message = error.localizedDescription }
+            }.disabled(model.busy || working || model.account != nil)
             Text(message).font(.footnote)
             Text("Pair once; use Host or Receive to reconnect. Each device uses its own Alpaca keys. Keep this app open while following; iOS suspends background networking.").font(.caption)
             DisclosureGroup("Advanced connection setup") {
@@ -75,6 +101,15 @@ struct IntentSettingsView: View {
             Stepper("Maximum quantity: \(preferences.maxQuantity)", value: $preferences.maxQuantity, in: 1...1000)
             Button("Apply follower settings") { do { try controller.settings(preferences); message = "Saved." } catch { message = error.localizedDescription } }
             Text(controller.message).font(.footnote)
+            Text("Unresolved tracked trades: \(controller.state.unresolved.count) • queued relay events: \(controller.state.outgoing.count)").font(.caption)
+            ForEach(controller.state.unresolved, id: \.self) { id in Text(id).font(.caption).textSelection(.enabled) }
+            if let records = controller.state.quarantine, !records.isEmpty {
+                DisclosureGroup("Quarantined relay records (\(records.count))") {
+                    ForEach(Array(records.enumerated()), id: \.offset) { _, record in
+                        Text("Cursor \(record.cursor): \(record.reason)").font(.caption)
+                    }
+                }
+            }
             Text(message).font(.footnote)
         }.onAppear { preferences = controller.state.preferences }
     }

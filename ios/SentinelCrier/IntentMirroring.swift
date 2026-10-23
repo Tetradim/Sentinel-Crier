@@ -7,6 +7,37 @@ struct IntentEvent: Codable, Equatable {
     var event_id: String; var trade_id: String; var sequence: Int; var action: String
     var environment: AlpacaEnvironment; var symbol: String; var asset: String
     var quantity: Int; var limit_price: String; var created_at: String; var expires_at: String
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case version, event_id, trade_id, sequence, action, environment, symbol, asset, quantity, limit_price, created_at, expires_at
+    }
+    private struct AnyKey: CodingKey { var stringValue: String; var intValue: Int? { nil }; init?(stringValue: String) { self.stringValue = stringValue }; init?(intValue: Int) { return nil } }
+    init(version: Int = 1, event_id: String, trade_id: String, sequence: Int, action: String, environment: AlpacaEnvironment, symbol: String, asset: String, quantity: Int, limit_price: String, created_at: String, expires_at: String) {
+        self.version = version; self.event_id = event_id; self.trade_id = trade_id; self.sequence = sequence; self.action = action
+        self.environment = environment; self.symbol = symbol; self.asset = asset; self.quantity = quantity
+        self.limit_price = limit_price; self.created_at = created_at; self.expires_at = expires_at
+    }
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.container(keyedBy: AnyKey.self)
+        guard Set(raw.allKeys.map(\.stringValue)) == Set(CodingKeys.allCases.map(\.rawValue)) else { throw AlpacaError.invalid("Unexpected or missing intent fields.") }
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = try c.decode(Int.self, forKey: .version)
+        event_id = try c.decode(String.self, forKey: .event_id); trade_id = try c.decode(String.self, forKey: .trade_id)
+        sequence = try c.decode(Int.self, forKey: .sequence); action = try c.decode(String.self, forKey: .action)
+        environment = try c.decode(AlpacaEnvironment.self, forKey: .environment)
+        symbol = try c.decode(String.self, forKey: .symbol); asset = try c.decode(String.self, forKey: .asset)
+        quantity = try c.decode(Int.self, forKey: .quantity); limit_price = try c.decode(String.self, forKey: .limit_price)
+        created_at = try c.decode(String.self, forKey: .created_at); expires_at = try c.decode(String.self, forKey: .expires_at)
+    }
+    static func validOption(_ symbol: String) -> Bool {
+        guard let pattern = try? NSRegularExpression(pattern: "^[A-Z]{1,6}([0-9]{6})[CP][0-9]{8}$"),
+              let match = pattern.firstMatch(in: symbol, range: NSRange(symbol.startIndex..., in: symbol)),
+              let range = Range(match.range(at: 1), in: symbol) else { return false }
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0); formatter.dateFormat = "yyMMdd"; formatter.isLenient = false
+        let text = String(symbol[range])
+        guard let date = formatter.date(from: text) else { return false }
+        return formatter.string(from: date) == text
+    }
     static func make(trade: String, sequence: Int, action: String, environment: AlpacaEnvironment, symbol: String, asset: String, quantity: Int, price: String) -> Self {
         let now = Date(); let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return Self(event_id: UUID().uuidString.lowercased(), trade_id: trade, sequence: sequence, action: action, environment: environment, symbol: symbol, asset: asset, quantity: quantity, limit_price: price, created_at: f.string(from: now), expires_at: f.string(from: now.addingTimeInterval(30)))
@@ -19,7 +50,7 @@ struct IntentEvent: Codable, Equatable {
         guard version == 1, UUID(uuidString: event_id)?.uuidString.lowercased() == event_id,
               UUID(uuidString: trade_id)?.uuidString.lowercased() == trade_id, sequence > 0,
               ["enter", "replace", "cancel", "exit"].contains(action), ["option", "stock"].contains(asset),
-              quantity > 0, quantity <= 1000, let price = Decimal(string: limit_price), price > 0,
+              quantity > 0, quantity <= 1000, (asset != "option" || Self.validOption(symbol)), let price = Decimal(string: limit_price), price > 0, limit_price.range(of: "^[0-9]+(?:\\.[0-9]+)?$", options: .regularExpression) != nil,
               !symbol.isEmpty, symbol == symbol.uppercased(), symbol.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-") }),
               let created = Self.date(created_at), let expiry = Self.date(expires_at), expiry >= created,
               (!["enter", "replace"].contains(action) || expiry.timeIntervalSince(created) <= 30) else { throw AlpacaError.invalid("Invalid intent event.") }
@@ -28,9 +59,21 @@ struct IntentEvent: Codable, Equatable {
 struct IntentPreferences: Codable {
     var mode = "exact_limit"; var maxSlippageBps = 100; var maxSlippageAmount = "0.02"
     var maxAgeSeconds = 10; var maxQuantity = 1000; var paused = true
+    init() {}
+    enum CodingKeys: String, CodingKey { case mode, maxSlippageBps, maxSlippageAmount, maxAgeSeconds, maxQuantity, paused }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        mode = try c.decodeIfPresent(String.self, forKey: .mode) ?? "exact_limit"
+        maxSlippageBps = try c.decodeIfPresent(Int.self, forKey: .maxSlippageBps) ?? 100
+        maxSlippageAmount = try c.decodeIfPresent(String.self, forKey: .maxSlippageAmount) ?? "0.02"
+        maxAgeSeconds = try c.decodeIfPresent(Int.self, forKey: .maxAgeSeconds) ?? 10
+        maxQuantity = try c.decodeIfPresent(Int.self, forKey: .maxQuantity) ?? 1000
+        paused = try c.decodeIfPresent(Bool.self, forKey: .paused) ?? true
+        _ = try price("1", sell: false)
+    }
     func price(_ source: String, sell: Bool) throws -> String? {
         guard ["exact_limit", "market", "bounded_limit"].contains(mode), let value = Decimal(string: source), value > 0,
-              maxSlippageBps >= 0, let absolute = Decimal(string: maxSlippageAmount), absolute >= 0,
+              (0...1000).contains(maxSlippageBps), let absolute = Decimal(string: maxSlippageAmount), absolute >= 0,
               (1...30).contains(maxAgeSeconds), (1...1000).contains(maxQuantity) else { throw AlpacaError.invalid("Invalid local execution settings.") }
         if mode == "market" { return nil }
         if mode == "exact_limit" { return source }
@@ -87,6 +130,41 @@ struct IntentState: Codable {
     var cursor = 0; var accountID = ""; var pairingID = ""; var trades: [String: IntentTrade] = [:]
     var outgoing: [IntentEvent] = []; var received: [String: IntentEvent] = [:]
     var diagnostics: [String: IntentDiagnosticRecord]?
+    struct Quarantine: Codable { var cursor: Int; var reason: String; var record: String }
+    var quarantine: [Quarantine]?
+    var unresolved: [String] {
+        trades.compactMap { id, trade in
+            let working = trade.mutations.contains { $0.order.map { !["filled", "canceled", "expired", "rejected", "replaced"].contains($0.status) } ?? true }
+            return working || trade.owned > 0 || (trade.desired != nil && trade.completed != trade.desired?.event_id && !trade.invalidated) ? id : nil
+        }.sorted()
+    }
+    // Validate one envelope at a time. Quarantine and cursor are committed with
+    // valid records, so a poison event cannot block later channel instructions.
+    mutating func ingestPage(_ data: Data, environment: AlpacaEnvironment) throws -> [IntentEvent] {
+        guard let page = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let records = page["events"] as? [[String: Any]] else { throw AlpacaError.invalid("Invalid relay page.") }
+        var accepted: [IntentEvent] = []
+        for record in records {
+            guard let position = record["cursor"] as? Int, position > 0 else { throw AlpacaError.invalid("Relay record has no valid cursor; reconnect without discarding its position.") }
+            if position <= cursor { continue }
+            let raw = try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
+            do {
+                guard let object = record["event"] else { throw AlpacaError.invalid("Missing intent event.") }
+                let event = try JSONDecoder().decode(IntentEvent.self, from: JSONSerialization.data(withJSONObject: object, options: [.fragmentsAllowed]))
+                try event.validate()
+                guard event.environment == environment else { throw AlpacaError.invalid("Relay environment mismatch.") }
+                if let previous = received[event.event_id], previous != event { throw AlpacaError.invalid("Event identity conflict.") }
+                var trade = trades[event.trade_id] ?? IntentTrade()
+                try trade.accept(event, paused: preferences.paused)
+                trades[event.trade_id] = trade; received[event.event_id] = event; accepted.append(event)
+            } catch {
+                if quarantine == nil { quarantine = [] }
+                quarantine?.append(Quarantine(cursor: position, reason: String(describing: error), record: String(decoding: raw, as: UTF8.self)))
+            }
+            cursor = position
+        }
+        return accepted
+    }
     var preferences = IntentPreferences()
     mutating func discardSupersededEntries() {
         let invalidations = outgoing.filter { ["cancel", "exit"].contains($0.action) }
@@ -120,6 +198,7 @@ struct IntentPairing: Codable {
     @Published private(set) var message = "Intent mirroring disconnected."
     private let file: URL
     private let now: () -> Date
+    private let session: URLSession
     private var api: AlpacaREST?; private var pair: IntentPairing?
     private var receiver: Task<Void, Never>?; private var worker: Task<Void, Never>?; private var transmitter: Task<Void, Never>?
     private var diagnosticWorker: Task<Void, Never>?
@@ -127,9 +206,10 @@ struct IntentPairing: Codable {
     private var diagnosticSession = UUID()
     private var quoteCaptures = Set<String>()
     private var processing = false; private var publishing = false
-    init(file: URL, now: @escaping () -> Date = Date.init) throws {
+    init(file: URL, now: @escaping () -> Date = Date.init, session: URLSession = CrierHTTPSession.shared) throws {
         self.file = file
         self.now = now
+        self.session = session
         state = FileManager.default.fileExists(atPath: file.path) ? try JSONDecoder().decode(IntentState.self, from: Data(contentsOf: file)) : IntentState()
     }
     static func local() throws -> IntentController {
@@ -143,10 +223,14 @@ struct IntentPairing: Codable {
         state = next
     }
     func settings(_ p: IntentPreferences) throws { _ = try p.price("1", sell: false); try commit { $0.preferences = p } }
+    func validateIdentity(account: String, environment: AlpacaEnvironment, pairing: IntentPairing? = nil) throws {
+        guard let pair = try pairing ?? IntentPairing.load() else { return }
+        guard pair.environment == environment else { throw AlpacaError.invalid("Pairing environment differs from broker.") }
+        guard state.accountID.isEmpty || (state.accountID == account && state.pairingID == pair.fingerprint) else { throw AlpacaError.invalid("Intent journal is pinned to its original account and pairing. Recover its trades before changing channels.") }
+    }
     func connect(api: AlpacaREST, account: String, pairing: IntentPairing? = nil, startWorkers: Bool = true) throws {
         guard let pair = try pairing ?? IntentPairing.load() else { return }
-        guard pair.environment == api.environment else { throw AlpacaError.invalid("Pairing environment differs from broker.") }
-        guard state.accountID.isEmpty || (state.accountID == account && state.pairingID == pair.fingerprint) else { throw AlpacaError.invalid("Intent journal is pinned to its original account and pairing. Recover its trades before changing channels.") }
+        try validateIdentity(account: account, environment: api.environment, pairing: pair)
         try commit { $0.accountID = account; $0.pairingID = pair.fingerprint }
         self.api = api; self.pair = pair
         diagnosticClock = nil
@@ -161,7 +245,15 @@ struct IntentPairing: Codable {
         diagnosticWorker = Task { while !Task.isCancelled { await syncDiagnostics(); try? await Task.sleep(nanoseconds: 5_000_000_000) } }
         message = "\(pair.role.capitalized) connected. Keep Crier open for delivery."
     }
-    func disconnect() { diagnosticSession = UUID(); diagnosticWorker?.cancel(); diagnosticWorker = nil; diagnosticClock = nil; receiver?.cancel(); worker?.cancel(); transmitter?.cancel(); receiver = nil; worker = nil; transmitter = nil; api = nil; pair = nil }
+    func disconnect() { message = "Disconnected; execution journals retained."; diagnosticSession = UUID(); diagnosticWorker?.cancel(); diagnosticWorker = nil; diagnosticClock = nil; receiver?.cancel(); worker?.cancel(); transmitter?.cancel(); receiver = nil; worker = nil; transmitter = nil; api = nil; pair = nil }
+    func archiveResolvedChannel() throws {
+        guard !processing, !publishing, api == nil else { throw AlpacaError.invalid("Disconnect before changing channel.") }
+        guard state.unresolved.isEmpty, state.outgoing.isEmpty else { throw AlpacaError.invalid("Resolve tracked holdings, pending orders and relay outbox before changing channel. Reconnect to the original account to recover.") }
+        let archive = file.deletingLastPathComponent().appendingPathComponent("intent-archive-" + UUID().uuidString + ".json")
+        try JSONEncoder().encode(state).write(to: archive, options: [.atomic, .completeFileProtection])
+        try commit { $0 = IntentState() }
+        UserDefaults.standard.removeObject(forKey: "intent-pairing-metadata")
+    }
     var hosting: Bool { pair?.role == "host" }
     func host(symbol: String, asset: String, quantity: Int, price: String, tradeID: String? = nil, action: String = "enter") throws -> String {
         guard let pair, hosting else { throw AlpacaError.invalid("Connect an intent host pairing first.") }
@@ -177,41 +269,79 @@ struct IntentPairing: Codable {
         var request = URLRequest(url: URL(string: pair.url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/api/sync/" + resource + query)!)
         request.httpMethod = body == nil ? "GET" : "POST"; request.httpBody = body; request.timeoutInterval = 30
         request.setValue("Bearer " + pair.token, forHTTPHeaderField: "Authorization"); request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let (data, response) = try await CrierHTTPSession.shared.data(for: request)
-        guard let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode) else { throw AlpacaError.invalid("Relay refused request.") }
+        let (data, response) = try await session.data(for: request)
+        guard let response = response as? HTTPURLResponse else { throw AlpacaError.invalid("Relay returned an invalid response.") }
+        if [401, 403].contains(response.statusCode) {
+            disconnect()
+            message = "Relay authentication failed or receiver revoked. Reconnect with valid credentials; journal retained."
+            throw AlpacaError.invalid(message)
+        }
+        guard (200..<300).contains(response.statusCode) else { throw AlpacaError.http(response.statusCode) }
         return data
     }
-    private func publish() async {
+    func publish() async {
         guard hosting, !publishing else { return }; publishing = true; defer { publishing = false }
         do {
             while !Task.isCancelled {
                 if !state.outgoing.isEmpty { try commit { $0.discardSupersededEntries() } }
                 guard let e = state.outgoing.first(where: { ["cancel", "exit"].contains($0.action) }) ?? state.outgoing.first else { break }
-                _ = try await relay(body: JSONEncoder().encode(e))
-                diagnosticStep(e.event_id, "relay_accepted", "Relay durably accepted event")
-                try commit { $0.outgoing.removeAll { $0.event_id == e.event_id } }
+                do {
+                    _ = try await relay(body: JSONEncoder().encode(e))
+                    diagnosticStep(e.event_id, "relay_accepted", "Relay durably accepted event")
+                    try commit { $0.outgoing.removeAll { $0.event_id == e.event_id } }
+                } catch AlpacaError.http(let status) where [400, 409, 422].contains(status) {
+                    let record = String(decoding: try JSONEncoder().encode(e), as: UTF8.self)
+                    try commit {
+                        if $0.quarantine == nil { $0.quarantine = [] }
+                        $0.quarantine?.append(IntentState.Quarantine(cursor: 0, reason: "Relay rejected outgoing event HTTP \(status)", record: record))
+                        $0.outgoing.removeAll { $0.event_id == e.event_id }
+                    }
+                    diagnosticStep(e.event_id, "relay_rejected", "HTTP \(status); original revision retained in quarantine")
+                    if ["enter", "replace"].contains(e.action), state.trades[e.trade_id]?.desired?.event_id == e.event_id {
+                        _ = try host(symbol: e.symbol, asset: e.asset, quantity: e.quantity, price: e.limit_price, tradeID: e.trade_id, action: "cancel")
+                    }
+                    message = "Relay rejected a revision; inspect quarantine and reconcile the tracked trade."
+                }
             }
         }
         catch { message = "Intent outbox pending: \(error.localizedDescription)" }
     }
+    func receiveOnce() async throws {
+        let data = try await relay("?after=\(state.cursor)&wait=20")
+        try Task.checkCancellation()
+        guard let environment = pair?.environment else { return }
+        var accepted: [IntentEvent] = []
+        try commit { accepted = try $0.ingestPage(data, environment: environment) }
+        for event in accepted { beginDiagnostic(event, stage: "receiver", observed: Date()) }
+        message = "Receiver connected â€¢ cursor \(state.cursor) â€¢ \(state.quarantine?.count ?? 0) quarantined"
+    }
     private func receiveLoop() async {
-        struct Page: Decodable { struct Item: Decodable { var cursor: Int; var event: IntentEvent }; var events: [Item]; var cursor: Int }
         while !Task.isCancelled {
             do {
-                let page = try JSONDecoder().decode(Page.self, from: await relay("?after=\(state.cursor)&wait=20"))
-                try Task.checkCancellation()
-                let arrival = Date()
-                for item in page.events {
-                    guard item.event.environment == pair?.environment else { throw AlpacaError.invalid("Relay environment mismatch.") }
-                    try commit { s in
-                        if let old = s.received[item.event.event_id], old != item.event { throw AlpacaError.invalid("Event identity conflict.") }
-                        var t = s.trades[item.event.trade_id] ?? IntentTrade(); try t.accept(item.event, paused: s.preferences.paused)
-                        s.trades[item.event.trade_id] = t; s.received[item.event.event_id] = item.event; s.cursor = max(s.cursor, item.cursor)
-                    }
-                    beginDiagnostic(item.event, stage: "receiver", observed: arrival)
-                }
+                try await receiveOnce()
                 Task { await process() }
-            } catch { message = error.localizedDescription; try? await Task.sleep(nanoseconds: 2_000_000_000) }
+            } catch {
+                if Task.isCancelled { return }
+                message = "Reconnect needed: " + error.localizedDescription
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+            }
+        }
+    }
+    func reconcileBeforeResume() async throws {
+        guard let api else { return }
+        let account = try await api.account()
+        guard account.id == state.accountID, account.status == "ACTIVE", !account.account_blocked, !account.trading_blocked else { throw AlpacaError.invalid("Reconnect account is changed or blocked.") }
+        for id in state.trades.keys.sorted() {
+            guard let trade = state.trades[id], let event = trade.desired else { continue }
+            for index in trade.mutations.indices {
+                let mutation = trade.mutations[index]
+                if let order = mutation.order, terminal(order) { continue }
+                let order = try await api.order(clientID: mutation.clientID)
+                try mutation.validate(order, symbol: event.symbol)
+                try Task.checkCancellation()
+                guard self.api === api, pair != nil else { throw AlpacaError.invalid("Reconnect interrupted.") }
+                try commit { $0.trades[id]!.mutations[index].order = order }
+            }
         }
     }
     func process() async {

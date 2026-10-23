@@ -63,6 +63,9 @@ targets:
       - path: SentinelCrier/IntentDiagnosticsTests.swift
       - path: SentinelCrier/IntentTests.swift
       - path: SentinelCrier/QuickConnectionTests.swift
+      - path: SentinelCrier/Phase2FlowTests.swift
+      - path: ../tests/fixtures/phase2-protocol.json
+        buildPhase: resources
       - path: SentinelCrier/AlpacaAlertFormatterTests.swift
       - path: SentinelCrier/MultiBrokerTradingTests.swift
       - path: SentinelCrier/TradingChartTests.swift

@@ -1,5 +1,12 @@
 package com.sentinel.crier
 import org.json.JSONObject
+interface AlertStore {
+ fun meta(key:String):String
+ fun setMeta(key:String,value:String)
+ fun enqueueAlert(id:String,payload:JSONObject)
+ fun claimAlert(now:Long,id:String?=null):JSONObject?
+ fun alertResult(id:String,state:String,delay:Long,detail:String)
+}
 interface IntentStore {
  fun diagnostic(id:String,stage:String,detail:String) {}
  fun meta(key:String):String

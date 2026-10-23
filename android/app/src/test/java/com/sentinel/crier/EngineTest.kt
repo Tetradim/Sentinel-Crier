@@ -105,4 +105,28 @@ class EngineTest {
   Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={now}) { false }.step(e)
   assertEquals(0,b.posts); assertEquals("superseded",s.os.single().state)
  }
+ @Test fun definitiveSubmissionAndAuthenticationRejectionsDoNotRepostAfterRestart() {
+  for(code in listOf(400,401,403)) {
+   val s=Store(); val b=Fake(); b.submissionError=HttpError(code)
+   try { engine(s,b).step(event()); fail() } catch(_:HttpError) {}
+   assertEquals("rejected",s.os.single().state); b.submissionError=null
+   engine(s,b).step(event()); assertEquals(0,b.posts); assertTrue(s.done)
+  }
+ }
+ @Test fun optionDecimalPremiumPartialFillAndUnrelatedHoldingsStayBoundedAfterResume() {
+  val (s,b)=cancelSetup(); var current=event("exit",2).put("symbol","SPY261218C00750000").put("asset","option").put("limit_price","0.20")
+  b.remote!!.put("symbol",current.getString("symbol")).put("status","partially_filled").put("filled_qty","2").put("filled_avg_price","0.23"); b.available=100
+  assertTrue(engine(s,b).reconcile(current)); assertEquals(0,b.posts)
+  engine(s,b).step(current); assertEquals(1,b.canceled); assertEquals(0,b.posts)
+  b.remote!!.put("status","canceled"); engine(s,b).step(current)
+  assertEquals(2,b.quantity); assertEquals(1,b.posts)
+ }
+ @Test fun resumeUnknownOrderAndDecliningFillEvidenceCannotAuthorizeSubmission() {
+  val (s,b)=cancelSetup(); b.remote=null
+  assertFalse(engine(s,b).reconcile(event("exit",2))); assertEquals(0,b.posts)
+  s.os[0]=s.os[0].copy(filled=2)
+  b.remote=JSONObject().put("id","broker").put("client_order_id","client").put("symbol","SPY").put("side","buy").put("qty","5").put("filled_qty","1").put("status","canceled")
+  assertTrue(runCatching { engine(s,b).reconcile(event("exit",2)) }.isFailure)
+  assertEquals(2,s.os[0].filled); assertEquals(0,b.posts)
+ }
 }

@@ -97,6 +97,30 @@ actor AlpacaJournal {
         next.deliveries[index].state = "sent"; next.deliveries[index].messageID = messageID
         try save(next)
     }
+    func retry(_ id: String, acknowledgeDuplicateRisk: Bool) throws {
+        var next = state
+        guard let index = next.deliveries.firstIndex(where: { $0.id == id }), next.deliveries[index].state != "sent" else { return }
+        guard next.deliveries[index].state != "uncertain" || acknowledgeDuplicateRisk else { throw AlpacaError.invalid("Verify Discord first; retrying an uncertain delivery can duplicate it.") }
+        next.deliveries[index].state = "pending"
+        // Keep the server rate-limit deadline even for an explicit retry.
+        try save(next)
+    }
+    func closeDelivery(_ id: String) throws {
+        var next = state
+        guard let index = next.deliveries.firstIndex(where: { $0.id == id && $0.state != "sent" }) else { return }
+        next.deliveries[index].state = "closed by user"
+        try save(next)
+    }
+    func hasOutstandingDeliveries() -> Bool {
+        state.deliveries.contains { $0.state == "pending" || $0.state == "uncertain" || $0.state.hasPrefix("rejected") }
+    }
+    func refused(_ id: String, status: Int) throws {
+        guard [400, 401, 403, 404].contains(status) else { return }
+        var next = state
+        guard let index = next.deliveries.firstIndex(where: { $0.id == id && $0.state == "uncertain" }) else { return }
+        next.deliveries[index].state = "rejected HTTP \(status)"
+        try save(next)
+    }
     func rateLimited(_ id: String, retryAfter: Double) throws {
         guard retryAfter.isFinite, retryAfter >= 0 else { return }
         var next = state
@@ -117,7 +141,8 @@ actor AlpacaDiscordDelivery {
         parts.queryItems = [URLQueryItem(name: "wait", value: "true")]
         guard let url = parts.url else { return }
         guard let delivery = try await journal.claim(environment: environment, accountID: accountID) else { return }
-        let payload = AlpacaAlertFormatter.payload(delivery, style: UserDefaults.standard.string(forKey: "discordFillStyle") ?? "homebrew")
+        let style = UserDefaults.standard.string(forKey: "discordFillStyle") ?? "homebrew"
+        let payload = UserDefaults.standard.data(forKey: "discordAlertSettings") == nil ? AlpacaAlertFormatter.payload(delivery, style: style) : DiscordAlertSettings.load().payload(delivery, style: style)
         var request = URLRequest(url: url); request.httpMethod = "POST"; request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
@@ -129,6 +154,7 @@ actor AlpacaDiscordDelivery {
             try await journal.rateLimited(delivery.id, retryAfter: seconds.isFinite && seconds >= 0 ? seconds : 60)
             return
         }
+        if [400, 401, 403, 404].contains(http.statusCode) { try await journal.refused(delivery.id, status: http.statusCode); return }
         guard http.statusCode == 200 else { return } // Ambiguous failures remain uncertain, never automatically resent.
         struct Message: Decodable { let id: String }
         let message = try JSONDecoder().decode(Message.self, from: data)

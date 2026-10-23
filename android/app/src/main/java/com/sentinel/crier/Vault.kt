@@ -16,14 +16,18 @@ class Vault(context: Context) {
   if (!ks.containsAlias("crier")) KeyGenerator.getInstance("AES", "AndroidKeyStore").apply { init(KeyGenParameterSpec.Builder("crier", KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT).setBlockModes("GCM").setEncryptionPaddings("NoPadding").build()); generateKey() }
   return ks.getKey("crier", null) as SecretKey
  }
- fun save(value: JSONObject) {
+ private fun writeRoot(value: JSONObject) {
   val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key()) }
   val encrypted = cipher.doFinal(value.toString().toByteArray(Charsets.UTF_8))
   check(prefs.edit().putString("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP)).putString("data", Base64.encodeToString(encrypted, Base64.NO_WRAP)).commit())
  }
- fun read(): JSONObject {
-  val data = prefs.getString("data", null) ?: return JSONObject()
+ private fun root(): JSONObject {
+  val data = prefs.getString("data", null) ?: return Settings.migrate(JSONObject())
   val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, Base64.decode(prefs.getString("iv", ""), Base64.NO_WRAP))) }
-  return JSONObject(String(cipher.doFinal(Base64.decode(data, Base64.NO_WRAP)), Charsets.UTF_8))
+  return Settings.migrate(JSONObject(String(cipher.doFinal(Base64.decode(data, Base64.NO_WRAP)), Charsets.UTF_8)))
  }
+ @Synchronized fun read():JSONObject = Settings.active(root())
+ @Synchronized fun save(value:JSONObject,newProfile:Boolean=false) { val r=root(); Settings.save(r,value,newProfile); writeRoot(r) }
+ @Synchronized fun profiles():List<JSONObject> { val p=root().getJSONArray("profiles"); return (0 until p.length()).map { p.getJSONObject(it) } }
+ @Synchronized fun select(id:String) { val r=root(); require(profiles().any { it.getString("id")==id }); r.put("active",id); writeRoot(r) }
 }

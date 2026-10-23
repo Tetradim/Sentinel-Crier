@@ -14,12 +14,27 @@ final class AlpacaWorkspace: ObservableObject {
     @Published private(set) var updatedAt: Date?
     @Published private(set) var mirrorMessage = "Not paired."
     @Published private(set) var intent: IntentController?
+    @Published private(set) var lifecycle = "Foreground • connect to resume"
+    private var suspended = false
+    private var foreground = true
     private var api: AlpacaREST?
     private var journal: AlpacaJournal?
     private var publisher: AlpacaDiscordDelivery?
     private var mirrorSender: MirrorSender?
-    init() {
-        do { let journal = try AlpacaJournal.local(); self.journal = journal; publisher = AlpacaDiscordDelivery(journal: journal); mirrorSender = try MirrorSender.local(); intent = try IntentController.local() }
+    private let makeClient: (AlpacaEnvironment, AlpacaCredentials) -> AlpacaREST
+    private let loadCredentials: (AlpacaEnvironment) throws -> AlpacaCredentials
+    private let saveCredentials: (AlpacaCredentials, AlpacaEnvironment) throws -> Void
+    init(journal suppliedJournal: AlpacaJournal? = nil, intentController: IntentController? = nil,
+         makeClient: @escaping (AlpacaEnvironment, AlpacaCredentials) -> AlpacaREST = { AlpacaREST(environment: $0, credentials: $1) },
+         loadCredentials: @escaping (AlpacaEnvironment) throws -> AlpacaCredentials = AlpacaKeychain.load,
+         saveCredentials: @escaping (AlpacaCredentials, AlpacaEnvironment) throws -> Void = { try AlpacaKeychain.save($0, environment: $1) }) {
+        self.makeClient = makeClient; self.loadCredentials = loadCredentials; self.saveCredentials = saveCredentials
+        do {
+            let journal = try suppliedJournal ?? AlpacaJournal.local()
+            self.journal = journal; publisher = AlpacaDiscordDelivery(journal: journal)
+            if suppliedJournal == nil { mirrorSender = try MirrorSender.local() }
+            intent = try intentController ?? IntentController.local()
+        }
         catch { message = "Trading disabled: durable journal could not be read. Preserve it for recovery." }
     }
     private func perform(_ operation: () async throws -> Void) async {
@@ -37,17 +52,36 @@ final class AlpacaWorkspace: ObservableObject {
         deliveries = snapshot.deliveries.filter { $0.environment == environment && $0.accountID == account.id }
     }
     private func connectSavedBroker(key: String = "", secret: String = "") async throws {
-        intent?.disconnect()
         guard journal != nil else { throw AlpacaError.invalid("Journal unavailable. Trading is disabled.") }
-        review = nil; account = nil; api = nil; positions = []; contracts = []
-        if !key.isEmpty || !secret.isEmpty {
-            try AlpacaKeychain.save(AlpacaCredentials(key: key.trimmingCharacters(in: .whitespacesAndNewlines), secret: secret.trimmingCharacters(in: .whitespacesAndNewlines)), environment: environment)
-        }
-        let client = AlpacaREST(environment: environment, credentials: try AlpacaKeychain.load(environment))
+        let supplied = !key.isEmpty || !secret.isEmpty
+        let credentials: AlpacaCredentials
+        if supplied { credentials = AlpacaCredentials(key: key.trimmingCharacters(in: .whitespacesAndNewlines), secret: secret.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        else { credentials = try loadCredentials(environment) }
+        let client = makeClient(environment, credentials)
         let current = try await client.account()
+        if let intent, !intent.state.accountID.isEmpty, intent.state.accountID != current.id {
+            throw AlpacaError.invalid("Saved channel belongs to another account. Reconnect its original keys and resolve its journal before changing accounts.")
+        }
+        try intent?.validateIdentity(account: current.id, environment: environment)
+        // Verify candidate credentials and journal identity before replacing working keys.
+        intent?.disconnect()
+        if supplied { try saveCredentials(credentials, environment) }
+        review = nil; positions = []; contracts = []
         account = current; api = client
-        try intent?.connect(api: client, account: current.id)
-        try await refreshConnected()
+        if foreground {
+            try await refreshConnected()
+            try await activateIntent(api: client, account: current.id)
+            suspended = !foreground
+        } else { suspended = true }
+    }
+    private func activateIntent(api: AlpacaREST, account: String) async throws {
+        guard foreground, let intent else { return }
+        do {
+            try intent.connect(api: api, account: account, startWorkers: false)
+            try await intent.reconcileBeforeResume()
+            guard foreground, !Task.isCancelled else { intent.disconnect(); return }
+            try intent.connect(api: api, account: account)
+        } catch { intent.disconnect(); suspended = true; throw error }
     }
     func connect(key: String, secret: String) async {
         await perform { try await connectSavedBroker(key: key, secret: secret) }
@@ -83,8 +117,11 @@ final class AlpacaWorkspace: ObservableObject {
         }
         do {
             guard let intent else { throw AlpacaError.invalid("Intent journal unavailable.") }
-            if let api, let account { try intent.connect(api: api, account: account.id) }
-            else { try await connectSavedBroker() }
+            if let api, let account {
+                try intent.validateIdentity(account: account.id, environment: environment)
+                if foreground { try await refreshConnected(); try await activateIntent(api: api, account: account.id) }
+                else { suspended = true }
+            } else { try await connectSavedBroker() }
             message = "Saved pairing connected. Keep this app open for delivery."
         } catch {
             message = "Pairing saved. Broker connection needs attention: " + error.localizedDescription
@@ -97,8 +134,59 @@ final class AlpacaWorkspace: ObservableObject {
         guard !busy else { return }
         if removeCredentials { AlpacaKeychain.remove(environment) }
         intent?.disconnect()
+        suspended = false
         api = nil; account = nil; review = nil; positions = []; contracts = []; submissions = []; deliveries = []; updatedAt = nil
         message = "Disconnected. Saved orders and fills remain in the journal."
+    }
+    func sceneActive(_ active: Bool) async {
+        foreground = active
+        if !active {
+            suspended = account != nil
+            intent?.disconnect()
+            review = nil
+            lifecycle = "Background / suspended • automatic execution stopped; open Crier to reconcile"
+            return
+        }
+        lifecycle = "Foreground • reconciling before new work"
+        if suspended, let api, let account {
+            await perform {
+                try await refreshConnected()
+                guard foreground, !Task.isCancelled else { return }
+                try await activateIntent(api: api, account: account.id)
+                suspended = false
+            }
+        }
+        lifecycle = suspended ? "Reconnect required • reconciliation failed" : "Foreground • keep Crier open for delivery"
+    }
+    func changeChannel() throws {
+        guard !busy, account == nil else { throw AlpacaError.invalid("Disconnect before changing channel.") }
+        try intent?.archiveResolvedChannel()
+        message = "Resolved channel archived. You can host or join a new channel."
+    }
+    func saveDiscordWebhook(_ raw: String?) async {
+        await perform {
+            guard let journal else { throw AlpacaError.invalid("Delivery journal unavailable.") }
+            let previous = StandaloneConfiguration.webhook()
+            if let raw, previous?.absoluteString == raw { message = "Webhook already saved."; return }
+            let outstanding = await journal.hasOutstandingDeliveries()
+            guard previous == nil || !outstanding else {
+                throw AlpacaError.invalid("Deliver or close every pending, rejected and uncertain alert before changing destination. Old fills must not be sent to a different channel by accident.")
+            }
+            if let raw {
+                guard StandaloneConfiguration.saveWebhook(raw) else { throw AlpacaError.invalid("Invalid webhook or Keychain unavailable.") }
+                message = "Webhook saved securely."
+            } else { StandaloneConfiguration.clear(); message = "Webhook removed." }
+        }
+    }
+    func closeDiscord(_ id: String) async {
+        await perform { try await journal?.closeDelivery(id) }
+    }
+    func retryDiscord(_ id: String, acknowledgeDuplicateRisk: Bool) async {
+        await perform {
+            guard let journal else { return }
+            try await journal.retry(id, acknowledgeDuplicateRisk: acknowledgeDuplicateRisk)
+            if let account { try await publisher?.deliver(environment: environment, accountID: account.id) }
+        }
     }
     func refresh() async { await perform { try await refreshConnected() } }
     private func refreshConnected() async throws {

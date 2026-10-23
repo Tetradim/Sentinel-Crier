@@ -21,6 +21,7 @@ struct CrierCommandCenter: View {
         .environmentObject(model)
         .preferredColorScheme(.dark)
         .task(id: scenePhase) {
+            await model.sceneActive(scenePhase == .active)
             guard scenePhase == .active else { return }
             while !Task.isCancelled {
                 await model.refresh()
@@ -54,6 +55,11 @@ struct CrierPositionsView: View {
 struct CrierExecutionsView: View {
     @EnvironmentObject var model: AlpacaWorkspace
     @AppStorage("discordFillStyle") private var style = "homebrew"
+    @State private var settings = DiscordAlertSettings.load()
+    @State private var feedback = ""
+    @State private var testing = false
+    @State private var retryEntry: AlpacaJournal.Delivery?
+    @State private var closeEntry: AlpacaJournal.Delivery?
     var body: some View {
         NavigationStack {
             List {
@@ -63,6 +69,23 @@ struct CrierExecutionsView: View {
                         Text("Plain text").tag("plain")
                         Text("Card").tag("card")
                     }
+                    TextField("Template", text: $settings.template)
+                    Text("Fields: {side}, {quantity}, {symbol}, {price}, {environment}").font(.caption)
+                    Toggle("Include broker time", isOn: $settings.showTime)
+                    Toggle("Include delivery reference", isOn: $settings.showReference)
+                    Text(settings.render(DiscordAlertSettings.preview)).font(.caption).textSelection(.enabled)
+                    Button("Save template and fields") {
+                        do { try settings.save(); feedback = "Alert settings saved." } catch { feedback = error.localizedDescription }
+                    }
+                    Button("Send test message") {
+                        testing = true
+                        Task { @MainActor in
+                            defer { testing = false }
+                            do { try settings.save(); feedback = try await DiscordAlertSettings.test() }
+                            catch { feedback = error.localizedDescription }
+                        }
+                    }.disabled(testing)
+                    Text(feedback).font(.footnote)
                     Text("Only broker FILL activities are published. First connection sets a baseline; earlier history is not posted. Monitoring runs while this app is active. Uncertain deliveries need manual Discord verification and are never automatically resent.").font(.footnote)
                 }
                 Section("\(model.environment.rawValue.uppercased()) verified fills") {
@@ -72,16 +95,39 @@ struct CrierExecutionsView: View {
                             Text(entry.fill.transaction_time).font(.caption)
                             Text("Discord: \(entry.state)").font(.caption)
                             Text(entry.fill.id).font(.caption).textSelection(.enabled)
+                            if let retry = entry.retryAfter { Text("Retry after: \(retry.formatted())").font(.caption) }
+                            if entry.state == "pending" || entry.state == "uncertain" || entry.state.hasPrefix("rejected") {
+                                Button("Retry delivery") {
+                                    if entry.state == "uncertain" { retryEntry = entry }
+                                    else { Task { await model.retryDiscord(entry.id, acknowledgeDuplicateRisk: false) } }
+                                }.disabled(model.busy)
+                                Button("Close alert without another post", role: .destructive) { closeEntry = entry }.disabled(model.busy)
+                            }
                         }
                     }
                 }
                 Text(model.message).font(.footnote)
             }.navigationTitle("Alerts").refreshable { await model.refresh() }
+            .alert("Retry uncertain delivery?", isPresented: Binding(get: { retryEntry != nil }, set: { if !$0 { retryEntry = nil } })) {
+                Button("Verified Discord; retry", role: .destructive) {
+                    if let entry = retryEntry { Task { await model.retryDiscord(entry.id, acknowledgeDuplicateRisk: true) } }
+                    retryEntry = nil
+                }
+                Button("Cancel", role: .cancel) { retryEntry = nil }
+            } message: { Text("Check Discord for this fill first. The prior request may have succeeded; retry can create a duplicate.") }
+            .alert("Close this alert?", isPresented: Binding(get: { closeEntry != nil }, set: { if !$0 { closeEntry = nil } })) {
+                Button("Close without posting", role: .destructive) {
+                    if let entry = closeEntry { Task { await model.closeDiscord(entry.id) } }
+                    closeEntry = nil
+                }
+                Button("Cancel", role: .cancel) { closeEntry = nil }
+            } message: { Text("The fill evidence is retained. This alert will not be posted again; its delivery status records your decision.") }
         }
     }
 }
 
 struct CrierConnectionsView: View {
+    @EnvironmentObject var model: AlpacaWorkspace
     @State private var webhook = ""
     @State private var configured = StandaloneConfiguration.webhook() != nil
     @State private var feedback: String?
@@ -97,18 +143,24 @@ struct CrierConnectionsView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 Button("Save webhook") {
-                    configured = StandaloneConfiguration.saveWebhook(
-                        webhook.trimmingCharacters(in: .whitespacesAndNewlines))
-                    feedback = configured ? "Webhook saved securely." : "Invalid webhook or Keychain unavailable."
+                    let raw = webhook.trimmingCharacters(in: .whitespacesAndNewlines)
                     webhook = ""
+                    Task { @MainActor in
+                        await model.saveDiscordWebhook(raw)
+                        configured = StandaloneConfiguration.webhook() != nil
+                        feedback = model.message
+                    }
                 }
                 Text(configured ? "Configured" : "Not configured")
                     .foregroundStyle(configured ? .green : .secondary)
                 Button("Remove webhook", role: .destructive) {
-                    StandaloneConfiguration.clear()
-                    configured = false
-                    feedback = "Webhook removed."
+                    Task { @MainActor in
+                        await model.saveDiscordWebhook(nil)
+                        configured = StandaloneConfiguration.webhook() != nil
+                        feedback = model.message
+                    }
                 }
+                Text("Deliver or close outstanding alerts before changing destination. Closing keeps fill evidence in the journal.").font(.caption)
                 if let feedback { Text(feedback).font(.footnote) }
             }
         }

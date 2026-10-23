@@ -44,11 +44,11 @@ class ConnectionClient:
     def saved(self):
         return json.loads(load_secret(self.path)) if self.path.exists() else self.existing
 
-    async def request(self, origin, path, body=None, token=None):
+    async def request(self, origin, path, body=None, token=None, method="POST"):
         owned=self.http is None
         client=self.http or httpx.AsyncClient(timeout=20,trust_env=False,follow_redirects=False)
         try:
-            response=await client.post(validate_origin(origin)+path,json=body,
+            response=await client.request(method,validate_origin(origin)+path,json=body,
                 headers={'Authorization':'Bearer '+token} if token else {},follow_redirects=False)
             if response.status_code==401:
                 raise ValueError('Pairing or invitation is unavailable. Ask the host for a fresh invitation.')
@@ -94,3 +94,15 @@ class ConnectionClient:
         origin,code=parse_invitation(text,origin or default_origin())
         result=await self.request(origin,'/api/connect/receive',{'code':code})
         return {'pair':self.store(origin,result,'follower')}
+
+    async def receivers(self):
+        pair=self.saved()
+        if not pair or pair['role']!='host': raise ValueError('Host connection required.')
+        return await self.request(pair['url'],'/api/connect/receivers',token=pair['token'],method='GET')
+
+    async def revoke_receiver(self, identity):
+        from uuid import UUID
+        identity=str(UUID(identity))
+        pair=self.saved()
+        if not pair or pair['role']!='host': raise ValueError('Host connection required.')
+        return await self.request(pair['url'],'/api/connect/receivers/'+identity+'/revoke',token=pair['token'])

@@ -140,6 +140,7 @@ async function preview() {
 }
 async function status() {
   const data = await api("status");
+  $("discord-enabled").checked = data.delivery_enabled;
   $("mode").textContent = data.paused
     ? "DELIVERY PAUSED"
     : data.delivery_enabled
@@ -216,6 +217,23 @@ async function history() {
     if (row.fill.verification === "user_confirmed") info.append(node("p", "User-confirmed · manual receipt", "provenance"));
     const state = node("div", row.status, "state");
     if (row.note) state.append(node("small", row.note));
+    state.append(node("small", `Attempts: ${row.attempts} · Retry after: ${row.due > Date.now()/1000 ? new Date(row.due*1000).toLocaleString() : "ready"}`));
+    if (row.status === "failed") {
+      const retry=node("button", "Retry failed delivery");
+      retry.type="button";
+      retry.onclick=async()=>{try {await api(`discord/${encodeURIComponent(row.id)}/retry`,{method:"POST",body:"{}"});await history();notice("Queued for retry when delivery is enabled.");} catch(e){notice(e.message);}};
+      state.append(retry);
+    }
+    if (["pending", "failed", "uncertain", "review"].includes(row.status)) {
+      const close=node("button", "Close after review (no resend)");
+      close.type="button";
+      close.onclick=async()=>{
+        if (!window.confirm("Check Discord first if delivery is uncertain. Close this alert without sending or retrying it? Its payload and delivery evidence will remain saved.")) return;
+        try {await api(`discord/${encodeURIComponent(row.id)}/close`,{method:"POST",body:"{}"});await history();notice("Alert closed. Evidence retained; no message sent.");}
+        catch(e){notice(e.message);}
+      };
+      state.append(close);
+    }
     line.append(info, state);
     $("history").append(line);
   });
@@ -324,6 +342,7 @@ $("lock").addEventListener("click", () => {
   $("capabilities").replaceChildren();
   clearTimeout(noticeTimer);
   $("notice").textContent = "";
+  $("discord-webhook").value="";
   $("token").focus();
 });
 
@@ -448,3 +467,17 @@ $("receipt-reject").addEventListener("click", () => {
   });
 });
 $("receipt-refresh").addEventListener("click", () => receipts().catch((error) => notice(error.message)));
+
+$("discord-save").onclick=async()=>{
+  try {
+    await api("discord",{method:"PUT",body:JSON.stringify({webhook:$("discord-webhook").value.trim(),enabled:$("discord-enabled").checked})});
+    $("discord-webhook").value="";
+    await status();notice("Destination saved. Pending alerts keep their frozen presentation.");
+  } catch(e){notice(e.message);}
+};
+$("discord-test").onclick=async()=>{
+  $("discord-test").disabled=true;
+  try {const result=await api("discord/test",{method:"POST",body:"{}"});await history();notice(`Test delivery: ${result.status}${result.note ? " · "+result.note : ""}`);}
+  catch(e){notice(e.message);}
+  finally{$("discord-test").disabled=false;}
+};

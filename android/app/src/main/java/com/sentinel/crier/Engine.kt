@@ -6,16 +6,9 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
  private val terminal=setOf("filled","canceled","expired","rejected","replaced","superseded")
  fun step(e:JSONObject) {
   journal.diagnostic(e.getString("event_id"),"execution_started","Account validation and reconciliation")
-  require(broker.account()==config.getString("account")) { "Account changed" }
   val trade=e.getString("trade_id"); val seq=e.getInt("sequence"); val action=e.getString("action")
-  var orders=journal.orders(trade)
-  for(o in orders) if(o.state !in terminal) {
-   val remote=broker.order(o.client)
-   if(remote==null) { journal.diagnostic(e.getString("event_id"),"reconciliation_wait","Broker outcome unknown; submission blocked"); return } // An ambiguous POST must never be repeated, even on a 404.
-   validate(remote,o.client,e.getString("symbol"),o.side,journal.meta("quantity:${o.client}").toIntOrNull(),o.filled,o.broker)
-   journal.update(o.client,remote)
-  }
-  orders=journal.orders(trade)
+  if(!reconcile(e)) return
+  val orders=journal.orders(trade)
   val revision=journal.revision(trade)
   val shouldCancel=action in setOf("replace","cancel","exit") || seq<revision.first || revision.second
   if(shouldCancel) {
@@ -74,10 +67,23 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
    throw error
   }
  }
+ /** Refresh every outstanding order before allowing new work after process/service resume. */
+ fun reconcile(e:JSONObject):Boolean {
+  require(broker.account()==config.getString("account")) { "Account changed" }
+  for(o in journal.orders(e.getString("trade_id"))) if(o.state !in terminal) {
+   val remote=broker.order(o.client)
+   if(remote==null) { journal.diagnostic(e.getString("event_id"),"reconciliation_wait","Broker outcome unknown; submission blocked"); return false }
+   validate(remote,o.client,e.getString("symbol"),o.side,journal.meta("quantity:${o.client}").toIntOrNull(),o.filled,o.broker)
+   journal.update(o.client,remote)
+  }
+  return true
+ }
  private fun validate(order:JSONObject,client:String,symbol:String,side:String,quantity:Int?,previous:Int,expectedBroker:String="") {
   require(order.getString("id").isNotBlank() && (expectedBroker.isBlank() || order.getString("id")==expectedBroker)) { "Broker order ID changed" }
   require(quantity!=null && order.getString("client_order_id")==client && order.getString("symbol")==symbol && order.getString("side")==side && order.getString("qty").toBigDecimal()==quantity.toBigDecimal()) { "Broker order identity mismatch" }
+  require(order.getString("status") in setOf("new","accepted","pending_new","accepted_for_bidding","partially_filled","filled","done_for_day","canceled","expired","replaced","pending_cancel","pending_replace","stopped","rejected","suspended","calculated")) { "Invalid broker status" }
   val filled=order.getString("filled_qty").toBigDecimal()
+  if(!order.isNull("filled_avg_price") && order.has("filled_avg_price")) require(order.getString("filled_avg_price").toBigDecimal().signum()>0) { "Invalid broker fill price" }
   require(filled>=previous.toBigDecimal() && filled<=quantity.toBigDecimal() && filled.stripTrailingZeros().scale()<=0) { "Invalid cumulative fill" }
  }
 }

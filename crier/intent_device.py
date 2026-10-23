@@ -99,8 +99,18 @@ class IntentDevice:
             self.pair=dict(pair); self._engine(); self.message='Paired; broker credentials required' if not self.engine else 'Paired'
             if self.engine and pair['role']=='host': self.engine.save_settings({'enabled':True})
     def status(self):
+        with self.db() as db:
+            delivery={r['state']:r['n'] for r in db.execute('SELECT state,COUNT(*) AS n FROM outgoing WHERE pair=? GROUP BY state',(self.fingerprint,))}
+            quarantined=db.execute('SELECT COUNT(*) FROM quarantined_events WHERE pair=?',(self.fingerprint,)).fetchone()[0]
         return {'pair':{k:v for k,v in (self.pair or {}).items() if k!='token'},'configured':self.engine is not None,
-                'message':self.message,'execution':self.engine.status() if self.engine else None}
+                'message':self.message,'execution':self.engine.status() if self.engine else None,
+                'delivery':delivery,'quarantined_events':quarantined}
+    def retry_rejected(self):
+        if not self.pair or self.pair['role']!='host': raise ValueError('Host pairing required')
+        with self.db() as db:
+            db.execute("UPDATE outgoing SET state='pending' WHERE pair=? AND state='rejected'",(self.fingerprint,))
+        self.publish_changed.set()
+        return self.status()
     def command(self,action,trade_id=None,**values):
         with self.lock:
             if not self.pair or self.pair['role']!='host' or not self.engine: raise ValueError('Connect a host pairing and broker first')
@@ -156,6 +166,11 @@ class IntentDevice:
                             self.message='Intent delivered'
                             failures=0
                         except httpx.HTTPStatusError as exc:
+                            if exc.response.status_code in (400,404,409,410,422):
+                                with self.db() as db: db.execute("UPDATE outgoing SET state='rejected' WHERE id=?",(row['id'],))
+                                self._trace(row['trade_id'],'relay_publish_rejected',event_id=row['id'],http_status=exc.response.status_code)
+                                self.message='Relay rejected an instruction; inspect local orders. Other instructions continue.'
+                                continue
                             failures+=1
                             if exc.response.status_code in (401,403,409):
                                 self.message='Relay rejected delivery; check pairing or channel. Queue retained.'
@@ -190,10 +205,12 @@ class IntentDevice:
                     quarantined=False
                     for item in response.json()['events']:
                         try:
-                            event=IntentEvent.model_validate(item['event'])
+                            event=IntentEvent.model_validate(item.get('event'))
+                            if event.environment!=pair['environment']: raise ValueError('Pair environment mismatch')
+                            engine.accept(event)
                         except (ValidationError, ValueError, TypeError) as exc:
-                            # Only schema-invalid events are quarantined. Do not
-                            # bypass environment, identity, or execution errors.
+                            # Validation/identity conflicts reject only this event.
+                            # Storage errors still halt consumption for safe retry.
                             with self.db() as db:
                                 db.execute('BEGIN IMMEDIATE')
                                 db.execute('INSERT OR IGNORE INTO quarantined_events VALUES (?,?,?,?)',
@@ -201,11 +218,9 @@ class IntentDevice:
                                 db.execute('INSERT OR REPLACE INTO cursors VALUES (?,?)',(fingerprint,item['cursor']))
                             quarantined=True
                             continue
-                        if event.environment!=pair['environment']: raise ValueError('Pair environment mismatch')
                         self._trace(event.trade_id,'receiver_instruction_arrived',event_id=event.event_id,sequence=event.sequence,relay_cursor=item['cursor'],sender_created_at=event.created_at.isoformat(),reference_limit_price=str(event.limit_price),quote_status='not_captured')
                         try: self.diagnostics.observe(event,'receiver')
                         except Exception: pass
-                        engine.accept(event)
                         self._trace(event.trade_id,'receiver_instruction_stored',event_id=event.event_id,relay_cursor=item['cursor'])
                         self.changed.set()
                         with self.db() as db: db.execute('INSERT OR REPLACE INTO cursors VALUES (?,?)',(fingerprint,item['cursor']))

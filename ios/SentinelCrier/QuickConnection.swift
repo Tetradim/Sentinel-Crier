@@ -73,4 +73,25 @@ enum QuickConnection {
         let value = try await post(Invite.self, origin: url, path: "invite", token: pair.token)
         return url.absoluteString + "/connect#" + (try code(value.code))
     }
+    struct Receiver: Decodable, Identifiable { let id: String; let created: Double; let revoked: Int }
+    static func receivers(_ pair: IntentPairing, session: URLSession = CrierHTTPSession.shared) async throws -> [Receiver] {
+        guard pair.role == "host" else { throw AlpacaError.invalid("Host credentials required.") }
+        var request = URLRequest(url: try origin(pair.url.absoluteString).appendingPathComponent("api/connect/receivers"))
+        request.timeoutInterval = 30
+        request.setValue("Bearer " + pair.token, forHTTPHeaderField: "Authorization")
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw AlpacaError.invalid("Invalid receiver response.") }
+        guard (200..<300).contains(http.statusCode) else { throw AlpacaError.http(http.statusCode) }
+        return try JSONDecoder().decode([Receiver].self, from: data)
+    }
+    static func revoke(_ receiver: Receiver, pairing: IntentPairing, session: URLSession = CrierHTTPSession.shared) async throws {
+        guard pairing.role == "host", UUID(uuidString: receiver.id) != nil else { throw AlpacaError.invalid("Invalid receiver identity.") }
+        var request = URLRequest(url: try origin(pairing.url.absoluteString).appendingPathComponent("api/connect/receivers/" + receiver.id + "/revoke"))
+        request.httpMethod = "POST"; request.timeoutInterval = 30
+        request.setValue("Bearer " + pairing.token, forHTTPHeaderField: "Authorization")
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw AlpacaError.invalid("Invalid revocation response.") }
+        guard (200..<300).contains(http.statusCode) else { throw AlpacaError.http(http.statusCode) }
+    }
+
 }

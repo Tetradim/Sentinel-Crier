@@ -14,6 +14,8 @@ from .intent_broker import AlpacaIntentBroker, HOSTS
 from .intent_device import IntentDevice
 from .intent_routes import Pair
 from .connection_client import ConnectionClient
+from .store import Store
+from .discord_settings import DiscordPublisher
 
 
 def data_directory():
@@ -56,6 +58,9 @@ class DesktopSession:
         self.account = ''
         self.closing = False
         self.lifecycle = asyncio.Lock()
+        self.publisher=DiscordPublisher(self.folder,Store(self.folder/"alerts.sqlite3"))
+        self.publisher.store.recover()
+        self.alert_state={'state':'stopped'}
 
     def connection_client(self):
         saved=json.loads(load_secret(self.credentials)) if self.credentials.exists() else {}
@@ -68,6 +73,61 @@ class DesktopSession:
     async def receive(self, invitation, origin):
         async with self.lifecycle:
             return await self.connection_client().receive(invitation,origin)
+
+    async def receivers(self):
+        return await self.connection_client().receivers()
+
+    async def revoke_receiver(self, identity):
+        return await self.connection_client().revoke_receiver(identity)
+
+    def discord_status(self):
+        return self.publisher.status()
+
+    def discord_configure(self, webhook, enabled):
+        return self.publisher.configure(webhook, enabled)
+
+    def discord_settings(self, settings):
+        return self.publisher.settings(settings)
+
+    def discord_preview(self, scenario='option_buy', settings=None):
+        return self.publisher.preview(scenario,settings)
+
+    async def discord_test(self):
+        def send():
+            with httpx.Client(trust_env=False,follow_redirects=False) as client:
+                return self.publisher.test_message(client)
+        return await asyncio.to_thread(send)
+
+    async def poll_alerts(self):
+        from .alpaca import poll_once
+        if not self.broker or not hasattr(self.broker,'client'): return
+        broker=self.broker
+        def poll():
+            broker.verify(broker.environment)
+            return poll_once(self.publisher.store,broker.client,self.account,broker.environment)
+        try:
+            self.alert_state=await asyncio.to_thread(poll)
+        except Exception:
+            self.alert_state={'state':'reconnecting','message':'Fill activity unavailable; saved cursor retained. No inferred fills published.'}
+
+    def retry_rejected(self):
+        if not self.device: raise ValueError('Connect first.')
+        return self.device.retry_rejected()
+
+    def discord_retry(self, identity):
+        return self.publisher.retry(identity)
+
+    def discord_close(self, identity):
+        return self.publisher.close(identity)
+
+    async def discord_loop(self, stop):
+        with httpx.Client(trust_env=False,follow_redirects=False) as client:
+            while not stop.is_set():
+                await self.poll_alerts()
+                if stop.is_set(): break
+                await asyncio.to_thread(self.publisher.deliver,client)
+                try: await asyncio.wait_for(stop.wait(),2)
+                except TimeoutError: pass
 
     async def connect(self, pairing_text, key, secret, allow_live=False):
         async with self.lifecycle:
@@ -104,18 +164,24 @@ class DesktopSession:
                 broker.close()
                 raise
             self.device, self.broker, self.account = device, broker, account
+            # Enroll pre-existing activity silently before the user enables orders.
+            await self.poll_alerts()
             self.stop = asyncio.Event()
             if self.start_workers:
                 self.tasks = [asyncio.create_task(device.publish_loop(self.stop)),
                               asyncio.create_task(device.receive_loop(self.stop)),
                               asyncio.create_task(device.execute_loop(self.stop)),
-                              asyncio.create_task(device.diagnostics_loop(self.stop))]
+                              asyncio.create_task(device.diagnostics_loop(self.stop)),
+                              asyncio.create_task(self.discord_loop(self.stop))]
             return self.status()
 
     def status(self):
         state = self.device.status() if self.device else {'pair': {}, 'execution': None, 'message': 'Disconnected'}
         return dict(state, connected=self.device is not None and not self.closing,
-                    account=self.account, saved=self.credentials.exists())
+                    account=self.account, saved=self.credentials.exists(),
+                    runtime='foreground' if self.device else 'stopped',
+                    alerts=self.alert_state,
+                    recovery='Reconnect with the same account and channel. New entries start paused; existing orders reconcile automatically.')
 
     async def diagnostics(self, trade_id, side='buy'):
         if not self.device or self.closing:
@@ -149,7 +215,7 @@ class DesktopSession:
                 self.stop.set()
                 self.device.changed.set()
                 self.device.publish_changed.set()
-                for task in self.tasks[:2] + self.tasks[3:]:
+                for task in self.tasks[:2] + self.tasks[3:4]:
                     task.cancel()
                 # Do not cancel a to_thread broker mutation while it is committing.
                 await asyncio.gather(*self.tasks, return_exceptions=True)

@@ -26,6 +26,7 @@ from .mirror_routes import configure_mirror, mirror_router
 from .intent_relay import IntentRelay, sync_router
 from .intent_routes import configure_device, device_router
 from .quick_connect import ConnectionService, connection_router
+from .discord_settings import DiscordPublisher
 
 STATIC = Path(__file__).parent / "static"
 
@@ -38,12 +39,12 @@ class Preview(BaseModel):
 def create_app(config=None):
     config = config or Config.from_env()
     store = Store(config.data_dir / "crier.sqlite3")
+    publisher=DiscordPublisher(config.data_dir,store,config.webhook,config.delivery_enabled)
 
     async def sender(stop):
         with httpx.Client() as client:
             while not stop.is_set():
-                if not store.get_settings().paused:
-                    await asyncio.to_thread(deliver_once, store, config.webhook, client)
+                await asyncio.to_thread(publisher.deliver,client)
                 try: await asyncio.wait_for(stop.wait(), timeout=2)
                 except TimeoutError: pass
 
@@ -52,7 +53,7 @@ def create_app(config=None):
         with single_process(config.data_dir / "console.lock"):
             store.recover()
             stop = asyncio.Event()
-            task = asyncio.create_task(sender(stop)) if config.delivery_enabled else None
+            task = asyncio.create_task(sender(stop))
             app.state.sender = task
             app.state.monitor = None
             device_stop = asyncio.Event()
@@ -120,12 +121,37 @@ def create_app(config=None):
         observer = json.loads(row[0]) if row else {"state": "not_started", "updated": 0}
         if time.time() - observer.get("updated", 0) > 90 and observer["state"] not in ("not_started", "stopped"):
             observer["state"] = "stale"
-        return {"mode": "live" if config.delivery_enabled else "preview", "delivery_enabled": config.delivery_enabled,
+        return {"mode": "live" if publisher.destination["enabled"] else "preview", "delivery_enabled": publisher.destination["enabled"],
                 "sender_failed": bool(getattr(app.state, "sender", None) and app.state.sender.done()),
-                "discord_configured": bool(config.webhook), "webull_verified": config.webull_verified,
+                "discord_configured": bool(publisher.destination["webhook"]), "webull_verified": config.webull_verified,
                 "monitor": {"selected": config.monitor, "running": bool(getattr(app.state, "monitor", None) and app.state.monitor.is_alive())},
                 "intake": {"configured": bool(config.intake_key), "verified": config.intake_verified},
                 "observer": observer, "review_count": store.review_count(), "paused": store.get_settings().paused}
+
+    @app.get('/api/discord', dependencies=[Depends(auth)])
+    def discord_status(): return publisher.status()
+
+    @app.put('/api/discord', dependencies=[Depends(auth)])
+    def discord_destination(value: dict):
+        try: return publisher.configure(value.get('webhook',''),value.get('enabled',False))
+        except (ValueError,TypeError,AttributeError) as exc: raise HTTPException(422,str(exc)) from None
+
+    @app.post('/api/discord/test', dependencies=[Depends(auth)])
+    def discord_test():
+        try:
+            with httpx.Client(trust_env=False,follow_redirects=False) as client:
+                return publisher.test_message(client)
+        except ValueError as exc: raise HTTPException(422,str(exc)) from None
+
+    @app.post('/api/discord/{identity}/retry', dependencies=[Depends(auth)])
+    def discord_retry(identity: str):
+        try: return publisher.retry(identity)
+        except ValueError as exc: raise HTTPException(422,str(exc)) from None
+
+    @app.post('/api/discord/{identity}/close', dependencies=[Depends(auth)])
+    def discord_close(identity: str):
+        try: return publisher.close(identity)
+        except ValueError as exc: raise HTTPException(422,str(exc)) from None
 
     @app.get("/api/settings", dependencies=[Depends(auth)])
     def settings(): return store.get_settings()

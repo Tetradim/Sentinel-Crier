@@ -24,6 +24,39 @@ def configure_device(config):
 
 def device_router(device,auth):
     router=APIRouter(prefix='/api/device',dependencies=[Depends(auth)])
+    from .connection_client import ConnectionClient
+    def connection(): return ConnectionClient(device.folder/'browser-connection.secret',existing=device.pair)
+
+    @router.post('/connect/host')
+    async def host(value:dict):
+        try:
+            result=await connection().host(value.get('origin',''),value.get('environment','paper'))
+            device.configure(result['pair'])
+            return dict(invitation=result['invitation'],expires_at=result['expires_at'],device=device.status())
+        except (ValueError,TypeError) as exc: raise HTTPException(422,str(exc)) from None
+
+    @router.post('/connect/receive')
+    async def receive(value:dict):
+        try:
+            result=await connection().receive(value.get('invitation',''),value.get('origin',''))
+            device.configure(result['pair'])
+            return device.status()
+        except (ValueError,TypeError) as exc: raise HTTPException(422,str(exc)) from None
+
+    @router.get('/receivers')
+    async def receivers():
+        try: return await connection().receivers()
+        except ValueError as exc: raise HTTPException(422,str(exc)) from None
+
+    @router.post('/receivers/{identity}/revoke')
+    async def revoke(identity:str):
+        try: return await connection().revoke_receiver(identity)
+        except ValueError as exc: raise HTTPException(422,str(exc)) from None
+
+    @router.post('/retry-rejected')
+    async def retry_rejected():
+        try: return device.retry_rejected()
+        except ValueError as exc: raise HTTPException(422,str(exc)) from None
     @router.get('')
     def status(): return device.status()
     @router.put('/pairing')

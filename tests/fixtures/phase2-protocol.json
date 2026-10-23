@@ -1,0 +1,19 @@
+{
+  "base": {"version":1,"event_id":"11111111-1111-4111-8111-111111111111","trade_id":"22222222-2222-4222-8222-222222222222","sequence":1,"action":"enter","environment":"paper","symbol":"SPY","asset":"stock","quantity":2,"limit_price":"0.20","created_at":"2026-10-23T14:00:00Z","expires_at":"2026-10-23T14:00:20Z"},
+  "cases": [
+    {"name":"stock","changes":{},"valid":true},
+    {"name":"option","changes":{"symbol":"SPY261218C00750000","asset":"option"},"valid":true},
+    {"name":"fractional-time","changes":{"created_at":"2026-10-23T14:00:00.125Z"},"valid":true},
+    {"name":"bad-version","changes":{"version":2},"valid":false},
+    {"name":"bad-action","changes":{"action":"purchase"},"valid":false},
+    {"name":"bad-symbol","changes":{"symbol":"spy"},"valid":false},
+    {"name":"bad-contract","changes":{"symbol":"SPY261332C00750000","asset":"option"},"valid":false},
+    {"name":"zero-quantity","changes":{"quantity":0},"valid":false},
+    {"name":"fractional-quantity","changes":{"quantity":1.5},"valid":false},
+    {"name":"zero-price","changes":{"limit_price":"0"},"valid":false},
+    {"name":"negative-sequence","changes":{"sequence":-1},"valid":false},
+    {"name":"missing-timezone","changes":{"created_at":"2026-10-23T14:00:00"},"valid":false},
+    {"name":"excess-lifetime","changes":{"expires_at":"2026-10-23T14:01:00Z"},"valid":false},
+    {"name":"extra-field","changes":{"unexpected":true},"valid":false}
+  ]
+}

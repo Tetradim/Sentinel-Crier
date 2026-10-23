@@ -240,6 +240,13 @@
                 <span class="connection-icon">#</span>
                 <h3>Discord</h3>
                 <p id="discord-state">Not configured</p>
+                <label for="discord-webhook">Discord webhook URL (leave blank to keep saved)</label>
+                <input id="discord-webhook" type="password" autocomplete="off">
+                <label><input id="discord-enabled" type="checkbox">Enable delivery to this destination</label>
+                <p class="fine">Enabling delivery sends queued alerts. Review Activity and verify the destination first.</p>
+                <button id="discord-save" type="button">Save destination</button>
+                <button id="discord-test" type="button">Send labeled test message</button>
+                <p class="fine">Test messages are synthetic and use the saved presentation. An uncertain delivery requires checking Discord; it is never blindly retried.</p>
                 <p class="fine">
                   Webhook credentials live on your server. Studio previews never enter the queue. Synthetic receipts queue only after confirmation.
                 </p>

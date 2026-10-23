@@ -42,6 +42,9 @@ class DesktopApp:
         tabs.add(self.activity, text='Trading & activity')
         tabs.add(setup, text='Host / Receive')
         tabs.add(pricing, text='Pricing')
+        delivery = ttk.Frame(tabs, padding=14)
+        tabs.add(delivery, text='Discord & receivers')
+        self.build_delivery(delivery)
         diagnostics = ttk.Frame(tabs, padding=14)
         tabs.add(diagnostics, text='Diagnostics')
         tabs.select(setup)
@@ -55,6 +58,46 @@ class DesktopApp:
                   style='Subtitle.TLabel').pack(anchor='w', pady=(6,0))
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.after(100, self.refresh)
+
+    def build_delivery(self, frame):
+        controls = ttk.Frame(frame)
+        controls.pack(side='left', fill='y', padx=(0,12))
+        output = tk.Text(frame, width=46, height=14, wrap='word')
+        output.pack(side='right', fill='both', expand=True)
+        frame = controls
+        webhook = self._entry(frame, 'Discord webhook (blank reuses saved)', masked=True)
+        enabled = tk.BooleanVar(value=False)
+        ttk.Checkbutton(frame, text='Enable Discord delivery', variable=enabled).pack(anchor='w')
+        style = tk.StringVar(value='card')
+        ttk.Combobox(frame, textvariable=style, values=('card','text','homebrew','echo'), state='readonly').pack(anchor='w')
+        quantity = tk.BooleanVar(value=True); timestamp = tk.BooleanVar(value=True)
+        ttk.Checkbutton(frame, text='Show quantity', variable=quantity).pack(anchor='w')
+        ttk.Checkbutton(frame, text='Show broker time', variable=timestamp).pack(anchor='w')
+        def show(value):
+            output.delete('1.0', 'end'); output.insert('1.0', json.dumps(value, indent=2, default=str))
+        def load(value):
+            enabled.set(value['enabled']); settings=value['settings']
+            style.set(settings['format']); quantity.set(settings['show_quantity']); timestamp.set(settings['show_time']); show(value)
+        ttk.Button(frame, text='Load delivery settings and history', command=lambda:self.submit('discord_status', callback=load)).pack(anchor='w')
+        ttk.Button(frame, text='Save destination', command=lambda:self.submit('discord_configure',webhook.get(),enabled.get(),callback=load)).pack(anchor='w')
+        def save_style():
+            self.submit('discord_status',callback=lambda value:self.submit('discord_settings',dict(value['settings'],format=style.get(),show_quantity=quantity.get(),show_time=timestamp.get()),callback=show))
+        ttk.Button(frame, text='Save alert format and fields', command=save_style).pack(anchor='w')
+        ttk.Button(frame, text='Preview saved alert', command=lambda:self.submit('discord_preview',callback=show)).pack(anchor='w')
+        ttk.Button(frame, text='Send labeled test message', command=lambda:self.submit('discord_test',callback=show)).pack(anchor='w')
+        alert=self._entry(frame,'Alert ID to retry (from history)')
+        def retry_alert():
+            if messagebox.askyesno('Retry delivery', 'Check Discord first. Retrying an uncertain delivery can create a duplicate. Retry this alert?'):
+                self.submit('discord_retry',alert.get(),callback=show)
+        ttk.Button(frame,text='Retry selected alert',command=retry_alert).pack(anchor='w')
+        def close_alert():
+            if messagebox.askyesno('Close delivery after inspection', 'Close this alert without sending it? Its original evidence will remain in history.'):
+                self.submit('discord_close',alert.get(),callback=show)
+        ttk.Button(frame,text='Close inspected delivery without sending',command=close_alert).pack(anchor='w')
+        ttk.Button(frame,text='Retry rejected relay instructions',command=lambda:self.submit('retry_rejected',callback=show)).pack(anchor='w')
+        ttk.Button(frame, text='List paired receivers', command=lambda:self.submit('receivers',callback=show)).pack(anchor='w')
+        receiver=self._entry(frame,'Receiver ID to revoke (from list)')
+        ttk.Button(frame,text='Revoke receiver',command=lambda:self.submit('revoke_receiver',receiver.get(),callback=show)).pack(anchor='w')
 
     def _entry(self, frame, label, value='', masked=False):
         row = ttk.Frame(frame)

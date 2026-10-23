@@ -136,14 +136,14 @@ class Store:
             rows = db.execute("SELECT * FROM outbox ORDER BY created DESC LIMIT 100").fetchall()
         return [dict(r) | {"fill": json.loads(r["fill"]), "payload": json.loads(r["payload"])} for r in rows]
 
-    def claim(self):
+    def claim(self, job_id=None):
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             pause = db.execute("SELECT value FROM config WHERE id='discord_retry_at'").fetchone()
             if pause and float(pause[0]) > time.time(): return None
             # Only one sender may own any job at a time, even across processes.
             if db.execute("SELECT 1 FROM outbox WHERE status='sending'").fetchone(): return None
-            row = db.execute("SELECT * FROM outbox WHERE status='pending' AND due<=? AND NOT EXISTS (SELECT 1 FROM blocked_orders WHERE blocked_orders.id=outbox.order_key) ORDER BY created LIMIT 1", (time.time(),)).fetchone()
+            row = db.execute("SELECT * FROM outbox WHERE status='pending' AND due<=? AND (? IS NULL OR id=?) AND NOT EXISTS (SELECT 1 FROM blocked_orders WHERE blocked_orders.id=outbox.order_key) ORDER BY created LIMIT 1", (time.time(),job_id,job_id)).fetchone()
             if row:
                 db.execute("UPDATE outbox SET status='sending', attempts=attempts+1, due=? WHERE id=?", (time.time(), row["id"]))
                 return dict(row) | {"payload": json.loads(row["payload"])}
