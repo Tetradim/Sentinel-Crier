@@ -40,6 +40,24 @@ jobs:
           } finally {
             if ($pfx -and (Test-Path -LiteralPath $pfx)) { Remove-Item -LiteralPath $pfx -Force }
           }
+      - name: Install, upgrade, reject downgrade and preserve journals
+        shell: pwsh
+        run: |
+          $version = python desktop/release_metadata.py --version-only
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot determine installer version' }
+          python scripts/windows-install-acceptance.py `
+            --installer "dist/release/SentinelCrier-$version-Windows-Setup.exe" `
+            --compiler 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' `
+            --program-source dist/SentinelCrier `
+            --output dist/release/installer-acceptance.json
+          if ($LASTEXITCODE -ne 0) { throw 'Installer acceptance failed' }
+      - name: Retain installer acceptance evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-installer-acceptance-results
+          path: dist/release/installer-acceptance.json
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
           name: SentinelCrier-Windows-release
