@@ -27,17 +27,14 @@ for initial testing. No Discord parsing is involved in this connection.
 
 ## Pairing and network
 
-For the new Host/Receive setup, see [one-time service deployment](https://github.com/Tetradim/Sentinel-Crier/blob/main/docs/remote-connect-setup.md).
-Once that service is deployed, invite links supply its address automatically to receivers.
+The app bundles the Supabase testing relay. Invite links supply its address automatically to receivers; customers do not need to deploy a service or open router ports. To operate your own service, see [remote connection setup](https://github.com/Tetradim/Sentinel-Crier/blob/main/docs/remote-connect-setup.md).
 Use **Host / invite receiver** to originate trades from Windows and invite other devices.
 After pairing, clear the invitation field and use the same button to reconnect with
 saved credentials. Advanced pairing JSON and the original Connect button remain available.
 
-Both apps still need a reachable HTTPS Crier relay. This executable is a desktop
-trading client; it does not silently open router ports or provision public hosting.
-Run the existing Crier service, expose it through your HTTPS setup, and create a
-channel at `/intent`. Paste host JSON into iOS and follower JSON into Windows.
-See [relay setup](https://github.com/Tetradim/Sentinel-Crier/blob/main/docs/intent-mirroring.md).
+Both apps need a reachable HTTPS Crier relay. The bundled service is for testing,
+with no guaranteed availability or trading latency. Advanced pairing JSON remains
+available for custom deployments; ordinary Host/Receive setup uses invitations.
 An iPhone cannot reach a PC's `localhost` address.
 
 Keep Crier running and the PC awake. iOS must remain foregrounded for its current

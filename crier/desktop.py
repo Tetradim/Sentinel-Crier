@@ -1,5 +1,6 @@
 """Native Windows desktop for the shared iOS/Android/PC intent protocol."""
 import argparse
+from datetime import datetime
 import json
 from pathlib import Path
 import tempfile
@@ -60,44 +61,197 @@ class DesktopApp:
         root.after(100, self.refresh)
 
     def build_delivery(self, frame):
-        controls = ttk.Frame(frame)
-        controls.pack(side='left', fill='y', padx=(0,12))
-        output = tk.Text(frame, width=46, height=14, wrap='word')
-        output.pack(side='right', fill='both', expand=True)
-        frame = controls
-        webhook = self._entry(frame, 'Discord webhook (blank reuses saved)', masked=True)
-        enabled = tk.BooleanVar(value=False)
-        ttk.Checkbutton(frame, text='Enable Discord delivery', variable=enabled).pack(anchor='w')
-        style = tk.StringVar(value='card')
-        ttk.Combobox(frame, textvariable=style, values=('card','text','homebrew','echo'), state='readonly').pack(anchor='w')
-        quantity = tk.BooleanVar(value=True); timestamp = tk.BooleanVar(value=True)
-        ttk.Checkbutton(frame, text='Show quantity', variable=quantity).pack(anchor='w')
-        ttk.Checkbutton(frame, text='Show broker time', variable=timestamp).pack(anchor='w')
-        def show(value):
-            output.delete('1.0', 'end'); output.insert('1.0', json.dumps(value, indent=2, default=str))
-        def load(value):
-            enabled.set(value['enabled']); settings=value['settings']
-            style.set(settings['format']); quantity.set(settings['show_quantity']); timestamp.set(settings['show_time']); show(value)
-        ttk.Button(frame, text='Load delivery settings and history', command=lambda:self.submit('discord_status', callback=load)).pack(anchor='w')
-        ttk.Button(frame, text='Save destination', command=lambda:self.submit('discord_configure',webhook.get(),enabled.get(),callback=load)).pack(anchor='w')
-        def save_style():
-            self.submit('discord_status',callback=lambda value:self.submit('discord_settings',dict(value['settings'],format=style.get(),show_quantity=quantity.get(),show_time=timestamp.get()),callback=show))
-        ttk.Button(frame, text='Save alert format and fields', command=save_style).pack(anchor='w')
-        ttk.Button(frame, text='Preview saved alert', command=lambda:self.submit('discord_preview',callback=show)).pack(anchor='w')
-        ttk.Button(frame, text='Send labeled test message', command=lambda:self.submit('discord_test',callback=show)).pack(anchor='w')
-        alert=self._entry(frame,'Alert ID to retry (from history)')
-        def retry_alert():
-            if messagebox.askyesno('Retry delivery', 'Check Discord first. Retrying an uncertain delivery can create a duplicate. Retry this alert?'):
-                self.submit('discord_retry',alert.get(),callback=show)
-        ttk.Button(frame,text='Retry selected alert',command=retry_alert).pack(anchor='w')
-        def close_alert():
-            if messagebox.askyesno('Close delivery after inspection', 'Close this alert without sending it? Its original evidence will remain in history.'):
-                self.submit('discord_close',alert.get(),callback=show)
-        ttk.Button(frame,text='Close inspected delivery without sending',command=close_alert).pack(anchor='w')
-        ttk.Button(frame,text='Retry rejected relay instructions',command=lambda:self.submit('retry_rejected',callback=show)).pack(anchor='w')
-        ttk.Button(frame, text='List paired receivers', command=lambda:self.submit('receivers',callback=show)).pack(anchor='w')
-        receiver=self._entry(frame,'Receiver ID to revoke (from list)')
-        ttk.Button(frame,text='Revoke receiver',command=lambda:self.submit('revoke_receiver',receiver.get(),callback=show)).pack(anchor='w')
+        self.delivery_tab = frame
+        self.delivery_canvas = tk.Canvas(frame, highlightthickness=0)
+        scroll = ttk.Scrollbar(frame, orient='vertical', command=self.delivery_canvas.yview)
+        self.delivery_canvas.configure(yscrollcommand=scroll.set)
+        scroll.pack(side='right', fill='y')
+        self.delivery_canvas.pack(side='left', fill='both', expand=True)
+        content = ttk.Frame(self.delivery_canvas)
+        window = self.delivery_canvas.create_window((0, 0), window=content, anchor='nw')
+        content.bind('<Configure>', lambda event: self.delivery_canvas.configure(
+            scrollregion=self.delivery_canvas.bbox('all')))
+        self.delivery_canvas.bind('<Configure>', lambda event: self.delivery_canvas.itemconfigure(
+            window, width=event.width))
+        frame = content
+        self.delivery_generation = {'alerts': 0, 'receivers': 0}
+        self.delivery_rows = {'alerts': {}, 'receivers': {}}
+        settings = ttk.LabelFrame(frame, text='Discord delivery', padding=8)
+        settings.pack(fill='x')
+        self.delivery_webhook = self._entry(settings, 'Webhook (blank reuses saved)', masked=True)
+        self.delivery_enabled = tk.BooleanVar(value=False)
+        ttk.Checkbutton(settings, text='Enable Discord delivery', variable=self.delivery_enabled).pack(anchor='w')
+        row = ttk.Frame(settings); row.pack(fill='x')
+        self.delivery_style = tk.StringVar(value='card')
+        ttk.Combobox(row, textvariable=self.delivery_style, values=('card','text','homebrew','echo'),
+                     state='readonly', width=12).pack(side='left')
+        self.delivery_quantity = tk.BooleanVar(value=True)
+        self.delivery_timestamp = tk.BooleanVar(value=True)
+        ttk.Checkbutton(row, text='Show quantity', variable=self.delivery_quantity).pack(side='left')
+        ttk.Checkbutton(row, text='Show broker time', variable=self.delivery_timestamp).pack(side='left')
+        ttk.Button(row, text='Save destination', command=self.save_delivery_destination).pack(side='left', padx=4)
+        ttk.Button(row, text='Save format / fields', command=self.save_delivery_style).pack(side='left')
+
+        ttk.Label(frame, text='Delivery history — select an alert to inspect and resolve').pack(anchor='w', pady=(8,2))
+        self.delivery_alerts = self._delivery_table(frame, ('created', 'contract', 'side', 'quantity', 'status'), 4)
+        self.delivery_alerts.bind('<<TreeviewSelect>>', lambda event: self.delivery_selection_changed('alerts'))
+        row = ttk.Frame(frame); row.pack(fill='x', pady=4)
+        ttk.Button(row, text='Refresh history / settings', command=self.refresh_delivery_history).pack(side='left')
+        self.retry_delivery_button = ttk.Button(row, text='Retry selected alert', state='disabled',
+                                               command=lambda: self.delivery_action('discord_retry'))
+        self.retry_delivery_button.pack(side='left', padx=4)
+        self.close_delivery_button = ttk.Button(row, text='Close inspected delivery', state='disabled',
+                                               command=lambda: self.delivery_action('discord_close'))
+        self.close_delivery_button.pack(side='left')
+        ttk.Button(row, text='Retry rejected relay instructions',
+                   command=lambda: self.submit('retry_rejected', callback=self.show_delivery_details)).pack(side='left', padx=4)
+        ttk.Label(frame, text='Paired receivers — Host connection required').pack(anchor='w', pady=(8,2))
+        self.delivery_receivers = self._delivery_table(frame, ('receiver', 'created', 'status'), 3)
+        self.delivery_receivers.bind('<<TreeviewSelect>>', lambda event: self.delivery_selection_changed('receivers'))
+        row = ttk.Frame(frame); row.pack(fill='x', pady=4)
+        ttk.Button(row, text='Refresh receivers', command=self.refresh_receivers).pack(side='left')
+        self.revoke_receiver_button = ttk.Button(row, text='Revoke selected receiver', state='disabled',
+                                                command=lambda: self.delivery_action('revoke_receiver'))
+        self.revoke_receiver_button.pack(side='left', padx=4)
+        advanced = ttk.LabelFrame(frame, text='Advanced: preview and record details', padding=6)
+        advanced.pack(fill='both', expand=True, pady=(8,0))
+        row = ttk.Frame(advanced); row.pack(fill='x')
+        ttk.Button(row, text='Preview saved alert', command=lambda: self.submit(
+            'discord_preview', callback=self.show_delivery_details)).pack(side='left')
+        ttk.Button(row, text='Send labeled test message', command=lambda: self.submit(
+            'discord_test', callback=self.delivery_test_completed)).pack(side='left', padx=4)
+        self.delivery_details = tk.Text(advanced, height=4, wrap='word', state='disabled')
+        self.delivery_details.pack(fill='both', expand=True)
+
+    def _delivery_table(self, frame, columns, height):
+        row = ttk.Frame(frame); row.pack(fill='x')
+        tree = ttk.Treeview(row, columns=columns, show='headings', height=height, selectmode='browse')
+        for column in columns:
+            tree.heading(column, text=column.title())
+            tree.column(column, width=140 if column in ('created', 'contract', 'receiver') else 85, stretch=True)
+        scroll = ttk.Scrollbar(row, orient='vertical', command=tree.yview)
+        tree.configure(yscrollcommand=scroll.set)
+        tree.pack(side='left', fill='x', expand=True); scroll.pack(side='right', fill='y')
+        return tree
+
+    def show_delivery_details(self, value):
+        self.delivery_details.configure(state='normal')
+        self.delivery_details.delete('1.0', 'end')
+        self.delivery_details.insert('1.0', json.dumps(value, indent=2, default=str))
+        self.delivery_details.configure(state='disabled')
+
+    def clear_delivery_list(self, kind):
+        self.delivery_generation[kind] += 1
+        self.delivery_rows[kind] = {}
+        tree = self.delivery_alerts if kind == 'alerts' else self.delivery_receivers
+        for iid in tree.get_children():
+            tree.delete(iid)
+        self.delivery_selection_changed(kind)
+
+    def selected_delivery_record(self, kind):
+        tree = self.delivery_alerts if kind == 'alerts' else self.delivery_receivers
+        selected = tree.selection()
+        return self.delivery_rows[kind].get(selected[0]) if len(selected) == 1 else None
+
+    def delivery_selection_changed(self, kind):
+        record = self.selected_delivery_record(kind)
+        if kind == 'alerts':
+            state = record.get('status') if record else None
+            self.retry_delivery_button.configure(state='normal' if state == 'failed' else 'disabled')
+            self.close_delivery_button.configure(state='normal' if state in ('pending','failed','uncertain','review') else 'disabled')
+        else:
+            self.revoke_receiver_button.configure(state='normal' if record and not record['revoked'] else 'disabled')
+        if record:
+            self.show_delivery_details(record)
+
+    @staticmethod
+    def delivery_time(timestamp):
+        return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+
+    def render_delivery_status(self, value):
+        self.clear_delivery_list('alerts')
+        self.delivery_enabled.set(value['enabled'])
+        settings = value['settings']
+        self.delivery_style.set(settings['format'])
+        self.delivery_quantity.set(settings['show_quantity'])
+        self.delivery_timestamp.set(settings['show_time'])
+        for record in value['history']:
+            self.delivery_rows['alerts'][record['id']] = dict(record)
+            fill = record['fill']
+            self.delivery_alerts.insert('', 'end', iid=record['id'], values=(self.delivery_time(record['created']),
+                fill.get('contract', ''), fill.get('side', ''), fill.get('quantity', ''), record['status']))
+        self.show_delivery_details(value)
+
+    def render_receivers(self, records):
+        self.clear_delivery_list('receivers')
+        for index, record in enumerate(records, 1):
+            self.delivery_rows['receivers'][record['id']] = dict(record)
+            self.delivery_receivers.insert('', 'end', iid=record['id'], values=(
+                f"Receiver {index} ({record['id'][:8]})", self.delivery_time(record['created']),
+                'Revoked' if record['revoked'] else 'Paired'))
+
+    def delivery_list_callback(self, kind, callback):
+        generation = self.delivery_generation[kind]
+        def current(value):
+            if generation == self.delivery_generation[kind]:
+                callback(value)
+        return current
+
+    def refresh_delivery_history(self):
+        self.clear_delivery_list('alerts')
+        self.submit('discord_status', callback=self.delivery_list_callback('alerts', self.render_delivery_status))
+
+    def refresh_receivers(self):
+        self.clear_delivery_list('receivers')
+        self.submit('receivers', callback=self.delivery_list_callback('receivers', self.render_receivers))
+
+    def save_delivery_destination(self):
+        self.clear_delivery_list('alerts')
+        self.submit('discord_configure', self.delivery_webhook.get(), self.delivery_enabled.get(),
+                    callback=self.delivery_list_callback('alerts', self.render_delivery_status))
+
+    def save_delivery_style(self):
+        values = dict(format=self.delivery_style.get(), show_quantity=self.delivery_quantity.get(),
+                      show_time=self.delivery_timestamp.get())
+        self.submit('discord_status', callback=lambda value: self.submit('discord_settings',
+            dict(value['settings'], **values), callback=self.show_delivery_details))
+
+    def delivery_test_completed(self, value):
+        self.show_delivery_details(value)
+        self.refresh_delivery_history()
+
+    def delivery_action(self, method):
+        kind = 'receivers' if method == 'revoke_receiver' else 'alerts'
+        record = self.selected_delivery_record(kind)
+        if not record:
+            return
+        if method == 'discord_retry' and record['status'] != 'failed':
+            return
+        if method == 'discord_close' and record['status'] not in ('pending','failed','uncertain','review'):
+            return
+        if method == 'revoke_receiver' and record['revoked']:
+            return
+        identity = record['id']
+        generation = self.delivery_generation[kind]
+        title, prompt = {
+            'discord_retry': ('Retry delivery', 'Check Discord first. Retrying an uncertain delivery can create a duplicate. Retry this alert?'),
+            'discord_close': ('Close delivery after inspection', 'Close this alert without sending it? Its original evidence will remain in history.'),
+            'revoke_receiver': ('Revoke receiver', 'Stop future transport to this receiver? Existing broker orders and positions remain; revoking does not cancel orders or close positions.'),
+        }[method]
+        if not messagebox.askyesno(title, prompt, parent=self.root):
+            return
+        # The modal dialog processes UI events: a refresh may have invalidated its row.
+        current = self.selected_delivery_record(kind)
+        if generation != self.delivery_generation[kind] or not current or current['id'] != identity:
+            return
+        self.clear_delivery_list(kind)
+        def completed(value):
+            self.show_delivery_details(value)
+            if kind == 'alerts':
+                self.refresh_delivery_history()
+            else:
+                self.refresh_receivers()
+        self.submit(method, identity, callback=self.delivery_list_callback(kind, completed))
 
     def _entry(self, frame, label, value='', masked=False):
         row = ttk.Frame(frame)
@@ -267,6 +421,9 @@ class DesktopApp:
     def submit(self, method, *args, callback=None, **kwargs):
         if self.closing:
             return
+        if method in ('connect', 'disconnect', 'host', 'receive'):
+            self.clear_delivery_list('alerts')
+            self.clear_delivery_list('receivers')
         self.notice.set('Working…')
         self.pending.append((self.worker.call(method, *args, **kwargs), callback))
 
@@ -308,6 +465,9 @@ class DesktopApp:
 
     def render(self, state):
         self.latest = state
+        if self.connected != state['connected']:
+            self.clear_delivery_list('alerts')
+            self.clear_delivery_list('receivers')
         self.connected = state['connected']
         self.connect_button.configure(state='disabled' if self.connected else 'normal')
         pair = state['pair']

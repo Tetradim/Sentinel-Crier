@@ -135,8 +135,8 @@ struct CrierConnectionsView: View {
     var body: some View {
         Form {
             AlpacaConnectionForm()
-            Section("Preferences") {
-                NavigationLink("Trading settings", destination: CrierSettingsView())
+            Section("Trading") {
+                NavigationLink("Supported trading and safeguards", destination: CrierSettingsView())
             }
             Section("Discord webhook") {
                 SecureField("Discord webhook URL", text: $webhook)
@@ -160,6 +160,7 @@ struct CrierConnectionsView: View {
                         feedback = model.message
                     }
                 }
+                Text("Connect Alpaca and save a webhook to publish new broker fills to Discord while Crier is open. The first connection starts from a saved baseline; earlier fills are not posted.").font(.footnote)
                 Text("Deliver or close outstanding alerts before changing destination. Closing keeps fill evidence in the journal.").font(.caption)
                 if let feedback { Text(feedback).font(.footnote) }
             }
@@ -169,17 +170,14 @@ struct CrierConnectionsView: View {
 }
 
 struct CrierSettingsView: View {
-    @AppStorage(TradingPreferences.autoStopsKey) private var autoStops = false
-    @AppStorage(TradingPreferences.autoTakeProfitKey) private var autoTakeProfit = false
-    @AppStorage(TradingPreferences.automatedDiscordTradingKey) private var automatedDiscord = false
-
     var body: some View {
         Form {
-            Section("Optional trading controls") {
-                Toggle("Automatic stop orders", isOn: $autoStops).disabled(true)
-                Toggle("Automatic take-profit orders", isOn: $autoTakeProfit).disabled(true)
-                Toggle("Discord-triggered automatic trading", isOn: $automatedDiscord).disabled(true)
-                Text("These are preference placeholders only. These automatic order strategies are not implemented. Manual Alpaca orders are available from Trade. All optional controls default to off.")
+            Section("Supported trading") {
+                Label("Manual Alpaca day limit orders", systemImage: "hand.tap")
+                Text("Buy whole shares or standard 100-share option contracts; sell existing long holdings. Options require level 2 permission in your Alpaca account. Enter your own limit price in Trade.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                Label("Host or follow paired trades", systemImage: "link")
+                Text("Set up a remote connection in Connections. Keep Crier open to follow trades and deliver fill alerts.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Section("Execution safeguards") {
@@ -189,6 +187,6 @@ struct CrierSettingsView: View {
                     .font(.footnote).foregroundStyle(.secondary)
             }
         }
-        .navigationTitle("Settings")
+        .navigationTitle("Trading capabilities")
     }
 }

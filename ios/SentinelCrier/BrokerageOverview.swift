@@ -1,31 +1,34 @@
 import SwiftUI
 
-/// Fast, read-only account overview. Empty state is deliberate until the
-/// authorized cloud broker snapshot endpoint has been provisioned.
+/// Read-only overview of the connected Alpaca account and foreground limits.
 struct BrokerageOverview: View {
     @EnvironmentObject var model: AlpacaWorkspace
     @AppStorage(TradingPreferences.hideBalancesKey) private var hideBalances = false
     var body: some View {
         NavigationStack {
             List {
-                Section("Alpaca • \(model.environment.rawValue.uppercased())") {
+                Section(model.environment == .paper ? "Alpaca Paper: simulated funds" : "Alpaca Live: real money") {
                     if let account = model.account {
-                        Text("Account status: \(account.status)")
+                        Text("Account loaded; broker status: \(account.status)")
                         Text("Equity: \(hideBalances ? "••••" : "$" + account.equity)")
                         Text("Buying power: \(hideBalances ? "••••" : "$" + account.buying_power)")
                         Toggle("Hide balances", isOn: $hideBalances)
-                    } else { Text("Connect API credentials in Connections.") }
+                    } else {
+                        Text("No account connected. Open Connections and use Alpaca API keys for the selected paper or live account.")
+                        NavigationLink("Connect Alpaca", destination: CrierConnectionsView())
+                    }
                     if let time = model.updatedAt { Text("Updated \(time.formatted())").font(.caption) }
                     Text(model.message).font(.footnote)
                 }
                 Section("Monitoring") {
-                    Text("Orders and fills refresh every 15 seconds while the app is active. Reopening catches up fills since the saved baseline. iOS suspension stops monitoring and Discord delivery until you return.")
-                    Text("Webull Connect approval pending. Automated signals, stops and profit orders are unavailable.").font(.footnote)
+                    Text("Keep Crier open to monitor orders and fills and deliver Discord alerts. iOS suspension pauses this work until you return. Reopening catches up fills since the saved baseline.")
+                    Text("A connected Alpaca account is required. Discord alerts also need a webhook in Connections; following trades needs a paired remote connection.").font(.footnote)
+                    Text("Trade supports manual day limit orders for whole shares and standard options, with sales limited to existing long holdings. Options require Alpaca level 2 permission.").font(.footnote)
                 }
             }.navigationTitle("Home")
                 .refreshable { await model.refresh() }
                 .toolbar {
-                    NavigationLink(destination: CrierConnectionsView()) { Image(systemName: "person.crop.circle") }.accessibilityLabel("Connections and settings")
+                    NavigationLink(destination: CrierConnectionsView()) { Label("Connections", systemImage: "person.crop.circle") }.accessibilityLabel("Connections and settings")
                 }
         }
     }

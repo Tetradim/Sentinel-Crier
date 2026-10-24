@@ -2,7 +2,7 @@
 
 Updated October 24, 2026. Original planning baseline: main `9d33f4a`. The phase definitions below retain their original acceptance requirements; the current status section records subsequent implementation and external blockers.
 
-The [autonomous implementation plan](autonomous-completion-plan.md) records completed atomic authorization, server coordination, operational recovery and automated acceptance within its offline scope. External release requirements remain tracked here and were excluded from that implementation queue.
+The [autonomous implementation plan](autonomous-completion-plan.md) records completed atomic authorization, server coordination, operational recovery and automated acceptance within its offline scope. The [customer ease-of-use phases E–I](customer-ease-plan.md) extend original Phases 2–5 with guided setup, clearer controls and recovery, OAuth preparation and customer acceptance. External release requirements remain tracked separately here.
 
 ## Goal and architecture
 

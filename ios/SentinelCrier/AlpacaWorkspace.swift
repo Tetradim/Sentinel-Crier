@@ -308,6 +308,12 @@ struct AlpacaConnectionForm: View {
                 Text("Paper • simulated funds").tag(AlpacaEnvironment.paper)
                 Text("Live • real money").tag(AlpacaEnvironment.live)
             }.disabled(model.account != nil || model.busy)
+            Text(model.environment == .paper
+                 ? "Paper uses simulated funds. Use API keys from your Alpaca paper account."
+                 : "Live orders use real money. Use API keys from your Alpaca live account; every manual order requires final confirmation.")
+                .font(.footnote)
+            Text("Keep Crier open for monitoring, following trades and Discord delivery. These pause when iOS suspends the app.")
+                .font(.footnote)
             SecureField("API key ID", text: $key).textInputAutocapitalization(.never).autocorrectionDisabled()
             SecureField("API secret", text: $secret).textInputAutocapitalization(.never).autocorrectionDisabled()
             Button("Save & connect (or use saved keys)") { Task { await model.connect(key: key, secret: secret); key = ""; secret = "" } }.disabled(model.busy)

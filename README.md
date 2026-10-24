@@ -141,7 +141,7 @@ The [capability report](docs/acceptance/2026-10-24/webull-offline-acceptance.jso
 
 ## Completion status and documentation
 
-The [autonomous implementation plan](docs/autonomous-completion-plan.md) is complete for its declared offline server scope. The whole Webull product and physical release acceptance remain unfinished.
+Phases A–D of the [autonomous implementation plan](docs/autonomous-completion-plan.md) are complete for their declared offline server scope. The [customer ease-of-use phases E–I](docs/customer-ease-plan.md) extend that work with clearer controls, guided onboarding and customer acceptance. The whole Webull product and physical release acceptance remain unfinished.
 
 Remaining gates include an authenticated HTTP gateway and approved signed Webull transport, native Connect flows and order adapter, Webull approval/sandbox validation, Apple distribution requirements, finalized privacy/contact information and real-device/paper-account/Discord acceptance. These are tracked in the [full completion roadmap](docs/project-completion-roadmap.md).
 
