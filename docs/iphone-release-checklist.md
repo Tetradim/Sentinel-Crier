@@ -79,7 +79,22 @@ expiration, and whether the certificate belongs to the profile. Xcode remains th
 authority on signing validity. The artifact contains the signed IPA plus
 `release-manifest.json`: SHA-256, commit, version/build, public connection endpoint,
 profile identity/expiry and public certificate metadata. It contains no signing
-key or provisioning profile. Do not place signing secrets in source files or chat.
+key or separate decoded provisioning profile. Apple's exported application can
+contain embedded provisioning material. Do not place signing secrets in source files or chat.
+
+## Release archive validation without membership
+
+The normal **iOS build** workflow also archives a Release build for generic iPhone
+hardware with signing disabled, verifies arm64 support, and checks the archived
+bundle identity/version, compiled icon/assets, privacy manifest and public relay
+configuration. Its artifact is a JSON validation report, not an IPA or app to
+install. This check can detect device Release build/resource problems before an
+Apple membership exists; it does not validate signatures or distribution rights.
+
+Prepared [support](release/support-draft.md), [privacy](release/privacy-policy-draft.md)
+and [review-note](release/ios-review-notes-draft.md) drafts identify remaining owner
+decisions. GitHub Issues is the approved support route. A published approved privacy
+policy and its accessible in-app link remain required before distribution.
 
 ## Physical-device acceptance
 

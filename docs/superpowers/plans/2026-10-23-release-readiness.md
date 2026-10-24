@@ -7,3 +7,7 @@ The owner explicitly deferred physical tests and requested the next roadmap item
 3. Add Android signed APK/AAB workflow with protected persistent signing identity, strict no-debug-key fallback and signature verification; verify existing data identity is retained. Establish a protected local signing identity if none exists; never commit keys/passwords.
 4. Harden iPhone profile/identity checks and signed artifact provenance, prepare explicit TestFlight upload path and customer metadata requirements. Do not create a fake signing identity or claim public distribution approval.
 5. Test migration/upgrade boundaries, packaging configuration and release tooling. Run relevant CI, retain artifacts, and push direct to main. Record exact completed artifacts versus missing external credentials and deferred acceptance.
+
+## October 24 follow-through
+
+See [Phase 4 status](../../phase4-status.md) for the full requirement/evidence table. The persistent Android identity now has an owner-passphrase portable backup copied to the Galaxy Tab and verified through an all-file hash-matched read-back. The new unsigned iPhone Release hardware archive and resource checks passed real macOS CI. Support/privacy/review drafts and interactive backup tooling are prepared. Apple signing/distribution, finalized public privacy/contact inputs, a separate-machine key recovery drill and the deferred physical gates remain open.

@@ -4,7 +4,7 @@ Candidate version and version code come from root `release.json`. The stable app
 
 The manually triggered **Android release packaging** workflow compiles/tests without signing, proves unsigned release packaging fails closed, then builds an operator-signed APK and AAB using the `android-signing` environment. Four protected secrets are required: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. No debug key is substituted for a missing release identity.
 
-A persistent Android signing identity was provisioned locally for this project under `%LOCALAPPDATA%/SentinelCrier/Signing/`. Its password record is protected with Windows user-bound DPAPI, and its directory has an owner-only ACL. An encrypted keystore copy is configured as a GitHub environment secret. Keep an encrypted offline backup of this identity and password; losing the key prevents signing compatible future updates. Never commit or paste either into source or release notes.
+A persistent Android signing identity was provisioned locally for this project under `%LOCALAPPDATA%/SentinelCrier/Signing/`. Its password record is protected with Windows user-bound DPAPI, and its directory has an owner-only ACL. An encrypted keystore copy is configured as a GitHub environment secret. Keep an encrypted offline backup of this identity; losing the key prevents signing compatible future updates. The [interactive backup helper](android-signing-backup.md) re-encrypts a portable PKCS12 copy under an owner-entered passphrase, independent of this Windows user's DPAPI record. Keep that passphrase separately. Never commit or paste either into source or release notes.
 
 Public certificate SHA-256:
 

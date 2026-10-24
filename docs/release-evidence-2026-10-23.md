@@ -44,9 +44,11 @@ All three checksum entries, artifact byte lengths and manifest hashes were check
 
 ## Remaining release requirements
 
+October 24 update: the Android portable backup was created and its tablet copy verified through read-back hashes; unsigned iPhone Release hardware compilation and resource validation passed. See [current Phase 4 status](phase4-status.md). Actual Apple signing/distribution, owner policy/contact decisions and the separate-machine signing drill remain unverified.
+
 - Apple Developer membership, actual Apple certificate/profile and distribution metadata (support contact, privacy URL, eligibility) before signing or TestFlight distribution.
 - A real Windows publisher certificate if Authenticode trust is desired; no self-signed publisher trust is claimed.
-- Owner-managed encrypted offline backup of Android signing identity/password and future monotonically increasing version codes. Signing materials are outside the repository and protected GitHub environment secrets; no private keys or passwords are in these artifacts or source files.
+- Preserve the owner-passphrase Android backup on separate storage and prove separate-machine private-key recovery/signing; use monotonically increasing version codes for future updates. Signing materials are outside the repository and protected GitHub environment secrets; no private keys or passwords are in these artifacts or source files.
 - Physical/device/network acceptance remains deferred. Existing debug Android installations use a different signing identity; do not erase unresolved journals to bypass an incompatible-signature install error. See the Android release guide.
 
 Phase 4's available packaging work is complete, but the overall phase remains partially blocked by Apple enrollment/distribution inputs. No Apple or Google store submission was made.
