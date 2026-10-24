@@ -6,9 +6,11 @@
 
 - [x] Add concurrent host/follower publish, receive and execute-loop tests. Hold the host's broker response, prove the follower can submit/cancel independently, then replay durable journals after restart without duplicate broker requests.
 - [x] Verify actual Alpaca fill normalization through durable Discord rendering/delivery: incremental option quantities, exact premiums/costs, timestamps, provenance, replay, retries and ambiguous-send quarantine.
-- [ ] Add a Windows installer acceptance helper guarded to fresh ephemeral CI runners. Install, upgrade using an acceptance-only higher installer version, reject downgrade, uninstall and verify synthetic unresolved journal plus DPAPI credential retention.
-- [ ] Run complete Python tests and independent review. Execute real installer acceptance in disposable Windows CI and retain its redacted report.
-- [ ] Update the Phase 5 result matrix, commit/push directly to main, and identify the remaining physical/account-dependent requirements.
+- [x] Add a Windows installer acceptance helper guarded to fresh ephemeral CI runners. Install, upgrade using an acceptance-only higher installer version, reject downgrade, uninstall and verify synthetic unresolved journal plus DPAPI credential retention.
+- [x] Run complete Python tests and independent review. Execute real installer acceptance in disposable Windows CI and retain its redacted report.
+- [x] Update the Phase 5 result matrix, commit/push directly to main, and identify the remaining physical/account-dependent requirements.
+
+Outcome: 542 local Python tests passed; Windows release CI `40073836995` passed 541 with one platform-specific skip and all real installer lifecycle stages. Independent review found no blocking issues. [Detailed results and remaining external gates](../../phase5-results-2026-10-24.md) retain the distinction between completed automated checks and unverified physical/account acceptance.
 
 ## Boundaries
 
