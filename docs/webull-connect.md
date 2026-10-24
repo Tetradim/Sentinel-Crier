@@ -6,7 +6,7 @@ October 24, 2026: Phase 6 work has started after completing available Phase 5 ac
 
 `crier/webull_connect_sessions.py` is an isolated server-side authorization-session primitive. It creates independent random state and browser-binding secrets, stores only their SHA-256 hashes, and binds redemption to an authenticated customer identity, sandbox/production environment and configured HTTPS callback. Sessions expire after five minutes; matching redemption deletes the session in one transaction. Invalid attempts leave the legitimate session intact. Concurrent callbacks cannot both succeed. A gateway must use a new session after any failed or uncertain code exchange.
 
-This module is not connected to the apps, HTTP endpoints, Webull or the deployed Supabase relay. It holds no broker tokens. Its SQLite persistence supports restart and local concurrency testing; it is not a storage option for ephemeral Supabase Edge Functions. A hosted implementation will need equivalent transactional PostgreSQL behavior and deployment tests.
+This module is not connected to the apps, HTTP endpoints, Webull or the deployed Supabase relay. It holds no broker tokens. Its SQLite persistence supports restart and local concurrency testing; it is not a storage option for ephemeral Supabase Edge Functions. The candidate PostgreSQL equivalent below is prepared for testing but has not been deployed or integrated into a gateway.
 
 The future gateway must authenticate the customer when starting authorization, bind the second secret to a Secure/HttpOnly browser cookie, enforce request limits, check the exact registered redirect and verify the callback before exchanging its code. The user identity must come from the authenticated session, never a callback query parameter. Cookie policy and browser return behavior must be tested on all platforms. State alone is not customer authentication.
 
@@ -28,7 +28,19 @@ Callback structure is restricted to a server HTTPS URI without credentials, quer
 
 Opaque request/token objects redact default JSON/string/inspection output; explicit form/token accessors expose their sensitive values for future server use. That does not protect raw HTTP bodies or explicitly serialized forms if a future caller logs them. Native clients must never import application secrets or receive these server-side objects.
 
-The existing Python session primitive and this TypeScript contract are separate tested building blocks, not an integrated login flow. An authenticated customer boundary, transactional hosted sessions, encrypted token custody, refresh locking/rotation, revocation and approved callback/browser behavior still need implementation and validation before real credentials are accepted.
+The Python session primitive, TypeScript contract and pending PostgreSQL store are separate building blocks, not an integrated login flow. An authenticated customer boundary, hosted integration/deployment, encrypted broker-token custody, refresh locking/rotation, token revocation and approved callback/browser behavior still need implementation and validation before real credentials are accepted.
+
+## Candidate PostgreSQL session persistence
+
+`supabase/webull-connect/session_store.sql` is intentionally **outside deployment migrations**. Test runners explicitly load it into isolated databases. It creates a separate private authorization-session schema and service-role-only create/consume/revoke RPCs; application roles cannot read or write its tables directly. The deployed relay and migration directory are unchanged.
+
+Each pending session binds an opaque authenticated-owner reference, independent state/browser SHA-256 digests, `sandbox` or `production`, an exact configured callback and a 300-second lifetime. Creates are capped at five pending sessions per owner across both environments. Create/revoke use owner transaction locks and reject isolation levels other than READ COMMITTED, avoiding stale snapshots that could miss committed sessions. Consume locks its matching row before checking wall-clock expiry; invalid bindings do not consume a legitimate session. Revoke affects pending sessions for the exact owner/environment and does not undo an already completed callback/token exchange.
+
+`session_material.ts` generates independent 32-byte Web Crypto random values, encodes them as URL-safe state/browser material and exposes only their SHA-256 persistence fields by default. Hashing uses the UTF-8 token text, matching the Python primitive. Ordinary serialization/inspection redacts raw values; explicit accessors are reserved for the future authorization redirect and server-only cookie handler. Start every new authorization with fresh material, including after consumption or revocation.
+
+SQL cannot establish customer authentication or prove nonce entropy. A future trusted gateway must derive the owner from its authenticated session, validate/pin the registered callback using the stricter contract helper, keep service-role access server-side and enforce request limits. Pending state is not a broker token vault; no access/refresh tokens or partner secrets are stored by this schema. Atomic candidate installation keeps default function privileges from becoming visible before their revocation.
+
+Local verification passed all three SQL suites and 23 Deno tests (10 existing gateway, 9 OAuth contract, 4 state-material tests), type checks and lint. Independent review caught and corrected a stale-snapshot revocation case; environment parity and its regressions were also corrected. Real PostgreSQL concurrency results are recorded after the focused CI run.
 
 ### Signing contract requiring confirmation
 

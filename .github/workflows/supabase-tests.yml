@@ -40,8 +40,11 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -c 'CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role; CREATE SCHEMA extensions;'
           for migration in supabase/migrations/*.sql; do psql -v ON_ERROR_STOP=1 -f "$migration"; done
+          # Candidate authorization-state storage is loaded only into this test DB.
+          psql -v ON_ERROR_STOP=1 -f supabase/webull-connect/session_store.sql
           for test in supabase/tests/*.sql; do psql -v ON_ERROR_STOP=1 -f "$test"; done
           psql -v ON_ERROR_STOP=1 -c "SET crier.test_dsn = 'host=127.0.0.1 port=5432 dbname=crier_test user=postgres password=local-test-only';" -f supabase/tests/integration/concurrency.sql
+          psql -v ON_ERROR_STOP=1 -c "SET crier.test_dsn = 'host=127.0.0.1 port=5432 dbname=crier_test user=postgres password=local-test-only';" -f supabase/tests/integration/webull_sessions_concurrency.sql
       - name: Edge gateway tests and type checks
         run: |
           npm exec --yes --package deno@2.9.6 -- deno test supabase/functions/crier/gateway_test.ts
@@ -49,6 +52,6 @@ jobs:
           npm exec --yes --package deno@2.9.6 -- deno lint supabase/functions/crier
       - name: Offline Webull Connect contract checks (no broker calls)
         run: |
-          npm exec --yes --package deno@2.9.6 -- deno test supabase/webull-connect/oauth_contract_test.ts
+          npm exec --yes --package deno@2.9.6 -- deno test supabase/webull-connect
           npm exec --yes --package deno@2.9.6 -- deno check supabase/webull-connect/oauth_contract.ts
           npm exec --yes --package deno@2.9.6 -- deno lint supabase/webull-connect
