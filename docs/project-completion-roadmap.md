@@ -92,7 +92,7 @@ Exit gate: all supported platform combinations pass; unresolved mismatches are f
 
 ## Phase 6 â€” Webull and additional brokerage support
 
-October 23 update: approval is still pending, as confirmed by the owner. The isolated [authorization-session groundwork](webull-connect.md) implements local single-use callback state and isolation tests. It is not deployed or connected to a client; token exchange and the Connect trading adapter remain unimplemented. This does not satisfy the Phase 6 exit gate.
+October 24 update: Phase 6 work has started under the owner's instruction; the last approval-status update remains pending. The isolated [authorization-session and OAuth contract groundwork](webull-connect.md) implements local single-use state and a server-runtime form/response boundary. Nine contract test groups and existing relay/real PostgreSQL checks passed CI. It is not deployed or connected to a client; signed token exchange, hosted token custody and the Connect trading adapter remain unimplemented. This does not satisfy the Phase 6 exit gate.
 
 1. Use the already-submitted Connect application; obtain approved scopes, redirect URI, sandbox access, order-event capabilities, and permitted market-data use. Do not submit a duplicate application.
 2. Confirm Webull's approved native-client architecture. Its documented OAuth flow includes server-held application secrets; never embed these in the open-source mobile binaries. A token-exchange service may expand the current relay's responsibilities and needs separate isolation and credential handling.

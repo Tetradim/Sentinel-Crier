@@ -40,6 +40,8 @@ The guide's sandbox/prod H5 browser-login paths and the reference's API authoriz
 
 Local Deno 2.9.6 verification passed nine synthetic contract test groups, type checking and lint. The existing relay gateway's ten tests and the PostgreSQL-compatible local SQL tests also passed. Tests cover reserved-character form encoding, grant/environment separation, exact expiry and clock boundaries, identity binding, malformed timestamps/callbacks, unknown options and redaction. No network permissions or broker credentials are required by the contract tests. The Supabase workflow now runs them alongside the existing relay checks; this workflow does not deploy anything.
 
+[CI 40090804881](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40090804881), source `3c5ec69`, passed the contract test/type/lint checks, existing gateway checks, PostgreSQL-compatible local tests and real PostgreSQL migration/security/concurrency checks. Independent re-review confirmed all three contract findings below were closed.
+
 Independent review initially found callback URL, decoder-option typo and future-issuance validation gaps. All three received failing regression tests before correction; the nine-group verification above includes those fixes.
 
 ## Work after approval

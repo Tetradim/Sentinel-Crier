@@ -11,8 +11,10 @@
 - [x] Read rendered request/response contracts without sending an API request or submitting another application.
 - [x] Test-first implementation in `supabase/webull-connect/oauth_contract.ts` and `_test.ts`: form encoding, grant separation, identity/expiry checks, environment isolation and secret-redacted errors/serialization.
 - [x] Add offline contract tests, type checking and lint to existing Supabase CI. Keep both the existing relay and its deployment configuration unchanged.
-- [ ] Independently review the boundary and run offline Deno checks plus existing relay/SQL checks appropriate to the CI change.
-- [ ] Record verified scope, unresolved signing/vault/browser details and approval-dependent sandbox checks. Commit/push directly to main.
+- [x] Independently review the boundary and run offline Deno checks plus existing relay/SQL checks appropriate to the CI change.
+- [x] Record verified scope, unresolved signing/vault/browser details and approval-dependent sandbox checks. Commit/push directly to main.
+
+Evidence: local nine-group contract tests, ten existing gateway tests, type/lint checks and local SQL checks passed. Real PostgreSQL and complete targeted checks passed in CI `40090804881`, source `3c5ec69`. Independent review's three validation findings received regression tests and were fixed/rechecked. No hosted deployment or real broker call occurred.
 
 ## Exit boundaries
 
