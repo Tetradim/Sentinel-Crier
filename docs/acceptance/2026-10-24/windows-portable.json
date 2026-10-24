@@ -1,0 +1,11 @@
+{
+  "source_commit": "18e284ab530b4f0c62f7b488cb1683d2c94cacde",
+  "ci_run": 40066108700,
+  "portable_sha256": "62822551eb6e37ba960f611d71cd6b6efd07da9c5043d7794b1f178fc2281441",
+  "smoke": {
+    "ok": true,
+    "network_calls": 0,
+    "ui": "Tk",
+    "credentials": "round-trip passed"
+  }
+}

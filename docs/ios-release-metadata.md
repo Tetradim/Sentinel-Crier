@@ -1,6 +1,6 @@
 # iOS release metadata worksheet
 
-Status: **blocked for release**. Candidate version is read from root `release.json`
+Status: **distribution deferred by owner on October 24, 2026; release requirements remain unmet**. Candidate version is read from root `release.json`
 (currently 0.2.0). No Apple Developer account exists for this owner; no signed
 package or Apple distribution eligibility has been verified. Physical testing is
 deferred by owner. This worksheet is preparation, not an App Store submission.

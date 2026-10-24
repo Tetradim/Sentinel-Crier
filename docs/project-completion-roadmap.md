@@ -1,6 +1,6 @@
 # Sentinel Crier completion roadmap
 
-Updated October 23, 2026. Original planning baseline: main `9d33f4a`. The phase definitions below retain their original acceptance requirements; the current status section records subsequent implementation and external blockers.
+Updated October 24, 2026. Original planning baseline: main `9d33f4a`. The phase definitions below retain their original acceptance requirements; the current status section records subsequent implementation and external blockers.
 
 ## Goal and architecture
 
@@ -37,6 +37,8 @@ Recovery fixes, native setup/Discord flows and invalid-event handling have autom
 Signed Android APK/AAB and an unsigned Windows installer/portable ZIP have been produced; see [candidate release evidence](release-evidence-2026-10-23.md). iOS simulator builds and unsigned Release hardware archive checks pass. The Android identity has a password-protected tablet backup with verified read-back hashes. Apple Developer enrollment, real signing inputs, distribution eligibility and finalized privacy/contact metadata are still required for iPhone distribution. A Windows publisher certificate remains optional and absent. See the [October 24 Phase 4 status](phase4-status.md) for completed work and remaining gates.
 
 Physical-device, cross-network and broker paper-accuracy acceptance is deferred by the owner, not passed. Webull Connect approval is still pending. Its local authorization-session groundwork does not implement working broker login or trading. These external gates prevent claiming the whole project is finished.
+
+The owner has now closed Phase 4 implementation with explicit deferrals of Apple enrollment/signing and all owner/external-dependent Phase 4 work, authorizing Phase 5 automated acceptance. See [Phase 4 deferrals](phase4-status.md) and [Phase 5 evidence](phase5-results-2026-10-24.md). This progression does not waive the original distribution or real-device acceptance requirements before claiming a supported release.
 
 ## Phase 1 â€” recovery correctness (execute now)
 

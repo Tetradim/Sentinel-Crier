@@ -1,9 +1,9 @@
 # iPhone installation and release
 
-**Release status: blocked.** The owner has no Apple Developer account. No signed
+**Apple distribution: deferred by owner on October 24, 2026.** The owner has no Apple Developer account. No signed
 IPA, TestFlight eligibility, Apple processing, or physical-device acceptance has
 been established. Physical testing is explicitly deferred by the owner. CI
-preparation and simulator results do not satisfy those gates. See
+preparation and simulator results do not satisfy those gates. Phase 5 automated work is authorized to continue while these requirements are deferred. See
 [release metadata](ios-release-metadata.md) for missing owner inputs.
 
 Crier's native app connects directly to a personal Alpaca API account. It does not

@@ -1,6 +1,6 @@
 # Phase 5 automated acceptance - October 24, 2026
 
-Phase 4 implementation is closed with [explicit owner-authorized deferrals](phase4-status.md). Phase 5's automated checks are recorded here separately from physical-device and real-broker acceptance. This report is not a customer release declaration.
+Phase 4 implementation is closed with [explicit owner-authorized deferrals](phase4-status.md). The automated Phase 5 checks below passed. Physical-device and real-broker acceptance remain deferred/unverified; this report is not a customer release declaration.
 
 ## Integrated execution acceptance
 
@@ -17,7 +17,7 @@ These are simulated Alpaca responses. Execution is advanced by explicit engine t
 
 ## Local relay load/recovery
 
-[Aggregate JSON](acceptance/2026-10-24/local-relay-load.json): 3 synthetic hosts, 10 receivers per host and 30 events per host; **900/900 deliveries**, zero reported failures. Restart cursor preservation, replay, duplicate publication and independent revocation passed. Missing authentication/wrong role, malformed event/invitation and receive throttling returned expected error statuses.
+[Aggregate JSON](acceptance/2026-10-24/local-relay-load.json), harness source `f206dfd`: 3 synthetic hosts, 10 receivers per host and 30 events per host; **900/900 deliveries**, zero reported failures. Restart cursor preservation, replay, duplicate publication and independent revocation passed. Missing authentication/wrong role, malformed event/invitation and receive throttling returned expected error statuses.
 
 Measured in-process delivery percentiles: p50 291.8 ms, p95 454.5 ms, p99 513.6 ms, max 532.4 ms. Transport is `httpx.ASGITransport`, with no network or brokerage. These timings are local harness measurements, not internet/mobile latency or Supabase capacity evidence.
 
@@ -29,7 +29,17 @@ The publish + duplicate + two-read sequence took 1385.398 ms. This includes mult
 
 ## Automated source/native evidence
 
-Complete local Python suite: **520 passed**, with one existing FastAPI/Starlette HTTPX deprecation warning. JUnit is retained in `dist/phase5-2026-10-24/python.xml`. Native CI results are added after the fresh run completes. Workflows retain Python JUnit XML, Android JUnit XML/build reports and the iOS XCTest result bundle. Results identify the tested commit; test artifacts do not establish signing or physical installation.
+Complete local Python suite: **521 passed**, with one existing FastAPI/Starlette HTTPX deprecation warning. JUnit is retained in `dist/phase5-2026-10-24/python.xml`. The Windows CI investigation exposed a pre-existing collection-time timestamp in the invalid-lifetime test: a long suite could turn the intended invalid lifetime into a valid one. Commit `18e284a` pins that fixture and adds exact 30-second boundary coverage; production trading behavior was not changed.
+
+Android [CI 40066021364](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40066021364), source `c892774`, passed the build and **44 tests across 4 suites**, with zero failures/errors/skips. Downloaded JUnit XML was independently counted under `dist/phase5-2026-10-24/android-c892774/`. The subsequent `18e284a` change affects only the Python timestamp test, not Android source.
+
+Linux [CI 40066108717](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40066108717), source `18e284a`, passed the Python job: 520 passed, one platform-specific skip. Downloaded JUnit contains 521 cases and zero failures/errors.
+
+Windows [CI 40066108700](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40066108700), source `18e284a`, passed 520 Python tests with one platform-specific skip, portable packaging and the packaged offline UI/credential smoke test. The downloaded ZIP's smoke report confirms zero network calls; its SHA-256 and source are retained in [portable evidence](acceptance/2026-10-24/windows-portable.json). This confirms the timestamp-fixture failure was corrected on the runner that exposed it.
+
+iOS [CI 40066108717](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40066108717), source `18e284a`, passed simulator compilation and **83 tests with zero failures**. The `ios-acceptance-results` artifact is retained and its XCTest bundle contents downloaded under `dist/phase5-2026-10-24/ios-18e284a/`. GitHub reports artifact archive SHA-256 `b4a186417d0ddbb1fb8d52115988af5729783d89438f8912731fdd51ab5723e9` (196637 bytes). This is the artifact archive digest, not a hash of a single extracted file. On a Mac, download/extract into a directory ending in `.xcresult` to open with Xcode.
+
+Workflows retain Python JUnit XML, Android JUnit XML/build reports and the iOS XCTest result bundle. Results identify the tested commit; test artifacts do not establish signing or physical installation. The corrected final runs passed. Superseded intermediate runs were canceled; the earlier Windows timestamp-fixture failure is retained in CI history and explained above.
 
 ## Deferred and unverified acceptance
 

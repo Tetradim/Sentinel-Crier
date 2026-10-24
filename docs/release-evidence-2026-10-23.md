@@ -51,4 +51,4 @@ October 24 update: the Android portable backup was created and its tablet copy v
 - Preserve the owner-passphrase Android backup on separate storage and prove separate-machine private-key recovery/signing; use monotonically increasing version codes for future updates. Signing materials are outside the repository and protected GitHub environment secrets; no private keys or passwords are in these artifacts or source files.
 - Physical/device/network acceptance remains deferred. Existing debug Android installations use a different signing identity; do not erase unresolved journals to bypass an incompatible-signature install error. See the Android release guide.
 
-Phase 4's available packaging work is complete, but the overall phase remains partially blocked by Apple enrollment/distribution inputs. No Apple or Google store submission was made.
+Phase 4's implementation work is closed with owner-authorized deferrals as of October 24; Apple enrollment/distribution inputs and the other deferred gates remain unmet. Phase 5 automated acceptance is authorized to proceed. No Apple or Google store submission was made.
