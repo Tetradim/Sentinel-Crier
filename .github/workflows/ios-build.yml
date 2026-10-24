@@ -40,7 +40,7 @@ jobs:
             -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Crier-unsigned.xcarchive" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO archive
           app="$RUNNER_TEMP/Crier-unsigned.xcarchive/Products/Applications/SentinelCrier.app"
-          xcrun lipo -verify_arch arm64 "$app/SentinelCrier"
+          xcrun lipo "$app/SentinelCrier" -verify_arch arm64
           python3 scripts/check-ios-archive.py --archive "$RUNNER_TEMP/Crier-unsigned.xcarchive" \
             --output "$RUNNER_TEMP/ios-unsigned-archive-validation.json"
       - uses: actions/upload-artifact@v4
