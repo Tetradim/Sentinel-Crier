@@ -1,6 +1,6 @@
 # Webull Connect integration status
 
-October 24, 2026: Phase 6 work has started after completing available Phase 5 acceptance work. The owner's last approval-status update remains "still waiting." Do not submit another application. Webull login and trading are not available in released Crier clients.
+October 24, 2026: Phase 6 work has started after completing available Phase 5 acceptance work. The owner has approved the implementation plan and explicitly confirmed that Webull's response is still pending. Do not submit another application. Webull login and trading are not available in released Crier clients.
 
 ## Implemented groundwork
 
@@ -28,7 +28,7 @@ Callback structure is restricted to a server HTTPS URI without credentials, quer
 
 Opaque request/token objects redact default JSON/string/inspection output; explicit form/token accessors expose their sensitive values for future server use. That does not protect raw HTTP bodies or explicitly serialized forms if a future caller logs them. Native clients must never import application secrets or receive these server-side objects.
 
-The Python session primitive, TypeScript contract and pending PostgreSQL store are separate building blocks, not an integrated login flow. An authenticated customer boundary, hosted integration/deployment, encrypted broker-token custody, refresh locking/rotation, token revocation and approved callback/browser behavior still need implementation and validation before real credentials are accepted.
+The Python session primitive, TypeScript contract and candidate PostgreSQL stores are separate building blocks, not an integrated login flow. The custody primitives below prepare encryption and refresh fencing. An authenticated customer boundary, integrated exchange/refresh orchestration, hosted deployment, remote token revocation and approved callback/browser behavior still need implementation and validation before real credentials are accepted.
 
 ## Candidate PostgreSQL session persistence
 
@@ -58,7 +58,23 @@ Local Deno 2.9.6 verification passed nine synthetic contract test groups, type c
 
 Independent review initially found callback URL, decoder-option typo and future-issuance validation gaps. All three received failing regression tests before correction; the nine-group verification above includes those fixes.
 
-## Work after approval
+## Candidate encrypted token custody
+
+The owner approved this implementation while Webull access remains pending. `supabase/webull-connect/token_vault.ts` encrypts validated OAuth replies with Web Crypto AES-GCM-256, nonextractable keys, independent random 12-byte nonces and 128-bit tags. Authenticated metadata binds the owner, environment, generation, key identifier, identity digest and both expiry deadlines. Keys are supplied by the future protected server configuration; the module reads no environment values and creates no keys on disk.
+
+Decryption rejects changed context or metadata, unknown keys and expired refresh tokens. An expired access token can still be opened for a refresh. Ordinary serialization and runtime inspection redact plaintext tokens and identity; explicit accessors are server-only. Encryption protects persisted data, not a compromised running process or a caller that explicitly logs secrets. Rewrapping under the active key preserves identity and expiry; this helper does not save its result or provide a storage compare-and-set operation.
+
+`supabase/webull-connect/token_store.sql` is a candidate private store outside deployment migrations. Only server-side service-role RPCs can reserve authorization, commit ciphertext, claim refresh, mark an uncertain outcome, read active ciphertext and revoke local custody. Mutations reject fixed-snapshot isolation and use monotonic generations and operation IDs. The database checks envelope structure; the vault verifies its cryptographic authenticity.
+
+A refresh claim returns the previous generation's ciphertext to one worker and advances the stored generation before the broker request. Its result must be sealed under the new generation and committed with the matching operation ID. No timer grants permission to retry a pending or uncertain refresh; reauthorization is required because the broker may have rotated its tokens. Revocation clears ciphertext and retains a tombstone generation so late results cannot reactivate credentials. This local operation does not claim to revoke tokens at Webull or undo an in-flight broker action.
+
+Future authorization must reserve its token generation **before** redirect and bind the operation/generation to the browser authorization session. That association is not yet implemented by the separate session store. The future gateway must derive owner references from verified customer authentication, enforce expiry immediately before use and keep signing, vault and service-role secrets server-side. Token persistence and browser-state persistence alone do not establish a working login flow.
+
+The [custody implementation plan](superpowers/plans/2026-10-24-phase6-token-custody.md) records the scope and remaining integration requirements. The schemas are loaded explicitly only into disposable test databases; no deployment or broker request occurs.
+
+Local verification passed four SQL suites and 32 Deno tests (10 gateway, 9 OAuth contract, 4 state-material and 9 vault tests), plus gateway type checks and lint. Independent review caught an empty-object SQL validation bypass and missing refresh identity retention; both received failing regressions before correction. Text bounds also match the vault's UTF-16 length, whitespace and control-character rules. Real PostgreSQL concurrency results for this slice will be recorded after the targeted CI run.
+
+## Work after Webull approval
 
 1. Confirm granted scopes, approved redirect URI, sandbox credentials, signing rules, request schemas and native-app permission model. Never include partner secrets in binaries or source control.
 2. Build a separately isolated authenticated exchange service. Decide token custody, encryption, per-customer authorization, refresh locking, rotation, revocation, audit redaction and deletion before accepting credentials. The existing connection relay remains transport-only.
