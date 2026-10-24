@@ -28,7 +28,7 @@ Callback structure is restricted to a server HTTPS URI without credentials, quer
 
 Opaque request/token objects redact default JSON/string/inspection output; explicit form/token accessors expose their sensitive values for future server use. That does not protect raw HTTP bodies or explicitly serialized forms if a future caller logs them. Native clients must never import application secrets or receive these server-side objects.
 
-The Python session primitive, TypeScript contract and candidate PostgreSQL stores are separate building blocks, not an integrated login flow. The custody primitives below prepare encryption and refresh fencing. An authenticated customer boundary, integrated exchange/refresh orchestration, hosted deployment, remote token revocation and approved callback/browser behavior still need implementation and validation before real credentials are accepted.
+The Python session primitive, TypeScript contract and candidate PostgreSQL stores are server building blocks. The compound SQL lifecycle below now joins browser state to its reserved token generation; this is not an integrated broker login flow. An authenticated customer boundary, integrated exchange/refresh orchestration, hosted deployment, remote token revocation and approved callback/browser behavior still need implementation and validation before real credentials are accepted.
 
 ## Candidate PostgreSQL session persistence
 
@@ -68,13 +68,23 @@ Decryption rejects changed context or metadata, unknown keys and expired refresh
 
 A refresh claim returns the previous generation's ciphertext to one worker and advances the stored generation before the broker request. Its result must be sealed under the new generation and committed with the matching operation ID. No timer grants permission to retry a pending or uncertain refresh; reauthorization is required because the broker may have rotated its tokens. Revocation clears ciphertext and retains a tombstone generation so late results cannot reactivate credentials. This local operation does not claim to revoke tokens at Webull or undo an in-flight broker action.
 
-Future authorization must reserve its token generation **before** redirect and bind the operation/generation to the browser authorization session. That association is not yet implemented by the separate session store. The future gateway must derive owner references from verified customer authentication, enforce expiry immediately before use and keep signing, vault and service-role secrets server-side. Token persistence and browser-state persistence alone do not establish a working login flow.
+Authorization must reserve its token generation **before** redirect and bind the operation/generation to the browser authorization session. The compound lifecycle below now implements that database association. The future gateway must derive owner references from verified customer authentication, enforce expiry immediately before use and keep signing, vault and service-role secrets server-side. Token persistence and browser-state persistence alone do not establish a working login flow.
 
 The [custody implementation plan](superpowers/plans/2026-10-24-phase6-token-custody.md) records the scope and remaining integration requirements. The schemas are loaded explicitly only into disposable test databases; no deployment or broker request occurs.
 
 Local verification passed four SQL suites and 32 Deno tests (10 gateway, 9 OAuth contract, 4 state-material and 9 vault tests), plus gateway type checks and lint. Independent review caught an empty-object SQL validation bypass and missing refresh identity retention; both received failing regressions before correction. Text bounds also match the vault's UTF-16 length, whitespace and control-character rules.
 
 [CI 40096336822](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40096336822), source `74e9e7f`, passed local SQL, real PostgreSQL 17 security/concurrency, all 32 Deno tests, gateway type checks and lint. The token-store concurrency cases prove a single initial authorization reservation, a single refresh claimant and rejection of late completion after concurrent revocation. Existing session and relay concurrency tests also passed. These tests used synthetic fixtures and disposable databases; no candidate store was deployed and no broker or Discord request was made.
+
+## Compound authorization lifecycle
+
+`supabase/webull-connect/authorization_flow.sql` composes the candidate session and token stores without changing deployment migrations. Its service-only begin RPC reserves a token generation and creates a linked browser session in one transaction. A successful new authorization supersedes the previous pending session in that owner/environment. A failed compare-and-set leaves the prior session intact; invalid or duplicate state creation rolls back token reservation and browser changes together.
+
+The consume RPC checks exact owner, environment, callback, state and browser-binding digests, expiry after lock acquisition, and the still-current token generation/operation. It returns that reservation once and deletes the associated session. Combined revoke removes pending browser state and advances the token tombstone atomically. All compound operations acquire the session-owner lock before the token-scope lock and require READ COMMITTED.
+
+The lower-level RPCs remain trusted server building blocks. The future coordinator must use the compound lifecycle rather than issuing separate reserve/create/revoke requests. Callers must create fresh state and browser material for every login. Consumption before revocation cannot prevent an already-started remote code exchange, but the token commit fence rejects its late result after revocation.
+
+The [autonomous implementation plan](autonomous-completion-plan.md) schedules the remaining coordinator, recovery controls and automated acceptance without owner input. The compound lifecycle has no HTTP endpoints or browser-cookie handler and accepts no live broker credentials.
 
 ## Work after Webull approval
 

@@ -15,6 +15,7 @@ try {
   // Pending Webull state is tested explicitly; it is not a deployed migration.
   await database.exec(await readFile(path.join(folder,'../webull-connect/session_store.sql'),'utf8'));
   await database.exec(await readFile(path.join(folder,'../webull-connect/token_store.sql'),'utf8'));
+  await database.exec(await readFile(path.join(folder,'../webull-connect/authorization_flow.sql'),'utf8'));
   const tests=(await readdir(folder)).filter(x=>x.endsWith('.sql')).sort();
   if(!tests.length) throw Error('No SQL regression tests found');
   for(const file of tests) {
