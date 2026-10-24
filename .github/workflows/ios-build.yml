@@ -1,5 +1,6 @@
 name: iOS build
 on:
+  workflow_dispatch:
   push:
     paths:
       - 'release.json'
@@ -7,6 +8,7 @@ on:
       - 'crier/connection-service.json'
       - '.github/workflows/ios-build.yml'
       - 'scripts/select_xcode.sh'
+      - 'scripts/check-ios-archive.py'
   pull_request:
     paths:
       - 'release.json'
@@ -14,6 +16,7 @@ on:
       - 'crier/connection-service.json'
       - '.github/workflows/ios-build.yml'
       - 'scripts/select_xcode.sh'
+      - 'scripts/check-ios-archive.py'
 jobs:
   build:
     runs-on: macos-15
@@ -31,6 +34,20 @@ jobs:
         run: xcodebuild -list -project ios/SentinelCrier.xcodeproj
       - name: Build for iOS Simulator without signing
         run: xcodebuild -project ios/SentinelCrier.xcodeproj -scheme SentinelCrier -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+      - name: Archive Release for iPhone hardware without signing
+        run: |
+          xcodebuild -project ios/SentinelCrier.xcodeproj -scheme SentinelCrier -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Crier-unsigned.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO archive
+          app="$RUNNER_TEMP/Crier-unsigned.xcarchive/Products/Applications/SentinelCrier.app"
+          xcrun lipo -verify_arch arm64 "$app/SentinelCrier"
+          python3 scripts/check-ios-archive.py --archive "$RUNNER_TEMP/Crier-unsigned.xcarchive" \
+            --output "$RUNNER_TEMP/ios-unsigned-archive-validation.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-device-archive-validation-report
+          path: ${{ runner.temp }}/ios-unsigned-archive-validation.json
+          if-no-files-found: error
       - name: Collect compiler and build-service crash reports
         if: failure()
         run: |
