@@ -72,7 +72,9 @@ Future authorization must reserve its token generation **before** redirect and b
 
 The [custody implementation plan](superpowers/plans/2026-10-24-phase6-token-custody.md) records the scope and remaining integration requirements. The schemas are loaded explicitly only into disposable test databases; no deployment or broker request occurs.
 
-Local verification passed four SQL suites and 32 Deno tests (10 gateway, 9 OAuth contract, 4 state-material and 9 vault tests), plus gateway type checks and lint. Independent review caught an empty-object SQL validation bypass and missing refresh identity retention; both received failing regressions before correction. Text bounds also match the vault's UTF-16 length, whitespace and control-character rules. Real PostgreSQL concurrency results for this slice will be recorded after the targeted CI run.
+Local verification passed four SQL suites and 32 Deno tests (10 gateway, 9 OAuth contract, 4 state-material and 9 vault tests), plus gateway type checks and lint. Independent review caught an empty-object SQL validation bypass and missing refresh identity retention; both received failing regressions before correction. Text bounds also match the vault's UTF-16 length, whitespace and control-character rules.
+
+[CI 40096336822](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40096336822), source `74e9e7f`, passed local SQL, real PostgreSQL 17 security/concurrency, all 32 Deno tests, gateway type checks and lint. The token-store concurrency cases prove a single initial authorization reservation, a single refresh claimant and rejection of late completion after concurrent revocation. Existing session and relay concurrency tests also passed. These tests used synthetic fixtures and disposable databases; no candidate store was deployed and no broker or Discord request was made.
 
 ## Work after Webull approval
 

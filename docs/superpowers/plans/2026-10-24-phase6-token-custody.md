@@ -19,4 +19,6 @@ Approved Connect signing, scopes, native redirect behavior, sandbox acceptance a
 
 ## Verification
 
-Record final local and CI results in the integration status document after tests and review. Physical and broker acceptance remain deferred or pending, not passed.
+Completed this slice: all four local SQL suites, 32 Deno tests, type checks and lint passed. Independent vault and store reviews completed; SQL empty-object validation and refresh identity retention findings received failing regressions and fixes. Real PostgreSQL 17 first-reservation/refresh-claim/revocation concurrency and existing relay/session checks passed in [CI 40096336822](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40096336822), source `74e9e7f`.
+
+Physical and broker acceptance remain deferred or pending, not passed. This implementation is committed directly to main; no candidate schema, secret or new endpoint was deployed.
