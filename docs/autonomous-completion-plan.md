@@ -30,7 +30,9 @@ The future coordinator must use these compound operations instead of separately 
 
 ## Execution status
 
-- [ ] A: atomic authorization lifecycle — implementation started.
+- [x] A: atomic authorization lifecycle — implemented and verified.
 - [ ] B: server coordinator.
 - [ ] C: recovery and operational controls.
 - [ ] D: automated acceptance and handoff.
+
+Phase A evidence: source `d246a7b`, [CI 40118251456](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40118251456). All five local SQL suites and 32 local Deno tests passed, with type checks and lint. Real PostgreSQL 17 CI passed initial reservation races, supersession, single callback consumption, revoke versus late commit/pending callback, and expiry during a lock wait. Independent review found no actionable issues. Candidate SQL remains undeployed. Phase B is the next implementation step.

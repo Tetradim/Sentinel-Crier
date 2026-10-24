@@ -10,12 +10,12 @@
 
 ## Tasks
 
-- [ ] Create `supabase/tests/webull_authorization.sql` with failing assertions for `crier_webull_authorization_begin`, `consume`, and `revoke`. Test exact binding, one-use callback, supersession, failed-CAS preservation, duplicate-state rollback, environment isolation, expiry and service-only privileges. Run `npm test --prefix supabase/tests`; observe missing-function failure.
-- [ ] Create `supabase/webull-connect/authorization_flow.sql`: private state-digest association with FK cascade; begin returns generation, operation ID and deadline; consume returns a matching current reservation once; revoke clears browser sessions and token custody together. Reuse validators and existing RPCs under fixed-order locks. Make DDL/grants atomic and errors generic.
-- [ ] Explicitly load this candidate after `token_store.sql` in `supabase/tests/run-sql-tests.mjs` and `.github/workflows/supabase-tests.yml`. It must stay outside migrations.
-- [ ] Create `supabase/tests/integration/webull_authorization_concurrency.sql`. Hold one transaction while a second worker attempts consumption/revocation; prove no stale result can reactivate custody. Test competing initial authorization reservations and expiry during lock wait. Add it to the real PostgreSQL CI step.
-- [ ] Review grants, lock order, callback failures and transaction rollback. Run all local SQL suites, all Webull and gateway Deno tests, type checks, lint and `git diff --check`. Commit directly to main with `[skip ci]`, push and dispatch `supabase-tests.yml`; inspect every job result.
-- [ ] Record CI/source evidence and mark Phase A complete in `docs/autonomous-completion-plan.md`; update `docs/webull-connect.md` and link the new queue from the original roadmap. Keep deployment and broker claims precise.
+- [x] Create `supabase/tests/webull_authorization.sql` with failing assertions for `crier_webull_authorization_begin`, `consume`, and `revoke`. Test exact binding, one-use callback, supersession, failed-CAS preservation, duplicate-state rollback, environment isolation, expiry and service-only privileges. Run `npm test --prefix supabase/tests`; observe missing-function failure.
+- [x] Create `supabase/webull-connect/authorization_flow.sql`: private state-digest association with FK cascade; begin returns generation, operation ID and deadline; consume returns a matching current reservation once; revoke clears browser sessions and token custody together. Reuse validators and existing RPCs under fixed-order locks. Make DDL/grants atomic and errors generic.
+- [x] Explicitly load this candidate after `token_store.sql` in `supabase/tests/run-sql-tests.mjs` and `.github/workflows/supabase-tests.yml`. It must stay outside migrations.
+- [x] Create `supabase/tests/integration/webull_authorization_concurrency.sql`. Hold one transaction while a second worker attempts consumption/revocation; prove no stale result can reactivate custody. Test competing initial authorization reservations and expiry during lock wait. Add it to the real PostgreSQL CI step.
+- [x] Review grants, lock order, callback failures and transaction rollback. Run all local SQL suites, all Webull and gateway Deno tests, type checks, lint and `git diff --check`. Commit directly to main with `[skip ci]`, push and dispatch `supabase-tests.yml`; inspect every job result.
+- [x] Record CI/source evidence and mark Phase A complete in `docs/autonomous-completion-plan.md`; update `docs/webull-connect.md` and link the new queue from the original roadmap. Keep deployment and broker claims precise.
 
 Representative test contract (fixture digests are synthetic):
 
@@ -32,3 +32,5 @@ FROM public.crier_webull_authorization_consume(
 SELECT public.crier_webull_authorization_revoke('fixture-owner','sandbox');
 -- generation=2; any result for generation=1 fails token_commit
 ```
+
+Outcome: source d246a7b passed CI 40118251456, including the real PostgreSQL concurrency scenarios. Five local SQL suites and 32 Deno tests, type checks and lint passed; independent review found no actionable issues. No deployment or broker requests occurred.

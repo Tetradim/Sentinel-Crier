@@ -86,6 +86,8 @@ The lower-level RPCs remain trusted server building blocks. The future coordinat
 
 The [autonomous implementation plan](autonomous-completion-plan.md) schedules the remaining coordinator, recovery controls and automated acceptance without owner input. The compound lifecycle has no HTTP endpoints or browser-cookie handler and accepts no live broker credentials.
 
+Phase A source `d246a7b` passed [CI 40118251456](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40118251456), including real PostgreSQL 17 concurrent reservation, callback consumption, supersession, revocation and expiry-after-lock-wait cases. All five local SQL suites and 32 local Deno tests passed, plus type checks and lint. Independent review found no actionable issues. No candidate schema was deployed.
+
 ## Work after Webull approval
 
 1. Confirm granted scopes, approved redirect URI, sandbox credentials, signing rules, request schemas and native-app permission model. Never include partner secrets in binaries or source control.
