@@ -22,7 +22,8 @@ def test_installer_is_per_user_and_never_removes_user_state():
     assert '[UninstallDelete]' not in source
     assert 'SentinelCrier\\Desktop' not in source
     assert 'Source: "{#SourceDir}\\*"; DestDir: "{app}"' in source
-    assert 'fmOpenReadWrite or fmShareExclusive' in source
+    assert "CreateFileW@kernel32.dll stdcall" in source
+    assert 'OpenProgram(ProgramFile, $40000000, 0, 0, 3, 0, 0)' in source
     assert 'ComparePackedVersion' in source
 
 

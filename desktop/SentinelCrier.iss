@@ -29,10 +29,16 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 [Icons]
 Name: "{userprograms}\Sentinel Crier"; Filename: "{app}\SentinelCrier.exe"
 [Code]
+function OpenProgram(FileName: String; Access, Share: LongWord;
+  Security: THandle; Creation, Flags: LongWord; Template: THandle): THandle;
+  external 'CreateFileW@kernel32.dll stdcall';
+function CloseProgram(Handle: THandle): Boolean;
+  external 'CloseHandle@kernel32.dll stdcall';
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ExistingVersion: String;
-  Handle: Integer;
+  Handle: THandle;
   InstalledPacked, TargetPacked: Int64;
   ProgramFile: String;
 begin
@@ -47,11 +53,11 @@ begin
     end;
   ProgramFile := ExpandConstant('{app}\SentinelCrier.exe');
   if FileExists(ProgramFile) then begin
-    Handle := FileOpen(ProgramFile, fmOpenReadWrite or fmShareExclusive);
+    Handle := OpenProgram(ProgramFile, $40000000, 0, 0, 3, 0, 0);
     if Handle = -1 then
       Result := 'Close Sentinel Crier before updating. No files have been replaced.'
     else
-      FileClose(Handle);
+      CloseProgram(Handle);
   end;
 end;
 
