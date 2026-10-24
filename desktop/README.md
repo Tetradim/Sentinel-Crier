@@ -1,8 +1,19 @@
 # Sentinel Crier for Windows
 
-Native Windows app for the same submission-time mirroring channel used by Crier on
-iPhone and Android. It supports Alpaca paper/live accounts. Webull Connect is not
-implemented in this desktop release.
+Native Windows app with read-only Alpaca fill alerts and optional submission-time
+mirroring with iPhone and Android. It supports Alpaca paper/live accounts. Webull
+Connect is not implemented in this desktop release.
+
+## Alerts only — no mirroring setup
+
+1. Open **Start here → Send my fills to Discord** (or the **Alerts setup** tab).
+2. Choose paper or live and enter your own Alpaca key and secret. Live read access requires explicit permission. Choose **Connect / use saved keys**; the app discovers and verifies the account. Future connections can leave both key fields blank to reuse the same saved alerts account/environment.
+3. After account verification, choose **Set up Discord: preview, test, enable**. Save your destination, inspect the preview and explicitly request a test message. Enable delivery when ready; pending alerts may then send.
+4. Keep the PC awake and Crier running. The first complete fill fetch establishes a suppressed baseline; place a new paper trade after monitoring reports observing. Transient activity failures retain the cursor and show reconnecting rather than inventing fills.
+
+This mode makes read-only Alpaca requests and creates no Host/Receive pairing, relay connection or order engine. Alerts credentials and each account/environment's Discord configuration, cursor and outbox are kept separately from the mirroring profile. Account/environment changes are rejected rather than silently reusing another journal. Disconnect before changing purpose; no connection or execution starts automatically on launch.
+
+A fresh alerts profile can bind never-attempted pending messages to its first explicitly saved destination. Prior delivery attempts, uncertain results or a lost previously configured destination still require inspection/restoration; no messages are silently discarded or rerouted.
 
 ## Run
 

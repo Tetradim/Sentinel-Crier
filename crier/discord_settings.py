@@ -17,16 +17,25 @@ class DiscordPublisher:
         self.store=store
         self.destination=json.loads(load_secret(self.path)) if self.path.exists() else dict(webhook=webhook,enabled=enabled)
 
-    def configure(self, webhook, enabled):
+    def configure(self, webhook, enabled, *, allow_initial=False):
         if type(enabled) is not bool: raise ValueError('Select whether delivery is enabled')
         webhook=webhook.strip() or self.destination['webhook']
         validate_webhook(webhook)
+        destination=dict(webhook=webhook,enabled=enabled)
         with self.store.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
             queued=db.execute("SELECT COUNT(*) FROM outbox WHERE status IN ('pending','sending','uncertain','review','failed')").fetchone()[0]
-        if queued and webhook!=self.destination['webhook']:
-            raise ValueError('Resolve queued or uncertain alerts before changing the Discord destination')
-        self.destination=dict(webhook=webhook,enabled=enabled)
-        save_secret(self.path,json.dumps(self.destination))
+            initial = allow_initial and not self.destination['webhook'] and not self.path.exists()
+            if initial:
+                unsafe=db.execute("SELECT COUNT(*) FROM outbox WHERE status!='pending' OR attempts!=0 OR attempts IS NULL OR status IS NULL").fetchone()[0]
+                prior=db.execute("SELECT 1 FROM config WHERE id='discord_destination_configured'").fetchone()
+                if unsafe or prior:
+                    raise ValueError('Cannot assign a first destination to prior delivery evidence. Restore the original destination secret.')
+            if queued and webhook!=self.destination['webhook'] and not initial:
+                raise ValueError('Resolve queued or uncertain alerts before changing the Discord destination')
+            save_secret(self.path,json.dumps(destination))
+            db.execute("INSERT OR REPLACE INTO config VALUES ('discord_destination_configured','true')")
+        self.destination=destination
         return self.status()
 
     def status(self):

@@ -1,5 +1,6 @@
 """Offline, hidden-window regressions for delivery row actions."""
 from concurrent.futures import Future
+import gc
 import tkinter as tk
 
 import pytest
@@ -26,6 +27,9 @@ def tk_root():
     root.withdraw()
     yield root
     root.destroy()
+    # Collect widget/variable cycles on Tk's owning thread before later async
+    # tests can trigger their finalizers from an HTTP client worker thread.
+    gc.collect()
 
 
 @pytest.fixture
@@ -183,3 +187,46 @@ def test_minimum_window_can_reach_record_details_and_usable_preview_controls(app
         assert button.winfo_height() >= 20
         assert button.winfo_rooty() >= canvas.winfo_rooty()
         assert button.winfo_rooty() + button.winfo_height() <= bottom
+
+def test_alerts_route_submits_only_read_connection_and_waits_for_verification(app):
+    app.choose_purpose('alerts')
+    assert app.tabs.select() == str(app.alerts_tab)
+    assert app.alerts_next.instate(['disabled'])
+    app.alerts_environment.set('live')
+    app.alerts_key.set('my-key')
+    app.alerts_secret.set('my-secret')
+    app.alerts_live.set(True)
+    app.alerts_connect.invoke()
+    method, args, kwargs, future = app.worker.calls[-1]
+    assert (method, args, kwargs) == ('connect_alerts', ('live', 'my-key', 'my-secret'), {'allow_live': True})
+    assert app.alerts_next.instate(['disabled'])
+    future.set_result(dict(connected=True, mode='alerts', account='account-sensitive-1234', environment='live',
+                          pair={}, execution=None, alerts={'state':'observing'}, saved=False))
+    app.refresh()
+    assert app.alerts_next.instate(['!disabled'])
+    assert '1234' in app.alerts_result.get() and 'sensitive' not in app.alerts_result.get()
+    assert app.alerts_key.get() == app.alerts_secret.get() == ''
+    app.alerts_next.invoke()
+    assert app.tabs.select() == str(app.delivery_tab)
+    assert all(button.instate(['disabled']) for button in app.host_buttons)
+
+
+def test_purpose_navigation_preserves_connection_and_journal(app):
+    app.connected = True
+    selected = app.tabs.select()
+    app.choose_purpose('alerts')
+    assert app.tabs.select() == selected
+    assert not app.worker.calls
+    assert 'Disconnect' in app.notice.get()
+
+
+def test_alerts_disconnect_clears_verified_ui_and_trade_controls(app):
+    app.render(dict(connected=True, mode='alerts', account='account-1234', environment='paper',
+                    pair={}, execution=None, alerts={'state':'reconnecting'}, saved=False))
+    assert 'reconnecting' in app.alerts_result.get()
+    assert all(button.instate(['disabled']) for button in app.execution_buttons)
+    app.render(dict(connected=False, mode='disconnected', account='', environment='',
+                    pair={}, execution=None, alerts={'state':'stopped'}, saved=False, saved_alerts=True))
+    assert 'not verified' in app.alerts_result.get()
+    assert app.alerts_next.instate(['disabled'])
+    assert 'Saved connection' in app.summary.get()

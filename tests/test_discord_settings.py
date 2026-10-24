@@ -147,3 +147,50 @@ def test_failed_job_blocks_destination_change_until_closed(tmp_path):
         publisher.configure('https://discord.com/api/webhooks/456/new-destination',False)
     publisher.close(failed['id'])
     publisher.configure('https://discord.com/api/webhooks/456/new-destination',False)
+
+
+def test_explicit_initial_alert_destination_accepts_only_never_attempted_jobs(tmp_path):
+    store = Store(tmp_path/'alerts.sqlite3')
+    publisher = DiscordPublisher(tmp_path, store)
+    with store.connect() as db:
+        db.execute("INSERT INTO outbox(id,created,fill,payload) VALUES ('first',0,'{}','{}')")
+    with pytest.raises(ValueError, match='queued'):
+        publisher.configure(URL, False)
+    result = publisher.configure(URL, False, allow_initial=True)
+    assert result['configured'] and not result['enabled']
+    assert result['history'][0]['status'] == 'pending'
+    assert result['history'][0]['attempts'] == 0
+    with pytest.raises(ValueError, match='queued'):
+        publisher.configure('https://discord.com/api/webhooks/456/other', True, allow_initial=True)
+
+
+@pytest.mark.parametrize('status,attempts', [('pending',1), ('sending',1), ('uncertain',1), ('sent',1), ('closed',0), ('failed',0), ('review',0)])
+def test_initial_destination_never_retargets_prior_delivery_evidence(tmp_path, status, attempts):
+    store = Store(tmp_path/'alerts.sqlite3')
+    publisher = DiscordPublisher(tmp_path, store)
+    with store.connect() as db:
+        db.execute("INSERT INTO outbox(id,created,fill,payload,status,attempts) VALUES ('old',0,'{}','{}',?,?)", (status,attempts))
+    with pytest.raises(ValueError, match='destination'):
+        publisher.configure(URL, True, allow_initial=True)
+    assert not publisher.destination['enabled']
+
+
+def test_lost_destination_secret_cannot_retarget_unattempted_queue(tmp_path):
+    store = Store(tmp_path/'alerts.sqlite3')
+    publisher = DiscordPublisher(tmp_path, store)
+    publisher.configure(URL, False)
+    with store.connect() as db:
+        db.execute("INSERT INTO outbox(id,created,fill,payload) VALUES ('old',0,'{}','{}')")
+    publisher.path.unlink()
+    reloaded = DiscordPublisher(tmp_path, store)
+    with pytest.raises(ValueError, match='destination'):
+        reloaded.configure('https://discord.com/api/webhooks/456/other',True,allow_initial=True)
+
+
+def test_failed_destination_save_keeps_memory_disabled(tmp_path, monkeypatch):
+    import crier.discord_settings as module
+    publisher = DiscordPublisher(tmp_path, Store(tmp_path/'alerts.sqlite3'))
+    monkeypatch.setattr(module, 'save_secret', lambda *args: (_ for _ in ()).throw(OSError('disk full')))
+    with pytest.raises(OSError):
+        publisher.configure(URL, True, allow_initial=True)
+    assert publisher.destination == {'webhook':'','enabled':False}

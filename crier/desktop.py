@@ -32,11 +32,15 @@ class DesktopApp:
         outer = ttk.Frame(root, padding=20)
         outer.pack(fill='both', expand=True)
         ttk.Label(outer, text='Sentinel Crier', style='Title.TLabel').pack(anchor='w')
-        ttk.Label(outer, text='Your iPhone trades. Your PC follows.', style='Subtitle.TLabel').pack(anchor='w', pady=(0,12))
-        self.summary = tk.StringVar(value='Disconnected • Connect starts new entries paused')
+        ttk.Label(outer, text='Fill alerts, trade sharing and following — choose your setup.', style='Subtitle.TLabel').pack(anchor='w', pady=(0,12))
+        self.summary = tk.StringVar(value='Disconnected • Choose a setup to begin')
         ttk.Label(outer, textvariable=self.summary, wraplength=1000).pack(anchor='w', pady=(0,12))
-        tabs = ttk.Notebook(outer)
+        tabs = self.tabs = ttk.Notebook(outer)
         tabs.pack(fill='both', expand=True)
+        start = ttk.Frame(tabs, padding=14)
+        self.alerts_tab = ttk.Frame(tabs, padding=14)
+        tabs.add(start, text='Start here')
+        tabs.add(self.alerts_tab, text='Alerts setup')
         self.activity = ttk.Frame(tabs, padding=14)
         setup = ttk.Frame(tabs, padding=14)
         pricing = ttk.Frame(tabs, padding=14)
@@ -48,17 +52,70 @@ class DesktopApp:
         self.build_delivery(delivery)
         diagnostics = ttk.Frame(tabs, padding=14)
         tabs.add(diagnostics, text='Diagnostics')
-        tabs.select(setup)
+        self.setup_tab = setup
+        tabs.select(start)
+        self._start(start)
+        self._alerts_setup(self.alerts_tab)
         self._setup(setup)
         self._pricing(pricing)
         self._activity(self.activity)
         self._diagnostics(diagnostics)
-        self.notice = tk.StringVar(value='Host shares an invitation. Receive joins it. Saved devices reconnect with the same button.')
+        self.notice = tk.StringVar(value='Choose Send my fills to Discord, Trade/share trades, or Follow trades in Start here.')
         ttk.Label(outer, textvariable=self.notice, wraplength=1000).pack(anchor='w', pady=(12,0))
-        ttk.Label(outer, text='Keep this PC awake and Crier running. Closing stops mirroring; existing broker orders remain.',
+        ttk.Label(outer, text='Keep this PC awake and Crier running. Closing stops monitoring and mirroring; existing broker orders remain.',
                   style='Subtitle.TLabel').pack(anchor='w', pady=(6,0))
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.after(100, self.refresh)
+
+    def _start(self, frame):
+        ttk.Label(frame, text='What would you like to do?', font=('Segoe UI', 16, 'bold')).pack(anchor='w', pady=12)
+        ttk.Label(frame, text='Choose a journey. Connections always require your explicit action.').pack(anchor='w', pady=8)
+        for label, purpose in [('Send my fills to Discord', 'alerts'), ('Trade/share trades', 'trade'), ('Follow trades', 'follow')]:
+            ttk.Button(frame, text=label, command=lambda p=purpose: self.choose_purpose(p)).pack(anchor='w', pady=8)
+        ttk.Label(frame, text='Other tools and existing recovery evidence remain available in the tabs above.', wraplength=700).pack(anchor='w', pady=12)
+
+    def choose_purpose(self, purpose):
+        if self.connected:
+            self.notice.set('Disconnect before changing setup purpose. Existing orders and recovery records remain saved.')
+            return
+        self.tabs.select(self.alerts_tab if purpose == 'alerts' else self.setup_tab)
+        self.notice.set('Verify your account, then configure Discord.' if purpose == 'alerts' else
+                        'Choose Host to share trades.' if purpose == 'trade' else 'Choose Receive to follow trades.')
+
+    def _alerts_setup(self, frame):
+        ttk.Label(frame, text='1. Connect your account for fill alerts', font=('Segoe UI', 14, 'bold')).pack(anchor='w', pady=8)
+        ttk.Label(frame, text='Read-only fill monitoring. No Host or Receive connection is needed.', wraplength=750).pack(anchor='w', pady=8)
+        row = ttk.Frame(frame); row.pack(fill='x', pady=8)
+        ttk.Label(row, text='Alpaca environment', width=25).pack(side='left')
+        self.alerts_environment = tk.StringVar(value='paper')
+        ttk.Combobox(row, textvariable=self.alerts_environment, values=('paper', 'live'), state='readonly').pack(side='left')
+        self.alerts_key = self._entry(frame, 'Alpaca API key', masked=True)
+        self.alerts_secret = self._entry(frame, 'Alpaca API secret', masked=True)
+        ttk.Label(frame, text='Leave both blank to reuse saved alerts keys for the same environment and account.').pack(anchor='w', pady=8)
+        self.alerts_live = tk.BooleanVar(value=False)
+        ttk.Checkbutton(frame, text='Allow read access to my live-money account', variable=self.alerts_live).pack(anchor='w', pady=8)
+        self.alerts_connect = ttk.Button(frame, text='Connect / use saved keys', command=self.connect_alerts)
+        self.alerts_connect.pack(anchor='w', pady=8)
+        ttk.Button(frame, text='Disconnect', command=lambda: self.submit('disconnect')).pack(anchor='w', pady=4)
+        self.alerts_result = tk.StringVar(value='Account not verified. Connect to check read access.')
+        ttk.Label(frame, textvariable=self.alerts_result, wraplength=750).pack(anchor='w', pady=12)
+        self.alerts_next = ttk.Button(frame, text='2. Set up Discord: preview, test, enable', state='disabled',
+                                     command=lambda: self.tabs.select(self.delivery_tab))
+        self.alerts_next.pack(anchor='w', pady=8)
+
+    def connect_alerts(self):
+        if self.connected:
+            self.notice.set('Disconnect before changing connection settings.')
+            return
+        self.alerts_connect.configure(state='disabled')
+        self.alerts_next.configure(state='disabled')
+        self.alerts_result.set('Verifying account read access…')
+        def completed(result):
+            self.alerts_key.set(''); self.alerts_secret.set('')
+            self.render(result)
+            self.refresh_delivery_history()
+        self.submit('connect_alerts', self.alerts_environment.get(), self.alerts_key.get(), self.alerts_secret.get(),
+                    allow_live=self.alerts_live.get(), callback=completed)
 
     def build_delivery(self, frame):
         self.delivery_tab = frame
@@ -328,8 +385,12 @@ class DesktopApp:
 
     def _activity(self, frame):
         controls = ttk.Frame(frame); controls.pack(fill='x', pady=(0,10))
-        ttk.Button(controls, text='Enable new entries', command=lambda: self.submit('settings', {'enabled': True})).pack(side='left')
-        ttk.Button(controls, text='Pause new entries', command=lambda: self.submit('settings', {'enabled': False})).pack(side='left', padx=8)
+        self.execution_buttons = []
+        for label, enabled in [('Enable new entries', True), ('Pause new entries', False)]:
+            button = ttk.Button(controls, text=label, state='disabled',
+                                command=lambda e=enabled: self.submit('settings', {'enabled': e}))
+            button.pack(side='left', padx=4)
+            self.execution_buttons.append(button)
         ttk.Label(frame, text='Cancel and exit instructions continue while new entries are paused.').pack(anchor='w')
         ttk.Label(frame, text='Tracked trades — select one to replace, cancel or exit as host').pack(anchor='w', pady=(12,4))
         columns = ('symbol','action','quantity','limit','revision','state')
@@ -421,7 +482,7 @@ class DesktopApp:
     def submit(self, method, *args, callback=None, **kwargs):
         if self.closing:
             return
-        if method in ('connect', 'disconnect', 'host', 'receive'):
+        if method in ('connect', 'connect_alerts', 'disconnect', 'host', 'receive'):
             self.clear_delivery_list('alerts')
             self.clear_delivery_list('receivers')
         self.notice.set('Working…')
@@ -473,12 +534,23 @@ class DesktopApp:
         pair = state['pair']
         execution = state['execution'] or {}
         enabled = execution.get('settings', {}).get('enabled', False)
-        if self.connected:
+        alerts_mode = state.get('mode') == 'alerts'
+        self.alerts_connect.configure(state='disabled' if self.connected else 'normal')
+        self.alerts_next.configure(state='normal' if self.connected and alerts_mode else 'disabled')
+        if self.connected and alerts_mode:
+            account = '…' + state['account'][-4:]
+            monitor = state.get('alerts', {}).get('state', 'connecting')
+            self.alerts_result.set(f"Verified {state['environment'].upper()} account {account}. Fill monitor: {monitor}. Discord delivery requires its own explicit setup.")
+            self.summary.set(f"{state['environment'].upper()} • Alerts only • Account {account} • Fill monitor: {monitor}")
+        elif self.connected:
             self.summary.set(f"{pair['environment'].upper()} • {pair['role'].title()} • Account {state['account']} • "
                              + ('Entries enabled' if enabled else 'New entries paused') + '\n' + state['message'])
         else:
-            self.summary.set('Disconnected • ' + ('Saved connection available' if state['saved'] else 'Set up a connection to begin'))
+            self.alerts_result.set('Account not verified. Connect to check read access.')
+            self.summary.set('Disconnected • ' + ('Saved connection available' if state['saved'] or state.get('saved_alerts') else 'Set up a connection to begin'))
         host = self.connected and pair.get('role') == 'host'
+        for button in self.execution_buttons:
+            button.configure(state='normal' if self.connected and not alerts_mode else 'disabled')
         for button in self.host_buttons:
             button.configure(state='normal' if host else 'disabled')
         trades = execution.get('trades', [])
