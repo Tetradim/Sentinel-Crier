@@ -14,4 +14,4 @@ Malformed evidence leaves the durable order unknown or at its last validated sta
 
 Focused executor suite: 53 tests passed. Complete Python suite: 486 tests passed, with one existing FastAPI/Starlette HTTPX deprecation warning. Regressions cover malformed first snapshots, blocked exit after invalid evidence, restart and subsequent valid partial-fill recovery without another buy. Independent review found no actionable regression; its requested explicit assertion that status remains unknown was added and the ten affected regression cases passed again.
 
-No broker connections or orders are used in these tests. These source changes do not replace the separately required physical/paper acceptance, and previously packaged Windows artifacts do not contain this fix until rebuilt.
+No broker connections or orders are used in these tests. These source changes do not replace the separately required physical/paper acceptance. The [refreshed Windows candidate](release-evidence-2026-10-23.md#refreshed-windows-candidate-with-reconciliation-fix), source `0bc7d36`, contains the fix; earlier Windows artifacts do not.

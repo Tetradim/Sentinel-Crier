@@ -12,7 +12,7 @@
 - [x] Add `crier/webull_connect_sessions.py` with bounded session lifetime, fixed environments, exact configured callback matching and transactional consumption. Invalid attempts must not consume a valid session.
 - [x] Run focused tests, then the complete Python suite. Review the diff for secret leakage and unintended enablement.
 - [x] Document current approval status, integration boundaries and remaining sandbox acceptance; correct old monitor documentation that implies Crier never submits Alpaca orders.
-- [ ] Commit and push directly to main as instructed.
+- [x] Commit and push directly to main as instructed (`0e14216`).
 
 ## Acceptance
 

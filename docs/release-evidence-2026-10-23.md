@@ -18,7 +18,23 @@ dist/windows-release-0.2.0/SentinelCrier-0.2.0-Windows-Setup.exe
 dist/windows-release-0.2.0/SentinelCrier-0.2.0-Windows.zip
 ```
 
-## Automated validation
+## Refreshed Windows candidate with reconciliation fix
+
+The current Windows candidate is rebuilt from `0bc7d36bdefe831e816dfde060df861165246e37`, including rejection of malformed broker evidence. [Release CI](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40063687203) passed: 485 Python tests, one platform-specific skip, installer compilation and the packaged offline smoke check. The version remains candidate 0.2.0; use the manifest commit to distinguish this build from the earlier candidate.
+
+Downloaded artifacts are retained separately:
+
+```text
+dist/windows-release-0.2.0-0bc7d36/SentinelCrier-0.2.0-Windows-Setup.exe
+dist/windows-release-0.2.0-0bc7d36/SentinelCrier-0.2.0-Windows.zip
+dist/windows-release-0.2.0-0bc7d36/SentinelCrier-0.2.0-Windows-manifest.json
+dist/windows-release-0.2.0-0bc7d36/SentinelCrier-0.2.0-Windows-SHA256SUMS.txt
+dist/windows-release-0.2.0-0bc7d36/local-offline-smoke.json
+```
+
+All three checksum entries, artifact byte lengths and manifest hashes were checked locally, as was the exact source commit. The downloaded portable executable passed a fresh local offline UI/DPAPI credential round-trip check with zero network calls. Authenticode inspection confirms the installer is not signed, matching its manifest. The installer itself was not installed; physical acceptance remains deferred. Earlier Android/iOS evidence below is unchanged by this PC-only rebuild.
+
+## Initial candidate automated validation
 
 - Backend release-tool coverage and application tests: 452 passed with one platform-specific skip on Linux CI; local suite passed 452 before the final added Keychain wildcard regression, and the focused 31 iOS/Windows release tests passed afterward.
 - Native iOS simulator: 83 passed, zero failures. [CI evidence](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40050997724).

@@ -1,6 +1,6 @@
 # Sentinel Crier completion roadmap
 
-Updated October 23, 2026. Baseline: main `9d33f4a`; Phase 1 is the implementation accompanying this plan.
+Updated October 23, 2026. Original planning baseline: main `9d33f4a`. The phase definitions below retain their original acceptance requirements; the current status section records subsequent implementation and external blockers.
 
 ## Goal and architecture
 
@@ -32,7 +32,11 @@ External dependencies may be resolved while coding proceeds. Phase 5 includes ph
 
 Already implemented: durable execution timeline, sender/receiver tracking, reconciliation evidence, automatic near-event premium observations, clock-adjusted cross-device timing with uncertainty, diagnostics screens, and JSON/CSV export. Existing automated builds exercise backend, Windows packaging, Android, and iOS simulator code. These are not proof of customer installation or broker execution accuracy.
 
-Remaining: cancellation crash recovery and native future-time deferral; consistent setup and Discord experience; invalid-event/rejection recovery coverage; deployed public relay; release signing and update paths; physical acceptance; approved Webull integration. The bundled connection-service URL is empty at this baseline. Android debug APKs, iOS simulator builds, and an unsigned Windows ZIP are development artifacts.
+Recovery fixes, native setup/Discord flows and invalid-event handling have automated evidence in [Phase 2 progress](phase2-progress.md). The Supabase HTTPS relay is deployed and bundled in all clients; its SQL, Edge gateway and isolated hosted transport checks are recorded in [test results](test-results-2026-10-23.md). Relay transport uses bounded HTTP polling, not Realtime push. Broker credentials stay on the executing devices.
+
+Signed Android APK/AAB and an unsigned Windows installer/portable ZIP have been produced; see [candidate release evidence](release-evidence-2026-10-23.md). iOS simulator tests pass, but Apple Developer enrollment, real signing inputs and distribution eligibility/metadata are still required for iPhone distribution. A Windows publisher certificate remains optional and absent.
+
+Physical-device, cross-network and broker paper-accuracy acceptance is deferred by the owner, not passed. Webull Connect approval is still pending. Its local authorization-session groundwork does not implement working broker login or trading. These external gates prevent claiming the whole project is finished.
 
 ## Phase 1 â€” recovery correctness (execute now)
 
