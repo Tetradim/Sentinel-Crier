@@ -14,6 +14,10 @@ from .lock import single_process, AlreadyRunningError
 DEFAULTS = dict(enabled=False, mode='exact_limit', max_slippage_bps=100,
                 max_slippage_amount='0.02', max_age_seconds=10, max_quantity=1000)
 TERMINAL = {'filled', 'canceled', 'expired', 'rejected', 'replaced', 'skipped'}
+BROKER_STATUSES = {'new', 'accepted', 'pending_new', 'accepted_for_bidding',
+                   'partially_filled', 'filled', 'done_for_day', 'canceled',
+                   'expired', 'replaced', 'pending_cancel', 'pending_replace',
+                   'stopped', 'rejected', 'suspended', 'calculated'}
 
 class IntentEngine:
     def __init__(self, path, broker, clock=None):
@@ -133,12 +137,19 @@ class IntentEngine:
             self._trace(order['trade_id'],'broker_lookup_unknown',client_order_id=order['cid'])
             return # Unknown stays unknown forever until resolved; never blind POST.
         if snap.get('client_order_id')!=order['cid']: raise ValueError('Broker order identity mismatch')
+        if not isinstance(snap.get('id'),str) or not snap['id'].strip(): raise ValueError('Missing broker order ID')
         if order['broker_id'] and snap.get('id')!=order['broker_id']: raise ValueError('Broker order ID changed')
         with self._db() as db:
             trade=json.loads(db.execute('SELECT data FROM intent_trades WHERE id=?',(order['trade_id'],)).fetchone()[0])
         if snap.get('symbol')!=trade['symbol'] or snap.get('side')!=order['side'] or Decimal(str(snap.get('qty','NaN')))!=Decimal(order['qty']): raise ValueError('Broker order binding mismatch')
         filled=Decimal(str(snap['filled_qty']))
-        if not filled.is_finite() or filled<Decimal(order['filled']) or filled>Decimal(order['qty']): raise ValueError('Inconsistent broker cumulative quantity')
+        if (not filled.is_finite() or filled<Decimal(order['filled'])
+                or filled>Decimal(order['qty']) or filled!=filled.to_integral_value()):
+            raise ValueError('Inconsistent broker cumulative quantity')
+        if snap.get('status') not in BROKER_STATUSES: raise ValueError('Invalid broker status')
+        if snap.get('filled_avg_price') is not None:
+            average=Decimal(str(snap['filled_avg_price']))
+            if not average.is_finite() or average<=0: raise ValueError('Invalid broker fill price')
         with self._db() as db:
             db.execute('UPDATE intent_orders SET status=?, broker_id=?, filled=? WHERE cid=?',(snap['status'],snap['id'],str(filled),order['cid']))
         self._trace(order['trade_id'],'broker_reconciled',client_order_id=order['cid'],status=snap['status'],filled_qty=str(filled),avg_fill_price=str(snap.get('filled_avg_price')) if snap.get('filled_avg_price') is not None else None,broker_created_at=snap.get('created_at'),broker_filled_at=snap.get('filled_at'))

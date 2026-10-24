@@ -32,6 +32,60 @@ def pair(tmp_path):
 def test_cancel_before_enter(pair):
     e,b=pair; x=event('cancel',2); e.accept(x); e.accept(event(trade_id=x['trade_id'])); e.tick(); assert not b.sent
 
+
+@pytest.mark.parametrize('changes', [
+    {'filled_qty':'1.5'}, {'status':'unrecognized_status'},
+    {'id':''}, {'id':None}, {'id':42},
+    {'filled_avg_price':'-0.20'}, {'filled_avg_price':'NaN'},
+    {'filled_avg_price':'Infinity'}, {'filled_avg_price':'0'},
+])
+def test_malformed_broker_snapshot_does_not_mutate_execution_journal(pair, changes):
+    engine, broker = pair
+    instruction = event(symbol='SPY261218C00750000', asset='option')
+    original = broker.submit
+
+    def malformed(request):
+        result = original(request)
+        result.update(changes)
+        return result
+
+    broker.submit = malformed
+    engine.accept(instruction)
+    result = engine.tick()
+    assert result[0]['state'] == 'reconcile_required'
+    order = engine.status()['orders'][0]
+    assert order['filled'] == '0'
+    assert order['broker_id'] is None
+    assert order['status'] == 'unknown'
+    assert len(broker.sent) == 1
+    # A subsequent exit cannot use malformed evidence to authorize a sale.
+    engine.accept(event('exit', 2, instruction['trade_id'],
+                        symbol=instruction['symbol'], asset='option'))
+    assert engine.tick()[0]['state'] == 'reconcile_required'
+    assert len(broker.sent) == 1
+
+
+def test_reconciliation_recovers_after_corrected_evidence_without_duplicate_buy(pair):
+    engine, broker = pair
+    instruction = event(symbol='SPY261218C00750000', asset='option')
+    engine.accept(instruction)
+    engine.tick()
+    row = next(iter(broker.orders.values()))
+    row.update(filled_qty='2.5', filled_avg_price='0.20')
+    assert engine.tick()[0]['state'] == 'reconcile_required'
+    assert engine.status()['orders'][0]['filled'] == '0'
+
+    # Restart retains ownership and rejects the same malformed snapshot.
+    engine = IntentEngine(engine.path, broker)
+    assert engine.tick()[0]['state'] == 'reconcile_required'
+    row.update(filled_qty='2.000', status='partially_filled', filled_avg_price='0.2000')
+    assert engine.tick()[0]['state'] == 'working'
+    assert engine.status()['orders'][0]['filled'] == '2.000'
+    assert len(broker.sent) == 1
+    detail = [entry['details'] for entry in engine.trade_trace(instruction['trade_id'])
+              if entry['stage'] == 'broker_reconciled'][-1]
+    assert detail['avg_fill_price'] == '0.2000'
+
 def test_duplicate_and_timeout_never_resubmit(pair):
     e,b=pair; x=event(); b.timeout=True; e.accept(x); e.tick(); e.accept(x); e.tick(); e.tick(); assert len(b.sent)==1
 
