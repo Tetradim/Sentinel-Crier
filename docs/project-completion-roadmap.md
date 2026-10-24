@@ -2,6 +2,8 @@
 
 Updated October 24, 2026. Original planning baseline: main `9d33f4a`. The phase definitions below retain their original acceptance requirements; the current status section records subsequent implementation and external blockers.
 
+For the remaining work executable without owner input, follow the [autonomous implementation plan](autonomous-completion-plan.md). It schedules atomic authorization, server coordination, operational recovery and automated acceptance. External release requirements remain tracked here and are excluded from that implementation queue.
+
 ## Goal and architecture
 
 Ship an installable iOS, Android, and Windows product that publishes customizable Discord alerts and mirrors enter/replace/cancel/exit instructions placed inside Crier. Each receiver uses its own account, pricing settings, and durable execution journal. The HTTPS relay transports instructions; broker execution stays on each device. Python/SQLite, SwiftUI, and Kotlin implementations share the same protocol and must pass the same lifecycle scenarios.
