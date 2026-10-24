@@ -1,0 +1,3 @@
+// Generated from release.json by scripts/ios-release-project.py.
+MARKETING_VERSION = 0.2.0
+CURRENT_PROJECT_VERSION = 1

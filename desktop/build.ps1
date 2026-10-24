@@ -7,6 +7,7 @@ try {
     & $Python -m PyInstaller --noconfirm --clean --windowed --onedir --name SentinelCrier --paths $repo --add-data $serviceResource --specpath build desktop/launch.py
     if ($LASTEXITCODE -ne 0) { throw 'Desktop packaging failed' }
     Copy-Item -LiteralPath desktop/README.md -Destination dist/SentinelCrier/README.md
+    Copy-Item -LiteralPath release.json -Destination dist/SentinelCrier/release.json
     Copy-Item -LiteralPath LICENSE -Destination dist/SentinelCrier/LICENSE
     $program = Join-Path $repo 'dist/SentinelCrier/SentinelCrier.exe'
     $report = Join-Path $repo 'dist/SentinelCrier/smoke-test.json'

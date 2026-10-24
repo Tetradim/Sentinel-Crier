@@ -88,3 +88,11 @@ local credential storage; it makes no broker or relay requests. The portable bui
 unsigned and is not a Microsoft Store installer. CI includes the source tests and
 the packaged smoke test. Physical cross-device testing remains separate:
 [paper acceptance](https://github.com/Tetradim/Sentinel-Crier/blob/main/docs/intent-paper-acceptance.md).
+
+## Installer and updates
+
+Use the versioned per-user installer from the manual **Windows release** workflow for
+normal installations. It preserves journals and DPAPI credentials across updates and
+uninstall. Close the app before replacing program files; downgrade is unsupported.
+See [Windows release and update instructions](../docs/windows-release.md) for release
+checksums, signing status, build steps, and retained data details.

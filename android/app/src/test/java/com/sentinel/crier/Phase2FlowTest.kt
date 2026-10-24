@@ -53,6 +53,21 @@ class Phase2FlowTest {
   r.put("active","legacy"); assertEquals("account",Settings.active(r).getString("account")); assertEquals("intent.db",Settings.journalName(Settings.active(r)))
   for(key in listOf("token","url","environment","role")) assertTrue(key,runCatching { Settings.save(r,JSONObject(config().toString()).put(key,"changed")) }.isFailure)
  }
+ @Test fun releaseUpgradeReopensSettingsWithoutChangingJournalOwnership() {
+  val before=Settings.migrate(config()); val profile=Settings.active(before)
+  val journal=Settings.journalName(profile)
+  val saved=before.toString()
+  val reopened=Settings.migrate(JSONObject(saved))
+  assertEquals(saved,reopened.toString()); assertEquals("intent.db",journal)
+  assertEquals(journal,Settings.journalName(Settings.active(reopened)))
+  assertEquals("token",Settings.active(reopened).getString("token"))
+ }
+ @Test fun unsupportedRollbackSchemaFailsWithoutMutatingSavedSettings() {
+  val newer=Settings.migrate(config()).put("schema",3)
+  val saved=newer.toString()
+  assertTrue(runCatching { Settings.migrate(newer) }.isFailure)
+  assertEquals(saved,newer.toString())
+ }
  class Alerts:AlertStore {
   val meta=mutableMapOf<String,String>(); val jobs=linkedMapOf<String,JSONObject>()
   override fun meta(key:String)=meta[key] ?: ""

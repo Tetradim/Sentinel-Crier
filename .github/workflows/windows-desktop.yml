@@ -1,9 +1,9 @@
 name: Windows desktop
 on:
   push:
-    paths: ['desktop/**', 'crier/**', 'tests/**', 'pyproject.toml', '.github/workflows/windows-desktop.yml']
+    paths: ['release.json', 'desktop/**', 'crier/**', 'tests/**', 'pyproject.toml', '.github/workflows/windows-desktop.yml']
   pull_request:
-    paths: ['desktop/**', 'crier/**', 'tests/**', 'pyproject.toml', '.github/workflows/windows-desktop.yml']
+    paths: ['release.json', 'desktop/**', 'crier/**', 'tests/**', 'pyproject.toml', '.github/workflows/windows-desktop.yml']
 permissions:
   contents: read
 jobs:

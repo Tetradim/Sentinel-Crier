@@ -1,0 +1,47 @@
+name: Windows release
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    environment: windows-release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: x64
+          cache: pip
+      - run: python -m pip install -e ".[test,desktop-build]"
+      - run: python -m pytest -q
+      - name: Install Inno Setup compiler
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe')) {
+            choco install innosetup --version=6.4.3 --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+          }
+      - name: Build installer, portable app, manifest and checksums
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+          WINDOWS_SIGNING_PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
+        run: |
+          $pfx = ''
+          try {
+            if ($env:WINDOWS_SIGNING_PFX_BASE64) {
+              $pfx = Join-Path $env:RUNNER_TEMP 'sentinel-signing.pfx'
+              [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_SIGNING_PFX_BASE64))
+            }
+            ./desktop/release.ps1 -SigningPfxPath $pfx
+          } finally {
+            if ($pfx -and (Test-Path -LiteralPath $pfx)) { Remove-Item -LiteralPath $pfx -Force }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SentinelCrier-Windows-release
+          path: dist/release/*
+          if-no-files-found: error

@@ -1,5 +1,11 @@
 # iPhone installation and release
 
+**Release status: blocked.** The owner has no Apple Developer account. No signed
+IPA, TestFlight eligibility, Apple processing, or physical-device acceptance has
+been established. Physical testing is explicitly deferred by the owner. CI
+preparation and simulator results do not satisfy those gates. See
+[release metadata](ios-release-metadata.md) for missing owner inputs.
+
 Crier's native app connects directly to a personal Alpaca API account. It does not
 require the Python service, and this version does not include a screen-broadcast
 extension. Webull Connect remains pending approval and integration.
@@ -43,16 +49,42 @@ provisioned devices. An App Store Connect IPA is uploaded to App Store Connect,
 then distributed using TestFlight after Apple's processing/review. It is not a
 universally sideloadable package.
 
-This workflow exports only; it never uploads or submits your app automatically.
+The workflow exports by default. The optional `upload_testflight` dispatch flag
+uploads an App Store Connect export for Apple's TestFlight processing only when
+explicitly selected. It never submits an app for App Store review or automatically
+distributes it to testers. Upload success does not establish beta eligibility.
+For upload, also configure `APP_STORE_CONNECT_KEY_ID`,
+`APP_STORE_CONNECT_ISSUER_ID`, and `APP_STORE_CONNECT_PRIVATE_KEY_BASE64` in the
+`ios-signing` environment. The last secret is a base64-encoded `.p8` API private
+key. Do not use account passwords. Temporary upload keys are cleaned up even on
+failure; private material is never part of the artifact.
 The project includes an opaque 1024px app icon, version/build identifiers and a
 settings-storage privacy manifest. Bundle identity, entitlements and distribution
 metadata still need Apple validation. Review [native data handling](native-data-handling.md)
 when supplying your privacy policy and App Store privacy answers.
 A fresh accepted build number is required on every upload.
-The workflow uses its run number; adjust if your existing App Store build number
-is already larger. Do not place signing secrets in source files or chat.
+Enter an explicit `build_number` and the highest previous uploaded number in
+`previous_build_number` (use zero only if never uploaded). The workflow requires
+the new number to exceed that value and meet `release.json`'s iOS floor. It does
+not query Apple's upload history, so the owner must verify the previous value.
+It never silently resets a previous uploaded build. Marketing version comes from
+the shared root `release.json`; run `python scripts/ios-release-project.py` before
+generating a local project when changing releases. Signed CI also validates the
+version/build read back from the exported IPA.
+
+The separate preflight reports missing secret names without printing their
+values. Before installation it checks profile expiration, distribution type,
+exact app identifier/team, shared Keychain and App Group permissions, certificate
+expiration, and whether the certificate belongs to the profile. Xcode remains the
+authority on signing validity. The artifact contains the signed IPA plus
+`release-manifest.json`: SHA-256, commit, version/build, public connection endpoint,
+profile identity/expiry and public certificate metadata. It contains no signing
+key or provisioning profile. Do not place signing secrets in source files or chat.
 
 ## Physical-device acceptance
+
+Status: **deferred by owner; not passed**. Record actual device, iOS version,
+commit, build, date and results when this work is authorized and possible.
 
 - Connect paper credentials, restart, and reconnect using Keychain storage.
 - Verify account identity, environment, balances and positions against Alpaca.

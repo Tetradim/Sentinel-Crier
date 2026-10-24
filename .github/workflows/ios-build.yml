@@ -2,12 +2,14 @@ name: iOS build
 on:
   push:
     paths:
+      - 'release.json'
       - 'ios/**'
       - 'crier/connection-service.json'
       - '.github/workflows/ios-build.yml'
       - 'scripts/select_xcode.sh'
   pull_request:
     paths:
+      - 'release.json'
       - 'ios/**'
       - 'crier/connection-service.json'
       - '.github/workflows/ios-build.yml'
