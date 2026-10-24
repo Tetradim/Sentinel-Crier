@@ -1,0 +1,17 @@
+{
+  "endpoint": "https://afvumgzbfqyrugjqrteu.supabase.co/functions/v1/crier",
+  "checked_at": "2026-10-24T05:18:50.186721+00:00",
+  "scope": "synthetic paper relay only; no broker connections",
+  "checks": {
+    "health": true,
+    "independent_pairing": true,
+    "authentication_and_role_isolation": true,
+    "exact_payload_and_idempotency": true,
+    "hosted_long_poll_option_delivery": true,
+    "option_enter_replace_cancel_exit_exact_fields": true,
+    "independent_revocation": true
+  },
+  "publish_duplicate_and_two_reads_ms": 1385.398,
+  "test_receivers_revoked": true,
+  "passed": true
+}

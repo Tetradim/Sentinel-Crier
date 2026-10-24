@@ -1,6 +1,7 @@
 name: Crier live-trading safety checks
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches: [main]
@@ -20,7 +21,13 @@ jobs:
           python-version: '3.11'
           cache: pip
       - run: python -m pip install -e ".[test]"
-      - run: python -m pytest -q
+      - run: python -m pytest -q --junitxml=acceptance-results/python.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: python-acceptance-results
+          path: acceptance-results/python.xml
+          if-no-files-found: warn
 
   ios:
     name: Native iOS compile and trading tests
@@ -52,4 +59,11 @@ jobs:
             -scheme TradingTests \
             -configuration Debug \
             -destination "platform=iOS Simulator,id=$IOS_SIMULATOR_ID" \
+            -resultBundlePath "$RUNNER_TEMP/trading-tests.xcresult" \
             CODE_SIGNING_ALLOWED=NO test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-acceptance-results
+          path: ${{ runner.temp }}/trading-tests.xcresult
+          if-no-files-found: warn

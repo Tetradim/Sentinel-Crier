@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "transport": "httpx.ASGITransport (in-process; no network or broker)",
+  "environment": {
+    "python": "3.11.9",
+    "platform": "Windows-10-10.0.28000-SP0",
+    "httpx": "0.28.1"
+  },
+  "load": {
+    "hosts": 3,
+    "followers_per_host": 10,
+    "events_per_host": 30
+  },
+  "expected_deliveries": 900,
+  "successful_deliveries": 900,
+  "failures": [],
+  "transport_latency_ms": {
+    "count": 900,
+    "p50": 291.8179000262171,
+    "p95": 454.53119999729097,
+    "p99": 513.5521000484005,
+    "max": 532.376499962993
+  },
+  "queue_age_ms": {
+    "count": 900,
+    "p50": 291.40700000000004,
+    "p95": 454.505,
+    "p99": 513.639,
+    "max": 532.193
+  },
+  "load_duration_seconds": 6.730527600040659,
+  "duration_seconds": 8.73899760004133,
+  "deliveries_per_second": 133.7190861522599,
+  "recovery": {
+    "restart_cursor_preserved": true,
+    "replay_preserved": true,
+    "duplicate_publish_preserved": true,
+    "independent_revocation": true
+  },
+  "gates": {
+    "missing_auth": 401,
+    "wrong_role": 401,
+    "malformed_event": 422,
+    "malformed_invitation": 422,
+    "receive_rate_limit": 429
+  }
+}

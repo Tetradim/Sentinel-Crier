@@ -1,6 +1,6 @@
 # Phase 4 status - October 24, 2026
 
-Phase 4 is partially complete. Available signing/build tooling and automated validation are implemented. Apple distribution inputs, finalized public disclosures and the deferred acceptance gates below remain open; no signed iPhone package or store approval is claimed.
+Phase 4 implementation work is closed with explicit owner-authorized deferrals as of October 24, 2026. The owner instructed continuation into Phase 5 while deferring Apple enrollment/signing and every Phase 4 item that cannot be completed autonomously. This is a workflow handoff, not a claim that distribution or acceptance requirements passed. No signed iPhone package or store approval is claimed.
 
 | Requirement | Evidence / remaining action |
 | --- | --- |
@@ -23,7 +23,9 @@ Phase 4 is partially complete. Available signing/build tooling and automated val
 - Backup contents: encrypted `android-release-backup.p12`, public `manifest.json`, `SHA256SUMS.txt` and `RESTORE.txt`. The public certificate fingerprint matches the identity recorded in [Android release instructions](android-release.md).
 - Private staging and read-back copies remain outside the repository under the current Windows user's owner-only `%LOCALAPPDATA%/SentinelCrier/SigningBackups/` folder. No signing keys, passwords or private backup artifacts were committed or attached to releases.
 
-## Next owner-dependent steps
+## Deferred owner/external steps
+
+These are deferred under the owner's latest instruction. They do not block automated Phase 5 work, but still must be satisfied before the corresponding release/distribution claims.
 
 1. Preserve the backup passphrase separately and keep the tablet copy offline. Complete `RESTORE.txt` on another trusted machine before relying on that as proven private-key recovery.
 2. Enroll/identify the Apple Developer team and resolve the app's distribution eligibility. Supply signing credentials through protected release secrets, not chat.

@@ -1,5 +1,6 @@
 name: Android build and intent tests
 on:
+  workflow_dispatch:
   push:
     paths: ['release.json', 'android/**', 'crier/connection-service.json', '.github/workflows/android-build.yml']
   pull_request:
@@ -32,3 +33,4 @@ jobs:
           path: |
             android/app/build/outputs/apk/debug/*.apk
             android/app/build/reports/tests/
+            android/app/build/test-results/testDebugUnitTest/*.xml

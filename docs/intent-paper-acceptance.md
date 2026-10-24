@@ -1,5 +1,7 @@
 # Cross-device paper acceptance
 
+October 24 status: the owner deferred Apple signing/enrollment and every owner-dependent Phase 4 item, authorizing Phase 5 automated work. The physical tests below remain deferred. Automated local/hosted transport checks and simulated broker integration evidence are tracked separately in [Phase 5 automated acceptance](superpowers/plans/2026-10-24-phase5-automated-acceptance.md); they do not establish that these physical/paper steps passed.
+
 Use separate Alpaca **paper** accounts for host and follower, a paper relay channel,
 and a currently tradable contract selected from the broker. Do not reuse an expired
 example symbol from documentation. Start with one contract and exact-limit pricing.
