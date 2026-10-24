@@ -1,6 +1,9 @@
 {
   "private": true,
   "type": "module",
-  "scripts": {"test": "node run-sql-tests.mjs"},
+  "scripts": {
+    "test": "node run-sql-tests.mjs && node --test offline-acceptance.test.mjs",
+    "acceptance": "node offline-acceptance.mjs"
+  },
   "devDependencies": {"@electric-sql/pglite": "0.5.11"}
 }

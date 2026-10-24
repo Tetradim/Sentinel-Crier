@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
       - name: PostgreSQL compatible local tests
         run: npm ci --prefix supabase/tests && npm test --prefix supabase/tests
       - name: Real PostgreSQL migration and security tests
@@ -44,11 +44,13 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/webull-connect/session_store.sql
           psql -v ON_ERROR_STOP=1 -f supabase/webull-connect/token_store.sql
           psql -v ON_ERROR_STOP=1 -f supabase/webull-connect/authorization_flow.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/webull-connect/operations.sql
           for test in supabase/tests/*.sql; do psql -v ON_ERROR_STOP=1 -f "$test"; done
           psql -v ON_ERROR_STOP=1 -c "SET crier.test_dsn = 'host=127.0.0.1 port=5432 dbname=crier_test user=postgres password=local-test-only';" -f supabase/tests/integration/concurrency.sql
           psql -v ON_ERROR_STOP=1 -c "SET crier.test_dsn = 'host=127.0.0.1 port=5432 dbname=crier_test user=postgres password=local-test-only';" -f supabase/tests/integration/webull_sessions_concurrency.sql
           psql -v ON_ERROR_STOP=1 -c "SET crier.test_dsn = 'host=127.0.0.1 port=5432 dbname=crier_test user=postgres password=local-test-only';" -f supabase/tests/integration/webull_tokens_concurrency.sql
           psql -v ON_ERROR_STOP=1 -c "SET crier.test_dsn = 'host=127.0.0.1 port=5432 dbname=crier_test user=postgres password=local-test-only';" -f supabase/tests/integration/webull_authorization_concurrency.sql
+          psql -v ON_ERROR_STOP=1 -c "SET crier.test_dsn = 'host=127.0.0.1 port=5432 dbname=crier_test user=postgres password=local-test-only';" -f supabase/tests/integration/webull_operations_concurrency.sql
       - name: Edge gateway tests and type checks
         run: |
           npm exec --yes --package deno@2.9.6 -- deno test supabase/functions/crier/gateway_test.ts
@@ -59,3 +61,11 @@ jobs:
           npm exec --yes --package deno@2.9.6 -- deno test supabase/webull-connect
           npm exec --yes --package deno@2.9.6 -- deno check supabase/webull-connect/oauth_contract.ts
           npm exec --yes --package deno@2.9.6 -- deno lint supabase/webull-connect
+      - name: Synthetic integrated capability report
+        run: node supabase/tests/offline-acceptance.mjs > webull-offline-acceptance.json
+      - name: Retain synthetic capability evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: webull-offline-acceptance
+          path: webull-offline-acceptance.json
+          if-no-files-found: error
