@@ -13,7 +13,7 @@ gradle :app:testDebugUnitTest :app:assembleDebug
 
 `.github/workflows/android-build.yml` performs those tasks and uploads a debug APK and test reports. Debug APKs are for installation/testing; production signing and Play distribution are separate steps. No broker credentials are needed by tests or CI.
 
-Local verification on 2026-10-23: production and unit-test Kotlin sources compile directly against Android SDK 35 with Kotlin 2.0.21. All 41 offline JUnit tests pass, including shared protocol fixtures, invitation parsing, profile migration, credential rotation, execution recovery and Discord delivery transitions. Direct compilation does not establish APK packaging or physical-device correctness. CI and installation remain separate gates. No brokerage orders or Discord messages were sent during development.
+Phase E verification on October 24, source `5fe75d0`: production and unit-test Kotlin sources compiled directly against Android SDK 35 with Kotlin 2.0.21; all **47 offline JUnit tests** passed. This includes picker roundtrips and preservation of invalid saved values. [Android CI 40134983406](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40134983406) also passed Gradle unit tests and debug APK packaging. These checks do not establish physical-device acceptance or signed release distribution. No brokerage orders or Discord messages were sent by these tests.
 
 ## Setup and operation
 

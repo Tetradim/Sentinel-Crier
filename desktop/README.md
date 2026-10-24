@@ -45,6 +45,8 @@ Disconnect stops all mirroring. These controls do not liquidate positions.
 
 ## Saved state and recovery
 
+In **Discord & receivers**, refresh delivery history or paired receivers, then select the actual row to inspect it. Retry, Close and Revoke act on that selection; no ID typing is needed. Refreshing or changing a connection clears stale selections. Failed messages can be explicitly retried after confirmation. Uncertain messages require inspection and may be closed without sending; their evidence is retained. Revoking a receiver stops future transport and does not cancel its existing broker orders. The delivery panel scrolls at smaller window sizes so record details and test/preview controls remain accessible.
+
 Windows stores configuration and journals under `%LOCALAPPDATA%\SentinelCrier\Desktop`.
 Pairing tokens and API credentials are encrypted with Windows DPAPI for the current
 Windows user. Secrets are not included in the portable app folder or sent through

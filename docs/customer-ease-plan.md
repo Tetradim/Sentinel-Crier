@@ -34,9 +34,19 @@ flowchart LR
 
 ## Phase E implementation tasks
 
-- [ ] Android: preserve saved protocol values while presenting human-readable pickers; place server URL, age/slippage/cap values and template syntax behind Advanced; preserve worker-stop and live/market checks.
-- [ ] Windows: select actual alert/receiver rows instead of typing IDs for retry/close/revoke; refresh lists after actions and keep confirmation dialogs.
-- [ ] iOS: remove nonfunctional strategy toggles; make paper/live, account/connection needs and foreground monitoring visible; preserve working trading and mirroring controls.
-- [ ] Review diffs, run relevant automated checks and native CI, record source-bound evidence, then commit directly to main.
+- [x] Android: preserve saved protocol values while presenting human-readable pickers; place server URL, age/slippage/cap values and template syntax behind Advanced; preserve worker-stop and live/market checks.
+- [x] Windows: select actual alert/receiver rows instead of typing IDs for retry/close/revoke; refresh lists after actions and keep confirmation dialogs.
+- [x] iOS: remove nonfunctional strategy toggles; make paper/live, account/connection needs and foreground monitoring visible; preserve working trading and mirroring controls.
+- [x] Review diffs, run relevant automated checks and native CI, record source-bound evidence, then commit directly to main.
 
-Phase F and later are queued after this bounded cross-platform pass. No physical test, external consent, message send or broker order is part of Phase E.
+Phase E source `5fe75d0` passed local **552 Python tests**, including **10 hidden-window Tk tests**, and **47 Android JUnit tests** with complete Kotlin source compilation. Independent review caught a minimum-window layout issue; a scrollable panel and actual geometry regression fixed it. CI passed [Android unit/debug packaging](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40134983406), [Python 3.11/3.12 backend checks](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40134983416), [Windows tests and portable packaging](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40134983468), [iOS simulator/unsigned device archive](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40134983364), and [83 iOS tests](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40134983413). Windows CI reported 551 passed/one platform-specific skip; local verification passed all 552. These are automated checks, not physical acceptance.
+
+Phase F has started with the Windows alerts-only account connection, eliminating its mirroring-channel requirement. Cross-platform guided onboarding remains open. No physical test, external consent, message send or broker order is part of Phase E.
+
+## Phase F acceptance details
+
+- A fresh user chooses a purpose and sees only the required setup steps, with an Advanced route to other tools. Existing position/recovery evidence stays accessible when changing purpose.
+- Alerts-only account verification and Discord setup do not require a mirroring channel. Setup navigation must not silently enable/disable execution or abandon a saved journal.
+- Verified setup progress is scoped to account, paper/live environment, pairing and Discord destination as relevant. A saved value is not proof of a fresh network connection; stale/failed verification remains visible.
+- Broker verification, Discord preview/test and permission to send real alerts are separate, explicit actions with clear results. Retry behavior must preserve current uncertain-delivery rules.
+- Reopening a configured app offers reconnect/reuse without retyping credentials, while execution retains its existing paused/authorization behavior. Changing accounts/destinations follows current journal/outbox preservation requirements.
