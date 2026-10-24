@@ -21,7 +21,7 @@ Sentinel Crier is an open-source project with three distinct workflows:
 | Remote Host / Receive | Expiring, single-use invitations via an operator-deployed HTTPS connection service |
 | Execution diagnostics | Windows/iOS/Android timelines and JSON/CSV export; automatic near-event Alpaca quotes and clock-corrected delivery estimates on receivers ([setup and limits](docs/execution-diagnostics.md)) |
 | Legacy fill-based mirroring | Separate optional iPhone-to-PC flow; **not** the submission-time protocol |
-| Webull | Connect integration pending; PC SDK observer experimental and requires validation |
+| Webull | [Connect approval pending; authorization-session groundwork only](docs/webull-connect.md). PC SDK observer experimental and requires validation |
 | Tradier | Read-only PC polling adapter; account-specific validation required |
 
 **Not implemented or not guaranteed:** Webull order execution, multi-leg strategy copying, guaranteed continuous iOS background operation, automatic position-level P/L or protective stops, and identical fills across accounts. A submitted order may be rejected, partially filled, or remain open.

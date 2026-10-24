@@ -1,5 +1,7 @@
 # Webull validation and enrollment
 
+This guide covers the experimental Trading API SDK observer, not Webull Connect. The Connect application is awaiting approval; see [Connect integration status](webull-connect.md).
+
 This is a free self-hosted tool. Each operator connects their own authorized account. No paid tier, Tetradim account system or shared customer credential store is included.
 
 ## What must be established
@@ -10,7 +12,7 @@ This is a free self-hosted tool. Each operator connects their own authorized acc
 4. Stock and option payload shape. Options must supply an unambiguous OCC symbol. Events lacking complete contract data or containing multi-leg information are quarantined. No option contract is guessed from a ticker alone.
 5. Whether replay on reconnect includes missed executions. Crier does not promise stream replay or automatic REST backfill.
 
-Use Webull's approved sandbox/test accounts where available. An unfunded production account is not a simulated account. Do not place a real trade solely to satisfy these checks; Crier itself never places orders.
+Use Webull's approved sandbox/test accounts where available. An unfunded production account is not a simulated account. Do not place a real trade solely to satisfy these checks. This Webull observer is read-only; Crier's separately configured Alpaca intent executor can place and cancel orders.
 
 ## Inspect without posting
 
