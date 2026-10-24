@@ -40,7 +40,9 @@ Each pending session binds an opaque authenticated-owner reference, independent 
 
 SQL cannot establish customer authentication or prove nonce entropy. A future trusted gateway must derive the owner from its authenticated session, validate/pin the registered callback using the stricter contract helper, keep service-role access server-side and enforce request limits. Pending state is not a broker token vault; no access/refresh tokens or partner secrets are stored by this schema. Atomic candidate installation keeps default function privileges from becoming visible before their revocation.
 
-Local verification passed all three SQL suites and 23 Deno tests (10 existing gateway, 9 OAuth contract, 4 state-material tests), type checks and lint. Independent review caught and corrected a stale-snapshot revocation case; environment parity and its regressions were also corrected. Real PostgreSQL concurrency results are recorded after the focused CI run.
+Local verification passed all three SQL suites and 23 Deno tests (10 existing gateway, 9 OAuth contract, 4 state-material tests), type checks and lint. Independent review caught and corrected a stale-snapshot revocation case; environment parity and its regressions were also corrected.
+
+[CI 40093696777](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40093696777), source `4bfcc3f`, passed the complete targeted checks, including real PostgreSQL parallel consumption, expiry during a row-lock wait, owner quota races and concurrent/stale-snapshot revocation tests. The existing relay's security/concurrency checks passed in the same job. The candidate schema was installed only into disposable test databases, not the hosted Supabase project.
 
 ### Signing contract requiring confirmation
 

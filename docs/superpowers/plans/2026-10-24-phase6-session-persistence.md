@@ -9,7 +9,9 @@
 - [x] Test-first candidate SQL: least-privilege schema/RPC grants, fixed lifetime, bounded owner sessions, exact identity/binding checks and atomic single-use consumption.
 - [x] Generate opaque server-side state material with CSPRNG values, hash-only persistence fields and redacted ordinary serialization.
 - [x] Add local and real PostgreSQL tests, including simultaneous redemption, expiry while waiting for a lock, owner quotas and revocation.
-- [ ] Independently review and run existing relay/contract checks. Run targeted CI, retain results and update integration status.
+- [x] Independently review and run existing relay/contract checks. Run targeted CI, retain results and update integration status.
+
+Outcome: three local SQL suites, 23 Deno tests and type/lint checks passed. Real PostgreSQL/security/concurrency verification passed in [CI 40093696777](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40093696777), source `4bfcc3f`. The review's stale-snapshot revoke issue and the environment-name mismatch received regression coverage and were corrected before CI. Candidate DDL/grants apply atomically. No deployment or broker request occurred; the repository still uses only `main`.
 
 ## Security boundaries
 
