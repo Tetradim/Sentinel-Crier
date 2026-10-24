@@ -23,7 +23,9 @@
 
 - [x] Observe missing-module failure before implementing `offline-acceptance.mjs`; exercise coordinator, strict adapter, real SQL and encryption together in nine synthetic scenarios.
 - [x] Add machine-readable capability reporting, dirty-source attribution and bounded scenario waits; retain CI report artifact.
-- [ ] Run all relevant local suites and targeted real PostgreSQL CI; inspect full results and retain source-bound evidence.
-- [ ] Update the autonomous queue and integration status; commit/push directly to main without PRs. Preserve original external/physical release gates separately.
+- [x] Run all relevant local suites and targeted real PostgreSQL CI; inspect full results and retain source-bound evidence.
+- [x] Update the autonomous queue and integration status; commit/push directly to main without PRs. Preserve original external/physical release gates separately.
 
 Native application and trading runtime sources are unchanged by this slice. Their earlier acceptance evidence remains tied to its original source commits; no new physical or signed-build claim is made.
+
+Outcome: source 6788b4c passed CI 40119328343, including PostgreSQL concurrency and retained clean-source capability evidence. Local 542 Python tests, 55 Deno tests, six SQL suites and nine integrated scenarios passed. No deployment, broker calls or Discord messages occurred.

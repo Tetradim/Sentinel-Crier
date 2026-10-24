@@ -2,7 +2,7 @@
 
 Updated October 24, 2026. Original planning baseline: main `9d33f4a`. The phase definitions below retain their original acceptance requirements; the current status section records subsequent implementation and external blockers.
 
-For the remaining work executable without owner input, follow the [autonomous implementation plan](autonomous-completion-plan.md). It schedules atomic authorization, server coordination, operational recovery and automated acceptance. External release requirements remain tracked here and are excluded from that implementation queue.
+The [autonomous implementation plan](autonomous-completion-plan.md) records completed atomic authorization, server coordination, operational recovery and automated acceptance within its offline scope. External release requirements remain tracked here and were excluded from that implementation queue.
 
 ## Goal and architecture
 
@@ -94,7 +94,7 @@ Exit gate: all supported platform combinations pass; unresolved mismatches are f
 
 ## Phase 6 â€” Webull and additional brokerage support
 
-October 24 update: the owner approved the implementation plan and confirmed that Webull's response is still pending. The isolated [authorization and custody groundwork](webull-connect.md) now includes form/response validation, cryptographically random browser-state material, an AES-GCM token vault and candidate durable PostgreSQL session/token stores. Refresh claims use monotonic generations and operation fences; uncertain rotating-token refreshes require new authorization, and local revocation prevents late results from restoring credentials. These schemas remain outside deployment migrations and are not deployed or connected to a client. Customer authentication, integrated signed exchange/refresh orchestration, approved native redirects and the Connect trading adapter remain unimplemented. See the linked status document for current test evidence. This does not satisfy the Phase 6 exit gate.
+October 24 update: Webull's response is still pending. The [server groundwork](webull-connect.md) now includes validated contracts, browser-state generation, encrypted custody, atomic SQL authorization, a coordinator/RPC adapter and rotation/cleanup/recovery controls. The coordinator was tested with actual SQL and synthetic authentication/signing ports; refresh and revocation fences reject stale work. Six SQL suites, 55 Deno tests, nine integrated scenarios and real PostgreSQL concurrency passed CI at source `6788b4c`; all 542 Python tests passed locally. Candidate schemas remain outside deployment migrations and are not deployed or connected to clients. An authenticated HTTP gateway, actual approved signer/transport, native redirects and the Connect trading adapter remain unimplemented. This does not satisfy the Phase 6 exit gate.
 
 1. Use the already-submitted Connect application; obtain approved scopes, redirect URI, sandbox access, order-event capabilities, and permitted market-data use. Do not submit a duplicate application.
 2. Confirm Webull's approved native-client architecture. Its documented OAuth flow includes server-held application secrets; never embed these in the open-source mobile binaries. A token-exchange service may expand the current relay's responsibilities and needs separate isolation and credential handling.

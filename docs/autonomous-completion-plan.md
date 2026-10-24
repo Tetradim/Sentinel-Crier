@@ -2,7 +2,7 @@
 
 October 24, 2026. Baseline: main `8f267e7`. This is the implementation queue for work that can be completed with source access, synthetic fixtures and existing CI. It supplements the original roadmap; completing it does not change that roadmap's release acceptance requirements.
 
-The available implementation work in original Phases 1–5 has already passed its recorded checks. The largest remaining code gap is Phase 6: the authorization, encryption and database primitives exist but are not connected. This plan closes those integration gaps without inventing an approved broker contract or requiring credentials.
+At this plan's baseline, the available implementation work in original Phases 1–5 had passed its recorded checks. Phase 6 still had separate authorization, encryption and database primitives. The completed tasks below connect them within the planned offline scope without inventing an approved broker contract or requiring credentials.
 
 ```mermaid
 flowchart LR
@@ -26,13 +26,17 @@ Create a candidate `authorization_flow.sql` after the existing session and token
 
 Begin reserves before redirect, creates the session and association in one transaction and returns the reservation plus deadline. Consume validates exact owner/environment/callback/browser digest, checks expiry after locks, verifies that the reservation is still current, then deletes the one-use session and returns the bound generation/operation. Revoke deletes pending state and increments the token tombstone in one transaction. A callback already consumed before revoke may still reach a remote broker; its stale result must fail the existing token commit fence.
 
-The future coordinator must use these compound operations instead of separately calling the lower-level building blocks. All operations remain service-role-only; they do not authenticate customers. No native client receives service keys, broker tokens or application secrets.
+The implemented coordinator uses these compound operations instead of separately calling the lower-level building blocks. All operations remain service-role-only; they do not authenticate customers. No native client receives service keys, broker tokens or application secrets.
 
 ## Execution status
 
 - [x] A: atomic authorization lifecycle — implemented and verified.
-- [ ] B: server coordinator.
-- [ ] C: recovery and operational controls.
-- [ ] D: automated acceptance and handoff.
+- [x] B: server coordinator — implemented with trusted injected authentication/signing ports.
+- [x] C: recovery and operational controls — rotation CAS, bounded cleanup and safe status/audit hooks.
+- [x] D: automated acceptance and handoff — source-bound evidence retained.
 
-Phase A evidence: source `d246a7b`, [CI 40118251456](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40118251456). All five local SQL suites and 32 local Deno tests passed, with type checks and lint. Real PostgreSQL 17 CI passed initial reservation races, supersession, single callback consumption, revoke versus late commit/pending callback, and expiry during a lock wait. Independent review found no actionable issues. Candidate SQL remains undeployed. Phase B is the next implementation step.
+Phase A evidence: source `d246a7b`, [CI 40118251456](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40118251456). All five local SQL suites and 32 local Deno tests passed, with type checks and lint. Real PostgreSQL 17 CI passed initial reservation races, supersession, single callback consumption, revoke versus late commit/pending callback, and expiry during a lock wait. Independent review found no actionable issues.
+
+Phases B–D evidence: source `6788b4c`, [CI 40119328343](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40119328343). Local verification passed 542 Python tests, 55 Deno tests, six SQL suites and nine integrated coordinator/SQL/vault scenarios. CI passed PostgreSQL 17 rotation/refresh/revoke and parallel cleanup races, existing security/concurrency suites, Deno checks and the integrated scenarios. The downloaded [capability report](acceptance/2026-10-24/webull-offline-acceptance.json) records a clean source tree, synthetic integration and no deployment or broker acceptance. Review findings about evidence attribution and asynchronous audit rejection were fixed with regressions; final review found no remaining product/security issues.
+
+The [operator guide](webull-server-operations.md) covers composition and recovery. All four phases in this autonomous queue are complete for their declared offline scope. No HTTP gateway, customer authentication implementation, approved signer, native Webull flow or broker adapter is deployed by this work. Original release gates remain separate; the full Webull product is not complete.

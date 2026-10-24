@@ -28,7 +28,7 @@ Callback structure is restricted to a server HTTPS URI without credentials, quer
 
 Opaque request/token objects redact default JSON/string/inspection output; explicit form/token accessors expose their sensitive values for future server use. That does not protect raw HTTP bodies or explicitly serialized forms if a future caller logs them. Native clients must never import application secrets or receive these server-side objects.
 
-The Python session primitive, TypeScript contract and candidate PostgreSQL stores are server building blocks. The compound SQL lifecycle below now joins browser state to its reserved token generation; this is not an integrated broker login flow. An authenticated customer boundary, integrated exchange/refresh orchestration, hosted deployment, remote token revocation and approved callback/browser behavior still need implementation and validation before real credentials are accepted.
+The compound SQL lifecycle joins browser state to its reserved token generation. The server coordinator below now connects session material, encrypted custody and RPC persistence through injected authentication/signing ports. A real authenticated HTTP boundary, approved signed transport, hosted deployment, remote token revocation and approved callback/browser behavior still need implementation and validation before real credentials are accepted.
 
 ## Candidate PostgreSQL session persistence
 
@@ -82,16 +82,26 @@ Local verification passed four SQL suites and 32 Deno tests (10 gateway, 9 OAuth
 
 The consume RPC checks exact owner, environment, callback, state and browser-binding digests, expiry after lock acquisition, and the still-current token generation/operation. It returns that reservation once and deletes the associated session. Combined revoke removes pending browser state and advances the token tombstone atomically. All compound operations acquire the session-owner lock before the token-scope lock and require READ COMMITTED.
 
-The lower-level RPCs remain trusted server building blocks. The future coordinator must use the compound lifecycle rather than issuing separate reserve/create/revoke requests. Callers must create fresh state and browser material for every login. Consumption before revocation cannot prevent an already-started remote code exchange, but the token commit fence rejects its late result after revocation.
+The lower-level RPCs remain trusted server building blocks. The coordinator uses the compound lifecycle rather than issuing separate reserve/create/revoke requests. Callers must create fresh state and browser material for every login. Consumption before revocation cannot prevent an already-started remote code exchange, but the token commit fence rejects its late result after revocation.
 
-The [autonomous implementation plan](autonomous-completion-plan.md) schedules the remaining coordinator, recovery controls and automated acceptance without owner input. The compound lifecycle has no HTTP endpoints or browser-cookie handler and accepts no live broker credentials.
+The [autonomous implementation plan](autonomous-completion-plan.md) records the completed offline coordinator, recovery controls and automated acceptance. The compound lifecycle has no HTTP endpoints or browser-cookie handler and accepts no live broker credentials.
 
 Phase A source `d246a7b` passed [CI 40118251456](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40118251456), including real PostgreSQL 17 concurrent reservation, callback consumption, supersession, revocation and expiry-after-lock-wait cases. All five local SQL suites and 32 local Deno tests passed, plus type checks and lint. Independent review found no actionable issues. No candidate schema was deployed.
+
+## Coordinator, recovery and integrated acceptance
+
+`coordinator.ts` connects verified-principal inputs, pinned configuration, fresh session material, compound SQL procedures and the vault. Its injected signed transport has a bounded timeout; a late response cannot resume a timed-out operation and commit. Refresh claims dispatch once, bind the returned broker identity and require fresh authorization after uncertainty. `rpc_store.ts` checks RPC argument/response contracts and keeps transport errors generic. These are tested server libraries, not an authentication verifier, concrete signer or HTTP gateway.
+
+`operations.sql` adds same-generation, exact-envelope rotation CAS and bounded expiry cleanup. Rotation preserves identity and lifetimes and loses safely to concurrent rotation, refresh or revocation. Cleanup skips locked rows, removes expired browser associations and preserves token tombstones. `operations.ts` adds authenticated status/rotation, separately operator-verified cleanup and fixed secret-free audit events; audit delivery is best effort and cannot trigger a mutation retry.
+
+[CI 40119328343](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40119328343), source `6788b4c`, passed six SQL suites, PostgreSQL 17 security/concurrency checks, 55 Deno tests/type/lint checks and nine real-SQL synthetic integration scenarios. All 542 Python tests passed locally. The retained [capability report](acceptance/2026-10-24/webull-offline-acceptance.json) attributes evidence to a clean commit and explicitly records no deployment or broker calls. Independent review findings about dirty-source attribution and asynchronous audit rejection received fixes and regression coverage. No product/security findings remained in final review.
+
+See [server composition and recovery](webull-server-operations.md) for APIs, trusted-port requirements, configuration checks and operational instructions. Native/trading runtime sources were unchanged; earlier platform evidence remains tied to its original tested commits. No new iPhone installation, live account or broker support claim follows from these results.
 
 ## Work after Webull approval
 
 1. Confirm granted scopes, approved redirect URI, sandbox credentials, signing rules, request schemas and native-app permission model. Never include partner secrets in binaries or source control.
-2. Build a separately isolated authenticated exchange service. Decide token custody, encryption, per-customer authorization, refresh locking, rotation, revocation, audit redaction and deletion before accepting credentials. The existing connection relay remains transport-only.
+2. Integrate the tested coordinator into a separately isolated authenticated HTTP service with an actual customer verifier, protected browser cookies, approved signer/transport, request limits, secret provisioning and deployed monitoring. Validate remote revocation and any operator retention/deletion policy before accepting credentials. The existing connection relay remains transport-only.
 3. Add browser authorization and deep-link return flows to each client; verify state/binding rejection, account identity and environment separation against the sandbox.
 4. Implement account, option-contract resolution, submit/replace/cancel, positions and order reconciliation using approved Connect contracts. Establish what events are available for orders entered through Webull's own app; do not promise submission-time observation before that is proven.
 5. Apply the existing intent lifecycle tests and broker UI reconciliation acceptance to Webull. Test token expiry/refresh races and reconnect backfill. Keep execution disabled until those pass; mocks alone do not establish brokerage support.

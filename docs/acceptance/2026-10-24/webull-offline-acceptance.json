@@ -1,0 +1,92 @@
+{
+  "schema": "crier.webull-offline-acceptance.v1",
+  "sourceCommit": "6788b4cccab0721d5c307c89ada651b8bf9ee67d",
+  "sourceTreeDirty": false,
+  "evidenceAttribution": "commit",
+  "runtime": "Node 24 + PGlite",
+  "deployment": "not_deployed",
+  "brokerCalls": 0,
+  "discordCalls": 0,
+  "scenarios": [
+    {
+      "id": "exchange-encrypted-persistence-refresh-replay",
+      "status": "passed"
+    },
+    {
+      "id": "forged-principal-and-browser-binding-rejected",
+      "status": "passed"
+    },
+    {
+      "id": "revocation-fences-in-flight-exchange",
+      "status": "passed"
+    },
+    {
+      "id": "lost-refresh-response-requires-new-authorization",
+      "status": "passed"
+    },
+    {
+      "id": "timeout-ignoring-abort-never-commits-late",
+      "status": "passed"
+    },
+    {
+      "id": "key-rotation-preserves-expiry-and-redacts-audit",
+      "status": "passed"
+    },
+    {
+      "id": "bounded-operator-cleanup-retains-tombstones",
+      "status": "passed"
+    },
+    {
+      "id": "rotation-cas-loses-to-revocation",
+      "status": "passed"
+    },
+    {
+      "id": "unapproved-signing-configuration-fails-closed",
+      "status": "passed"
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "authorization",
+      "implemented": true,
+      "integration": "synthetic_sql",
+      "deployed": false,
+      "brokerAccepted": false
+    },
+    {
+      "name": "exchange_refresh_coordinator",
+      "implemented": true,
+      "integration": "synthetic_sql",
+      "deployed": false,
+      "brokerAccepted": false
+    },
+    {
+      "name": "encrypted_custody",
+      "implemented": true,
+      "integration": "synthetic_sql",
+      "deployed": false,
+      "brokerAccepted": false
+    },
+    {
+      "name": "rotation_recovery",
+      "implemented": true,
+      "integration": "synthetic_sql",
+      "deployed": false,
+      "brokerAccepted": false
+    },
+    {
+      "name": "expiry_cleanup",
+      "implemented": true,
+      "integration": "synthetic_sql",
+      "deployed": false,
+      "brokerAccepted": false
+    },
+    {
+      "name": "safe_diagnostics",
+      "implemented": true,
+      "integration": "synthetic_sql",
+      "deployed": false,
+      "brokerAccepted": false
+    }
+  ]
+}
