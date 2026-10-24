@@ -35,6 +35,14 @@ def test_cancel_before_enter_remains_in_stream(tmp_path):
     assert [r['event']['action'] for r in rows]==['cancel','enter']
     assert IntentRelay(tmp_path/'relay.db').read(pair['follower_token'],0)==relay.read(pair['follower_token'],0)
 
-@pytest.mark.parametrize('changes',[dict(quantity=1.2),dict(limit_price='NaN'),dict(event_id='bad'),dict(symbol='SPY261399C00750000'),dict(asset='stock'),dict(expires_at=datetime.now(timezone.utc)+timedelta(minutes=2))])
+@pytest.mark.parametrize('changes',[dict(quantity=1.2),dict(limit_price='NaN'),dict(event_id='bad'),dict(symbol='SPY261399C00750000'),dict(asset='stock'),dict(created_at=datetime(2026,1,1,tzinfo=timezone.utc),expires_at=datetime(2026,1,1,0,2,tzinfo=timezone.utc))])
 def test_invalid_wire_event(changes):
     with pytest.raises(ValueError): event(**changes)
+
+
+def test_entry_lifetime_boundary_does_not_depend_on_test_runtime():
+    created = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    assert event(created_at=created, expires_at=created + timedelta(seconds=30))
+    for duration in (timedelta(0), timedelta(seconds=30, microseconds=1), timedelta(minutes=2)):
+        with pytest.raises(ValueError):
+            event(created_at=created, expires_at=created + duration)
