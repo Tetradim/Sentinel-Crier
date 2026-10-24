@@ -1,5 +1,6 @@
 name: Supabase relay tests
 on:
+  workflow_dispatch:
   push:
     paths: ['supabase/**', '.github/workflows/supabase-tests.yml']
   pull_request:
@@ -46,3 +47,8 @@ jobs:
           npm exec --yes --package deno@2.9.6 -- deno test supabase/functions/crier/gateway_test.ts
           npm exec --yes --package deno@2.9.6 -- deno check supabase/functions/crier/index.ts
           npm exec --yes --package deno@2.9.6 -- deno lint supabase/functions/crier
+      - name: Offline Webull Connect contract checks (no broker calls)
+        run: |
+          npm exec --yes --package deno@2.9.6 -- deno test supabase/webull-connect/oauth_contract_test.ts
+          npm exec --yes --package deno@2.9.6 -- deno check supabase/webull-connect/oauth_contract.ts
+          npm exec --yes --package deno@2.9.6 -- deno lint supabase/webull-connect
