@@ -149,3 +149,23 @@ boundaries. Run the iOS test target in macOS CI. This Windows workspace has no
 Xcode; signing, real provider registration/deployment and physical consent/browser
 return acceptance remain required separately. No real provider grant, message or
 order was exercised here.
+
+## Connection health
+
+Open **Home → Connection health and recovery**. The view displays actual broker,
+fill, relay, execution-worker and Discord observations, their last successful checks,
+and recovery navigation. Refresh view updates local presentation only. It does not
+send a broker/Discord/relay request or grant execution/delivery permission.
+
+Health evidence is scoped to the verified account/environment, journey, OAuth customer provenance where applicable,
+pairing and destination. A new connection or foreground resume requires fresh checks;
+late callbacks from a stopped session cannot restore health. Saved timestamps survive
+restart while readiness does not. Clock discontinuity and stale observations are shown
+separately. The view links to existing account setup, orders and delivery history; it
+cannot manually resolve an unknown order or automatically retry an uncertain message.
+
+Native preference storage holds diagnostic timestamps and fixed reason codes, with
+credential-bearing identities hashed before storage. Health is informational and is
+separate from the authoritative order/delivery journals. Keep the app foregrounded:
+returning reconciles a connected account, restart requires reconnect, and Discord
+publishing must be explicitly re-enabled after suspension.

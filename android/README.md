@@ -75,3 +75,23 @@ Returning consent requires **Install returned provider connection · keep stoppe
 Offline injected HTTP/JUnit checks cover login → begin → strict return → one-use redemption → broker identity installation, restart and logout, wrong identity/environment/owner, exclusive auth headers and ambiguous redemption. Source compilation does not establish installed-device browser interoperability, deployed service availability, provider registration or release acceptance. No real login, provider grant, message or order is exercised by these checks.
 
 OAuth credential provenance includes the exact customer service URL and canonical customer UUID for both brokerage and Discord credentials. The same UUID on another Supabase project is a different identity. Restored connections, worker startup and direct Discord test/retry actions reject mismatched or missing OAuth provenance; manual API-key credentials keep their existing path. Login and logout require stopped workers, failed refresh preserves the previous customer fence, and inactive Activity returns wait in a process-owned inbox until foreground before consuming their one-use receipt.
+
+## Connection health and recovery
+
+Open **Connection health and recovery** below the journey buttons. The dialog shows
+broker, fill-monitor, trade-sharing/receiving, execution-worker and Discord checks
+for the selected journey. It refreshes local observations once a second while visible;
+opening it or pressing Refresh view sends no network request. Idle is not proof of
+remote connectivity. Saved successes remain history after restart and do not resume
+monitoring, trading or publishing permission.
+
+Alerts and Trade/Follow retain separate account/environment/connection scopes.
+Stopped connection tickets reject late callbacks, and an old service cannot stop a
+newer connection's health session. Alerts still stops when its screen leaves the
+foreground; service status remains active until its owning workers drain. The health
+history uses a coalesced background writer, with storage failures reported separately
+from trading journals. No API key, webhook or pairing token is written into it.
+
+Recovery actions show existing order/delivery evidence, return to setup, or explicitly
+stop local workers. They never mark a broker order resolved or retry an uncertain
+message automatically. Broker orders remain at the brokerage when local workers stop.

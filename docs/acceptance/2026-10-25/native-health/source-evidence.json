@@ -1,0 +1,81 @@
+{
+  "phase": "H.2",
+  "status": "H.2 native health and recovery source verified; H.3-H.5 remain open",
+  "collected_at_utc": "2026-10-25T15:32:02.046856+00:00",
+  "android_initial_commit": "3bb91e08189e32e2f6d29915c98b8ee26ba45cb7",
+  "native_source_commit": "7aca9570ef8dc4c9ddb1ecf14aff86d51bc692f0",
+  "android": {
+    "tests": 98,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "local_android_tests": 98,
+  "ci_runs": [
+    {
+      "conclusion": "success",
+      "databaseId": 40206593922,
+      "headSha": "7aca9570ef8dc4c9ddb1ecf14aff86d51bc692f0",
+      "name": "Android build and intent tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40206593922"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40206587489,
+      "headSha": "7aca9570ef8dc4c9ddb1ecf14aff86d51bc692f0",
+      "name": "iOS build",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40206587489"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40206590599,
+      "headSha": "7aca9570ef8dc4c9ddb1ecf14aff86d51bc692f0",
+      "name": "Crier live-trading safety checks",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40206590599"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "ios-unsigned-archive-validation.json",
+      "sha256": "201228a6073991ed5d9dad86995a976810f8ea453c17f24afc4658bde5e13a3d"
+    },
+    {
+      "path": "ios-behavioral-summary.json",
+      "sha256": "140298163c51bcbeb7e61cd086bd8eb9d75ee319686cb567ddd415142d6a7374"
+    }
+  ],
+  "scope": [
+    "Scoped native component health with monotonic freshness and session tickets",
+    "Process-owned Android service/Alerts contexts and coalesced background persistence",
+    "Local native health/recovery views without additional HTTP probes",
+    "Late-response fencing across background, stop, reconnect and logout",
+    "Actual Discord receipt/uncertainty observations retain authoritative journals"
+  ],
+  "remaining_phase_h": [
+    "H.3 execution-clock/freshness and duplicate-preflight review",
+    "H.4 optional Windows tray/startup",
+    "H.5 deliberate sizing and entry/exit policy design"
+  ],
+  "deployed": false,
+  "physical_acceptance": false,
+  "broker_orders": 0,
+  "real_discord_messages": 0,
+  "ios": {
+    "tests": 114,
+    "failures": 0,
+    "unexpected_failures": 0,
+    "run": 40206590599,
+    "source_commit": "7aca9570ef8dc4c9ddb1ecf14aff86d51bc692f0",
+    "scope": "iPhone simulator; injected storage/HTTP and real native delivery/account code; no real provider calls"
+  },
+  "backend": {
+    "tests": 757,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 25,
+    "passed": 732
+  }
+}

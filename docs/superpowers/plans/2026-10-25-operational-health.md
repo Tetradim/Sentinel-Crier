@@ -12,7 +12,7 @@ Execute directly on main under the owner's standing approval. Use the existing c
 
 ## Remaining H slices
 
-- [ ] H.2 Native iOS/Android component health and recovery presentation, retaining foreground/background constraints.
+- [x] H.2 Native iOS/Android component health and recovery presentation, retaining foreground/background constraints.
 - [ ] H.3 Clock/freshness execution-gate and duplicate-preflight review with targeted regressions; classify transport failures by actual send uncertainty.
 - [ ] H.4 Optional Windows tray/startup behavior with explicit opt-in and entries paused; no auto-live authorization.
 - [ ] H.5 Deliberate sizing/quantity/notional and entry/exit policy design, preserving existing saved settings and broker reconciliation. Do not silently change execution policy as a UI preset.
@@ -25,4 +25,4 @@ Implementation `12778a4`, contention fix `85800d2`, and benchmark-only correctio
 
 The final matrix passed Windows Python 3.11 **823/one skip**, Linux Python 3.11/3.12 **801/23 skips each**. Windows installer packaging and install/upgrade/downgrade/uninstall preservation passed on `85800d2`; the later change is confined to the benchmark script/tests. The default backend passed **727/25 skips** and unchanged native iOS tests passed **107/zero failures**. The earlier Linux benchmark failure at a minute boundary and its bounded-probe correction are retained in the [source-bound report](../../acceptance/2026-10-25/operational-health/source-evidence.json). Production rate limits were not changed.
 
-H.1 is complete. H.2–H.5 remain implementation work; health clock warnings do not correct execution timestamps or change price/sizing policies. No real order/message, service deployment or physical acceptance was performed.
+H.1 and [H.2 native health](2026-10-25-native-health.md) are complete. H.3–H.5 remain implementation work; health clock warnings do not correct execution timestamps or change price/sizing policies. No real order/message, service deployment or physical acceptance was performed.
