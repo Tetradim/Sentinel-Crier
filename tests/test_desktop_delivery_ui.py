@@ -301,3 +301,28 @@ def test_disconnected_legacy_save_controls_cannot_edit_previous_profile(app):
     app.save_delivery_style()
     assert not app.worker.calls
     assert 'verify' in app.notice.get()
+
+def test_provider_panel_capabilities_and_purpose(tk_root, monkeypatch):
+    window=tk.Toplevel(tk_root); window.withdraw()
+    worker=Worker(); desktop=DesktopApp(window,worker)
+    try:
+        assert all(str(b['state'])=='disabled' for b in desktop.provider_buttons.values())
+        desktop.check_providers()
+        future,callback=desktop.pending[-1]
+        callback({'providers':['alpaca']})
+        assert str(desktop.provider_buttons['alpaca']['state'])=='normal'
+        assert str(desktop.provider_buttons['discord']['state'])=='disabled'
+        desktop.choose_purpose('follow')
+        desktop.provider_environment.set('live')
+        desktop.begin_provider('alpaca')
+        assert worker.calls[-1][:3]==('provider_begin',('alpaca','trade','live'),{})
+        desktop.customer_email.set('user@example.test');desktop.customer_password.set('private')
+        desktop.customer_login(False)
+        assert desktop.customer_password.get()==''
+        assert worker.calls[-1][:3]==('customer_login',('user@example.test','private',False),{})
+        desktop.provider_return.set('sentinelcrier://oauth/complete?flow='+'x'*43)
+        desktop.complete_provider()
+        assert desktop.provider_return.get()==''
+        assert worker.calls[-1][0]=='provider_complete'
+    finally:
+        window.destroy()

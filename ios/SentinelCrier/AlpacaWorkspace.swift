@@ -12,7 +12,8 @@ final class AlpacaWorkspace: ObservableObject {
     @Published private(set) var purpose: GuidedPurpose?
     @Published private(set) var readiness = GuidedReadiness()
     private let defaults: UserDefaults
-    private var scopeGeneration = UUID()
+    private var effectPermit = OAuthEffectPermit()
+    private var scopeGeneration = UUID() { didSet { effectPermit.invalidate(); effectPermit = OAuthEffectPermit() } }
     private var discordScope: String?
     private let testDiscord: () async throws -> String
     private let webhook: () -> URL?
@@ -20,7 +21,7 @@ final class AlpacaWorkspace: ObservableObject {
     private let deliverDiscord: ((AlpacaEnvironment, String) async throws -> Void)?
     private func publishFills(environment: AlpacaEnvironment, accountID: String) async throws {
         if let deliverDiscord { try await deliverDiscord(environment, accountID) }
-        else { try await publisher?.deliver(environment: environment, accountID: accountID) }
+        else { try await publisher?.deliver(environment: environment, accountID: accountID, permit: effectPermit) }
     }
 
     func selectPurpose(_ value: GuidedPurpose?) {
@@ -87,6 +88,7 @@ final class AlpacaWorkspace: ObservableObject {
     private var publisher: AlpacaDiscordDelivery?
     private var mirrorSender: MirrorSender?
     private let makeClient: (AlpacaEnvironment, AlpacaCredentials) -> AlpacaREST
+    private let loadCustomer: () -> CustomerSession?
     private let loadCredentials: (AlpacaEnvironment) throws -> AlpacaCredentials
     private let saveCredentials: (AlpacaCredentials, AlpacaEnvironment) throws -> Void
     init(journal suppliedJournal: AlpacaJournal? = nil, intentController: IntentController? = nil,
@@ -97,11 +99,12 @@ final class AlpacaWorkspace: ObservableObject {
          loadIntentPairing: @escaping () throws -> IntentPairing? = IntentPairing.load,
          makeClient: @escaping (AlpacaEnvironment, AlpacaCredentials) -> AlpacaREST = { AlpacaREST(environment: $0, credentials: $1) },
          loadCredentials: @escaping (AlpacaEnvironment) throws -> AlpacaCredentials = AlpacaKeychain.load,
+         loadCustomer: @escaping () -> CustomerSession? = { CustomerSessionVault().load() },
          saveCredentials: @escaping (AlpacaCredentials, AlpacaEnvironment) throws -> Void = { try AlpacaKeychain.save($0, environment: $1) }) {
         self.loadIntentPairing = loadIntentPairing
         self.defaults = defaults; self.testDiscord = testDiscord; self.webhook = webhook; self.deliverDiscord = deliverDiscord
         purpose = defaults.string(forKey: "guidedPurpose").flatMap(GuidedPurpose.init(rawValue:))
-        self.makeClient = makeClient; self.loadCredentials = loadCredentials; self.saveCredentials = saveCredentials
+        self.loadCustomer = loadCustomer; self.makeClient = makeClient; self.loadCredentials = loadCredentials; self.saveCredentials = saveCredentials
         do {
             let journal = try suppliedJournal ?? AlpacaJournal.local()
             self.journal = journal; publisher = AlpacaDiscordDelivery(journal: journal)
@@ -133,6 +136,10 @@ final class AlpacaWorkspace: ObservableObject {
         let credentials: AlpacaCredentials
         if supplied { credentials = AlpacaCredentials(key: key.trimmingCharacters(in: .whitespacesAndNewlines), secret: secret.trimmingCharacters(in: .whitespacesAndNewlines)) }
         else { credentials = try loadCredentials(environment) }
+        if let owner = credentials.owner {
+            let customer = loadCustomer()
+            guard OAuthOwnership.matches(owner: owner, serviceURL: credentials.serviceURL, customer: customer) else { throw AlpacaError.invalid("Sign in to the Crier customer that owns this OAuth credential, or use API keys.") }
+        }
         let client = makeClient(environment, credentials)
         let current = try await client.account()
         guard foreground, generation == scopeGeneration, environment == selectedEnvironment, !Task.isCancelled else { throw AlpacaError.invalid("Connection interrupted. Reconnect explicitly.") }
@@ -223,17 +230,59 @@ final class AlpacaWorkspace: ObservableObject {
         guard !busy else { return }
         readiness.invalidate(); scopeGeneration = UUID()
         if removeCredentials { AlpacaKeychain.remove(environment) }
-        intent?.disconnect()
+        api?.invalidate(); intent?.disconnect()
         suspended = false
         api = nil; account = nil; review = nil; positions = []; contracts = []; submissions = []; deliveries = []; updatedAt = nil
         message = "Disconnected. Saved orders and fills remain in the journal."
+    }
+    /// Stops workers synchronously even while an in-flight operation owns busy.
+    func oauthStopWorkers() {
+        readiness.invalidate(); scopeGeneration = UUID(); api?.invalidate(); intent?.disconnect()
+        api = nil; account = nil; review = nil; positions = []; contracts = []; suspended = false
+        discordConfigurationChanged()
+    }
+    func oauthLogout() {
+        oauthStopWorkers()
+        for value in AlpacaEnvironment.allCases {
+            if (try? loadCredentials(value))?.owner != nil { AlpacaKeychain.remove(value) }
+        }
+        if UserDefaults.standard.string(forKey: "discordOAuthOwner") != nil {
+            StandaloneConfiguration.clear(); UserDefaults.standard.removeObject(forKey: "discordOAuthOwner"); UserDefaults.standard.removeObject(forKey: "discordOAuthServiceURL")
+        }
+        discordConfigurationChanged()
+    }
+    func installOAuthGrant(_ grant: ProviderGrant, owner: String, serviceURL: String, stillCurrent: () -> Bool) async throws {
+        guard !busy, foreground, account == nil, stillCurrent(), grant.environment == environment.rawValue,
+              grant.purpose == (grant.provider == "discord" ? "alerts" : (purpose == .alerts ? "alerts" : "trade")),
+              purpose != nil, UUID(uuidString: owner) != nil, (try? ProviderAPI(base: serviceURL)) != nil else { throw AlpacaError.invalid("Disconnect and restore the requested purpose and environment before installation.") }
+        busy = true; let generation = scopeGeneration; let selected = environment
+        defer { busy = false }
+        if grant.provider == "alpaca" {
+            guard journal != nil, intent != nil else { throw AlpacaError.invalid("Recovery journals unavailable; installation disabled.") }
+            let credentials = AlpacaCredentials(bearer: grant.credential, owner: owner, serviceURL: serviceURL)
+            let current = try await makeClient(selected, credentials).account()
+            guard foreground, generation == scopeGeneration, selected == environment, account == nil, stillCurrent(),
+                  current.id == grant.account_id else { throw AlpacaError.invalid("Broker identity or connection context changed. Authorize again.") }
+            guard intent?.state.accountID.isEmpty != false || intent?.state.accountID == current.id else { throw AlpacaError.invalid("Saved intent journal belongs to another broker account.") }
+            try intent?.validateIdentity(account: current.id, environment: selected, pairing: loadIntentPairing())
+            try saveCredentials(credentials, selected)
+            readiness.invalidate(); review = nil
+        } else {
+            guard grant.provider == "discord", !grant.guild_id.isEmpty, !grant.channel_id.isEmpty,
+                  grant.guild_id.allSatisfy({ $0.isASCII && $0.isNumber }), grant.channel_id.allSatisfy({ $0.isASCII && $0.isNumber }) else { throw AlpacaError.invalid("Invalid Discord destination.") }
+            try await storeDiscordWebhook(grant.credential, stillCurrent: { foreground && generation == scopeGeneration && stillCurrent() && account == nil })
+            StandaloneConfiguration.setEnabled(false)
+            UserDefaults.standard.set(owner, forKey: "discordOAuthOwner")
+            UserDefaults.standard.set(serviceURL, forKey: "discordOAuthServiceURL")
+        }
+        message = "OAuth credential saved; reconnect explicitly. No trading or publishing permission was enabled."
     }
     func sceneActive(_ active: Bool) async {
         foreground = active
         if !active {
             suspended = account != nil
             readiness.invalidate(); scopeGeneration = UUID()
-            intent?.disconnect()
+            api?.invalidate(); intent?.disconnect()
             review = nil
             lifecycle = "Background / suspended • automatic execution stopped; open Crier to reconcile"
             return
@@ -253,20 +302,26 @@ final class AlpacaWorkspace: ObservableObject {
         try intent?.archiveResolvedChannel()
         message = "Resolved channel archived. You can host or join a new channel."
     }
+    /// Shared manual/OAuth destination guard. An await must never allow a stale write.
+    private func storeDiscordWebhook(_ raw: String?, stillCurrent: () -> Bool) async throws {
+        guard let journal else { throw AlpacaError.invalid("Delivery journal unavailable.") }
+        let previous = StandaloneConfiguration.webhook()
+        let outstanding = await journal.hasOutstandingDeliveries()
+        guard stillCurrent() else { throw AlpacaError.invalid("Destination change interrupted.") }
+        if let raw, previous?.absoluteString == raw { message = "Webhook already saved."; return }
+        guard !outstanding else {
+            throw AlpacaError.invalid("Deliver or close every pending, rejected and uncertain alert before changing destination. Old fills must not be sent to a different channel by accident.")
+        }
+        discordConfigurationChanged()
+        if let raw {
+            guard StandaloneConfiguration.saveWebhook(raw) else { throw AlpacaError.invalid("Invalid webhook or Keychain unavailable.") }
+            UserDefaults.standard.removeObject(forKey: "discordOAuthOwner"); UserDefaults.standard.removeObject(forKey: "discordOAuthServiceURL"); message = "Webhook saved securely."
+        } else { StandaloneConfiguration.clear(); UserDefaults.standard.removeObject(forKey: "discordOAuthOwner"); UserDefaults.standard.removeObject(forKey: "discordOAuthServiceURL"); message = "Webhook removed." }
+    }
     func saveDiscordWebhook(_ raw: String?) async {
         await perform {
-            guard let journal else { throw AlpacaError.invalid("Delivery journal unavailable.") }
-            let previous = StandaloneConfiguration.webhook()
-            if let raw, previous?.absoluteString == raw { message = "Webhook already saved."; return }
-            let outstanding = await journal.hasOutstandingDeliveries()
-            guard previous == nil || !outstanding else {
-                throw AlpacaError.invalid("Deliver or close every pending, rejected and uncertain alert before changing destination. Old fills must not be sent to a different channel by accident.")
-            }
-            discordConfigurationChanged()
-            if let raw {
-                guard StandaloneConfiguration.saveWebhook(raw) else { throw AlpacaError.invalid("Invalid webhook or Keychain unavailable.") }
-                message = "Webhook saved securely."
-            } else { StandaloneConfiguration.clear(); message = "Webhook removed." }
+            let generation = scopeGeneration
+            try await storeDiscordWebhook(raw, stillCurrent: { foreground && generation == scopeGeneration })
         }
     }
     func closeDiscord(_ id: String) async {
@@ -276,11 +331,18 @@ final class AlpacaWorkspace: ObservableObject {
         await perform {
             guard canDeliver else { throw AlpacaError.invalid("Explicitly enable delivery for the current destination first.") }
             guard let journal else { return }
+            let generation = scopeGeneration
             try await journal.retry(id, acknowledgeDuplicateRisk: acknowledgeDuplicateRisk)
+            guard canDeliver, generation == scopeGeneration, !Task.isCancelled else { return }
             if let account { try await publishFills(environment: environment, accountID: account.id) }
         }
     }
     func refresh() async { await perform {
+        if let previous = api, !previous.permitsMutations {
+            guard foreground, suspended else { lifecycle = "Reconnect required - previous broker session stopped"; return }
+            // Never revive a client retained by a stale intent task.
+            api = try previous.freshClient(customer: loadCustomer())
+        }
         do {
             let generation = scopeGeneration
             try await refreshConnected()
@@ -296,12 +358,15 @@ final class AlpacaWorkspace: ObservableObject {
     } }
     private func refreshConnected() async throws {
         guard foreground, let api, let account, let journal else { return }
-        let generation = scopeGeneration; let selectedEnvironment = environment
+        let generation = scopeGeneration; let permit = effectPermit; let selectedEnvironment = environment
         let current = try await api.account()
         guard generation == scopeGeneration, selectedEnvironment == environment, foreground, current.id == account.id else { throw AlpacaError.invalid("Authenticated account changed. Disconnect and reconnect.") }
-        self.account = current; positions = try await api.positions()
+        let currentPositions = try await api.positions()
+        guard foreground, generation == scopeGeneration, permit.isCurrent else { return }
+        self.account = current; positions = currentPositions
         let snapshot = await journal.snapshot()
         for submission in snapshot.submissions where executionJourney && submission.ticket.environment == environment && submission.ticket.accountID == account.id {
+            guard foreground, generation == scopeGeneration, permit.isCurrent else { return }
             do { let order = try await api.order(clientID: submission.id)
                 try await journal.record(order, ticket: submission.ticket) }
             catch AlpacaError.http(404) { continue } // Unknown remains durable. 404 does not authorize resubmission.
@@ -314,6 +379,7 @@ final class AlpacaWorkspace: ObservableObject {
         // Later refreshes page back to that ID and commit the watermark only after every fill is durable.
         repeat {
             try Task.checkCancellation()
+            guard foreground, generation == scopeGeneration, permit.isCurrent else { return }
             let fills = try await api.fills(pageToken: cursor)
             if newest == nil { newest = fills.first?.id }
             if baseline == nil { break }
@@ -328,7 +394,8 @@ final class AlpacaWorkspace: ObservableObject {
         for fill in collected.reversed() { try await journal.ingest(fill, environment: environment, accountID: account.id) }
         if executionJourney, try loadIntentPairing() == nil { try await mirrorSender?.ingest(Array(collected.reversed()), environment: environment, account: account.id) }
         try await journal.setBaseline(newest ?? baseline ?? "__empty__", environment: environment, accountID: account.id)
-        do { if executionJourney, try loadIntentPairing() == nil { mirrorMessage = try await mirrorSender?.deliver(api: api, account: account.id) ?? "Mirror journal unavailable." } }
+        guard foreground, generation == scopeGeneration, permit.isCurrent, !Task.isCancelled else { return }
+        do { if executionJourney, try loadIntentPairing() == nil { mirrorMessage = try await mirrorSender?.deliver(api: api, account: account.id, permit: permit) ?? "Mirror journal unavailable." } }
         catch { mirrorMessage = error.localizedDescription }
         if canDeliver { try await publishFills(environment: environment, accountID: account.id) }
         updatedAt = Date(); message = "Account, orders and broker fills refreshed."
@@ -367,6 +434,7 @@ final class AlpacaWorkspace: ObservableObject {
     func confirm(_ ticket: AlpacaTicket) async {
         await perform {
             guard executionJourney, foreground, review == ticket, let api, let account, let journal, account.id == ticket.accountID, environment == ticket.environment else { throw AlpacaError.invalid("Review changed. Review again.") }
+            let generation = scopeGeneration; let permit = effectPermit
             try ticket.validate()
             let current = try await api.account()
             guard current.id == ticket.accountID, current.status == "ACTIVE", !current.account_blocked, !current.trading_blocked else { throw AlpacaError.invalid("Account changed or cannot trade.") }
@@ -375,6 +443,7 @@ final class AlpacaWorkspace: ObservableObject {
                 guard let held = currentPositions.first(where: { $0.symbol == ticket.symbol }),
                       let available = Decimal(string: held.qty_available ?? ""), available >= Decimal(ticket.quantity) else { throw AlpacaError.invalid("Available holdings changed. Review again.") }
             }
+            guard foreground, generation == scopeGeneration, self.api === api, permit.isCurrent, !Task.isCancelled else { throw AlpacaError.invalid("Trading session ended. Review again.") }
             try ticket.validate()
             if let intent, intent.hosting {
                 guard ticket.side == "buy" else { throw AlpacaError.invalid("Use Exit on the tracked intent trade to sell mirrored holdings.") }
@@ -384,9 +453,10 @@ final class AlpacaWorkspace: ObservableObject {
             }
             if try loadIntentPairing() != nil { throw AlpacaError.invalid("Follower pairing cannot originate trades. Use a host pairing to submit mirrored orders.") }
             try await journal.begin(ticket)
+            guard foreground, generation == scopeGeneration, self.api === api, permit.isCurrent, !Task.isCancelled else { throw AlpacaError.invalid("Trading session ended; journal retained for recovery.") }
             review = nil // Consume before any network await.
             do {
-                let order = try await api.submit(ticket)
+                let order = try await api.submit(ticket, permit: permit)
                 try await journal.record(order, ticket: ticket)
                 message = "Broker status: \(order.status). Acceptance is not a fill."
             } catch AlpacaError.http(let status) where [400, 401, 403, 422, 429].contains(status) {
@@ -398,9 +468,11 @@ final class AlpacaWorkspace: ObservableObject {
     func cancel(_ submission: AlpacaJournal.Submission) async {
         await perform {
             guard executionJourney, foreground, let api, let account, submission.ticket.environment == environment, submission.ticket.accountID == account.id, let order = submission.order else { throw AlpacaError.invalid("Reconcile the broker order before cancellation.") }
+            let generation = scopeGeneration; let permit = effectPermit
             let current = try await api.account()
+            guard foreground, generation == scopeGeneration, self.api === api, permit.isCurrent, !Task.isCancelled else { throw AlpacaError.invalid("Trading session ended; cancellation not sent.") }
             guard current.id == account.id else { throw AlpacaError.invalid("Account changed.") }
-            try await api.cancel(orderID: order.id)
+            try await api.cancel(orderID: order.id, permit: permit)
             message = "Cancellation requested. Refresh to confirm; a racing fill can still occur."
         }
     }

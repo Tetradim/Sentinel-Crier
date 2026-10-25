@@ -1,7 +1,7 @@
 import Foundation
 
-/// Preparation only. Login, installed deep-link handling and credential installation
-/// require separate external configuration and integration. Never normalise/decode input.
+/// Strict notification contract used by installed handling. Service deployment and
+/// provider registration remain external requirements. Never normalise/decode input.
 enum OAuthReturn {
     private static let prefix = "sentinelcrier://oauth/complete?flow="
     static func validFlow(_ flow: String) -> Bool {

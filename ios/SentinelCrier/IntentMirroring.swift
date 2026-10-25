@@ -231,6 +231,7 @@ struct IntentPairing: Codable {
         guard let pair = try pairing ?? IntentPairing.load() else { return }
         try validateIdentity(account: account, environment: api.environment, pairing: pair)
         try commit { $0.accountID = account; $0.pairingID = pair.fingerprint }
+        if self.api !== api { self.api?.invalidate() }
         self.api = api; self.pair = pair
         diagnosticClock = nil
         diagnosticSession = UUID()
@@ -244,7 +245,7 @@ struct IntentPairing: Codable {
         diagnosticWorker = Task { while !Task.isCancelled { await syncDiagnostics(); try? await Task.sleep(nanoseconds: 5_000_000_000) } }
         message = "\(pair.role.capitalized) connected. Keep Crier open for delivery."
     }
-    func disconnect() { message = "Disconnected; execution journals retained."; diagnosticSession = UUID(); diagnosticWorker?.cancel(); diagnosticWorker = nil; diagnosticClock = nil; receiver?.cancel(); worker?.cancel(); transmitter?.cancel(); receiver = nil; worker = nil; transmitter = nil; api = nil; pair = nil }
+    func disconnect() { message = "Disconnected; execution journals retained."; diagnosticSession = UUID(); diagnosticWorker?.cancel(); diagnosticWorker = nil; diagnosticClock = nil; receiver?.cancel(); worker?.cancel(); transmitter?.cancel(); receiver = nil; worker = nil; transmitter = nil; api?.invalidate(); api = nil; pair = nil }
     func archiveResolvedChannel() throws {
         guard !processing, !publishing, api == nil else { throw AlpacaError.invalid("Disconnect before changing channel.") }
         guard state.unresolved.isEmpty, state.outgoing.isEmpty else { throw AlpacaError.invalid("Resolve tracked holdings, pending orders and relay outbox before changing channel. Reconnect to the original account to recover.") }

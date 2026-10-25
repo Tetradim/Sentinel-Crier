@@ -131,11 +131,18 @@ actor AlpacaJournal {
     }
 }
 
+/// Shared synchronous fence survives actor hops and is invalidated before logout clears identity.
+final class OAuthEffectPermit: @unchecked Sendable {
+    private let lock = NSLock()
+    private var valid = true
+    var isCurrent: Bool { lock.lock(); defer { lock.unlock() }; return valid }
+    func invalidate() { lock.lock(); valid = false; lock.unlock() }
+}
 actor AlpacaDiscordDelivery {
     private let journal: AlpacaJournal
     private let session: URLSession
     init(journal: AlpacaJournal, session: URLSession = CrierHTTPSession.shared) { self.journal = journal; self.session = session }
-    func deliver(environment: AlpacaEnvironment, accountID: String) async throws {
+    func deliver(environment: AlpacaEnvironment, accountID: String, permit: OAuthEffectPermit = OAuthEffectPermit()) async throws {
         guard let webhook = StandaloneConfiguration.webhook() else { return }
         var parts = URLComponents(url: webhook, resolvingAgainstBaseURL: false)!
         parts.queryItems = [URLQueryItem(name: "wait", value: "true")]
@@ -146,6 +153,7 @@ actor AlpacaDiscordDelivery {
         var request = URLRequest(url: url); request.httpMethod = "POST"; request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        guard permit.isCurrent, !Task.isCancelled else { return } // Claimed journal evidence remains uncertain for manual recovery.
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { return }
         if http.statusCode == 429 {

@@ -44,7 +44,7 @@ class Diagnostics(private val journal:Journal,private val config:JSONObject) {
  private fun quote(e:JSONObject):JSONObject {
   val symbol=e.getString("symbol"); val option=e.getString("asset")=="option"
   val endpoint=if(option) "https://data.alpaca.markets/v1beta1/options/quotes/latest?symbols=$symbol&feed=opra" else "https://data.alpaca.markets/v2/stocks/$symbol/quotes/latest?feed=iex"
-  val r=Network.request(endpoint,headers=mapOf("APCA-API-KEY-ID" to config.getString("key"),"APCA-API-SECRET-KEY" to config.getString("secret")))
+  val r=Network.request(endpoint,headers=BrokerAuth.headers(config))
   val q=if(option) r.getJSONObject("quotes").getJSONObject(symbol) else r.getJSONObject("quote"); val quoteAt=Instant.parse(q.getString("t")); val sample=clock ?: error("Clock unavailable"); require(System.currentTimeMillis()-sample.sampledAt in 0..60000 && kotlin.math.abs((System.currentTimeMillis()-sample.sampledAt)-(SystemClock.elapsedRealtime()-clockMono))<=100); val now=Instant.ofEpochMilli((System.currentTimeMillis()+sample.offset).toLong()); require(quoteAt<=now && java.time.Duration.between(quoteAt,now).toMillis()<=5000)
   fun price(k:String):Any = if(!q.has(k) || q.isNull(k)) JSONObject.NULL else boundedPrice(q.get(k).toString()) ?: JSONObject.NULL
   return JSONObject().put("source",if(option) "alpaca:opra" else "alpaca:iex").put("quote_timestamp",q.getString("t")).put("bid",price("bp")).put("ask",price("ap")).put("last",JSONObject.NULL)

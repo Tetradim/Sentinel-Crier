@@ -9,6 +9,15 @@ import httpx
 
 HOSTS={'paper':'https://paper-api.alpaca.markets','live':'https://api.alpaca.markets'}
 
+def alpaca_headers(key='', secret='', *, bearer=''):
+    if bearer:
+        if key or secret or not isinstance(bearer,str) or any(ord(c)<33 or ord(c)>126 for c in bearer):
+            raise ValueError('Use one credential mode')
+        return {'Authorization':'Bearer '+bearer}
+    if not all(isinstance(x,str) and x.strip() for x in (key,secret)):
+        raise ValueError('Both API credentials required')
+    return {'APCA-API-KEY-ID':key,'APCA-API-SECRET-KEY':secret}
+
 class BrokerNotSubmitted(RuntimeError):
     """Broker definitely did not accept an order; safe to invalidate the intent."""
 
@@ -16,13 +25,13 @@ class BrokerSuperseded(RuntimeError):
     """Preflight finished but the durable instruction changed before dispatch."""
 
 class AlpacaIntentBroker:
-    def __init__(self, environment, key, secret, account, client=None):
-        if environment not in HOSTS or not all(isinstance(x,str) and x.strip() for x in (key,secret,account)):
+    def __init__(self, environment, key, secret, account, client=None, *, bearer=''):
+        if environment not in HOSTS or not all(isinstance(x,str) and x.strip() for x in (account,)):
             raise ValueError('Environment, credentials and pinned account are required')
         self.environment, self.account = environment, account
-        self.data_headers={'APCA-API-KEY-ID':key,'APCA-API-SECRET-KEY':secret}
+        self.data_headers=alpaca_headers(key,secret,bearer=bearer)
         self.url=HOSTS[environment]
-        self.client=client or httpx.Client(headers={'APCA-API-KEY-ID':key,'APCA-API-SECRET-KEY':secret},timeout=15,trust_env=False,follow_redirects=False)
+        self.client=client or httpx.Client(headers=self.data_headers,timeout=15,trust_env=False,follow_redirects=False)
     def _request(self, method, path, **kwargs):
         response=self.client.request(method,self.url+path,follow_redirects=False,**kwargs)
         response.raise_for_status()

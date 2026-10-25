@@ -47,6 +47,8 @@ enum StandaloneConfiguration {
     }
 
     static func webhook() -> URL? {
+        if let owner = UserDefaults.standard.string(forKey: "discordOAuthOwner"),
+           !OAuthOwnership.matches(owner: owner, serviceURL: UserDefaults.standard.string(forKey: "discordOAuthServiceURL"), customer: CustomerSessionVault().load()) { return nil }
         guard let group = accessGroup else { return nil }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,

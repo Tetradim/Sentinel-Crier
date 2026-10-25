@@ -46,3 +46,11 @@ class PendingOAuthReturn(private val flow: String, private val context: OAuthRet
         return context
     }
 }
+
+/** Raw notifications wait for an active Activity; never saved across process restart. */
+class OAuthReturnInbox {
+ private var raw:String?=null
+ @Synchronized fun enqueue(value:String) { if(OAuthReturn.parse(value)!=null && raw==null) raw=value }
+ @Synchronized fun take(active:Boolean):String? { if(!active) return null; return raw.also { raw=null } }
+ @Synchronized fun clear() { raw=null }
+}

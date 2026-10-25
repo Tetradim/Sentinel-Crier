@@ -10,6 +10,8 @@ class GuidedAlertsTest {
  private val baseline=Instant.parse("2026-10-24T12:00:00Z")
  private class Memory:AlertsDocument {
   var json="{}"
+  var identity=JSONObject()
+  override fun customer()=JSONObject(identity.toString())
   override fun read()=JSONObject(json)
   override fun write(value:JSONObject) { json=value.toString() }
  }
@@ -27,6 +29,16 @@ class GuidedAlertsTest {
  private fun fill(id:String="fill-1",quantity:String="0.5",price:String="42.07")=JSONObject().put("id",id).put("activity_type","FILL").put("transaction_time","2026-10-24T12:00:01Z").put("symbol","SPY").put("side","buy").put("qty",quantity).put("price",price).put("order_id","broker-order-1")
  private fun ready(g:GuidedAlerts,c:JSONObject=config()) { g.verify(c); g.preview() }
  private fun fail(block:()->Unit) { try { block(); fail("Expected rejection") } catch(_:IllegalArgumentException) {} catch(_:IllegalStateException) {} }
+ @Test fun oauthDestinationRequiresCurrentOwnerButManualBrokerRecoveryWorks() {
+  val d=Memory(); val r=Reads(); var sends=0
+  val c=config().put("discordOAuthOwner","11111111-1111-4111-8111-111111111111").put("discordOAuthService","https://abcdefghijklmnopqrst.supabase.co/functions/v1/crier-oauth")
+  val g=GuidedAlerts(d,{r},{_,_->sends++; JSONObject().put("id","123")},{baseline})
+  ready(g,c); fail { g.test() }; fail { g.enable() }; assertEquals(0,sends)
+  d.identity.put("owner",c.getString("discordOAuthOwner")).put("service",c.getString("discordOAuthService"))
+  g.test(); assertEquals(1,sends); g.enable()
+  d.identity.put("owner","22222222-2222-4222-8222-222222222222")
+  r.page=JSONArray().put(fill()); fail { g.tick() }; assertEquals(1,sends)
+ }
  @Test fun savedConfigAndRestartNeverImplyReadinessOrEnable() {
   val d=Memory(); val r=Reads(); val g=GuidedAlerts(d,{r},now={baseline})
   ready(g); g.enable(); assertTrue(g.isEnabled())

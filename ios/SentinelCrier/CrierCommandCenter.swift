@@ -4,6 +4,7 @@ import SwiftUI
 /// available from Home instead of consuming a permanent tab.
 struct CrierCommandCenter: View {
     @StateObject private var model = AlpacaWorkspace()
+    @StateObject private var connections = ProviderConnections()
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
         TabView {
@@ -21,8 +22,13 @@ struct CrierCommandCenter: View {
                 .tabItem { Label("Alerts", systemImage: "bell") }
         }
         .environmentObject(model)
+        .environmentObject(connections)
+        .onOpenURL { url in
+            Task { await connections.receive(url, environment: model.environment, purpose: model.purpose == .alerts ? "alerts" : "trade") }
+        }
         .preferredColorScheme(.dark)
         .task(id: scenePhase) {
+            connections.suspend(scenePhase != .active)
             await model.sceneActive(scenePhase == .active)
             guard scenePhase == .active else { return }
             while !Task.isCancelled {

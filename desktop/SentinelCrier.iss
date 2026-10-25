@@ -26,6 +26,10 @@ RestartApplications=no
 SetupMutex=SentinelCrier.Setup
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+[Registry]
+Root: HKCU; Subkey: "Software\Classes\sentinelcrier"; ValueType: string; ValueData: "URL:Sentinel Crier OAuth"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\sentinelcrier"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\sentinelcrier\shell\open\command"; ValueType: string; ValueData: """{app}\SentinelCrier.exe"" --oauth-return ""%1"""
 [Icons]
 Name: "{userprograms}\Sentinel Crier"; Filename: "{app}\SentinelCrier.exe"
 [Code]

@@ -14,14 +14,14 @@ interface FillReadPort {
 class AlpacaFillReader(private val config:JSONObject,
  private val get:(String,Map<String,String>)->Any={ url,headers -> Network.requestValue(url,headers=headers) }):FillReadPort {
  private val base=when(config.getString("environment")) { "paper"->"https://paper-api.alpaca.markets"; "live"->"https://api.alpaca.markets"; else->error("Choose paper or live") }
- private val headers=mapOf("APCA-API-KEY-ID" to config.getString("key"),"APCA-API-SECRET-KEY" to config.getString("secret"))
+ private val headers=BrokerAuth.headers(config)
  override fun account():String { val a=get("$base/v2/account",headers) as JSONObject; require(a.optString("id").isNotBlank()) { "Broker account identity unavailable" }; return a.getString("id") }
  override fun fills(after:String,page:String?):JSONArray {
   fun encode(s:String)=URLEncoder.encode(s,"UTF-8")
   return get("$base/v2/account/activities/FILL?direction=asc&page_size=100&after=${encode(after)}"+(page?.let { "&page_token=${encode(it)}" } ?: ""),headers) as JSONArray
  }
 }
-interface AlertsDocument { fun read():JSONObject; fun write(value:JSONObject) }
+interface AlertsDocument { fun read():JSONObject; fun write(value:JSONObject); fun customer():JSONObject=JSONObject() }
 /** Activities share one writer so late acknowledgements cannot overwrite a newer root snapshot. */
 class AlertsSessionOwner {
  private var instance:GuidedAlerts?=null
@@ -46,6 +46,11 @@ class GuidedAlerts(private val document:AlertsDocument,
  fun invalidate() { synchronized(generation) { generation.incrementAndGet(); verified=false; previewed=false; enabled=false; testEvidence="No current test evidence"; evidence="Setup changed or monitoring stopped; verify again" } }
  private fun finish(ticket:Long,action:()->Unit) { synchronized(generation) { current(ticket); action() } }
  private fun current(ticket:Long) { check(ticket==generation.get()) { "Setup changed; result ignored. Verify again." } }
+ private fun authorize(c:JSONObject,destination:Boolean=false) {
+  val prefix=if(destination) "discordOAuth" else "oauth"
+  val bound=if(destination) c.has(prefix+"Owner") || c.has(prefix+"Service") else c.optString("authMode")=="oauth"
+  if(bound) { val customer=document.customer(); require(OAuthProvenance.matches(c,customer.optString("owner"),customer.optString("service"),prefix)) { "Sign in as the saved customer before using this connection" } }
+ }
  private fun scope(c:JSONObject)=c.getString("environment")+":"+c.getString("account")
  private fun state(c:JSONObject=saved()):JSONObject {
   val scopes=root.optJSONObject("scopes") ?: JSONObject().also { root.put("scopes",it) }
@@ -53,11 +58,11 @@ class GuidedAlerts(private val document:AlertsDocument,
  }
  private fun persist()=document.write(root)
  fun verify(input:JSONObject) {
-  invalidate(); val ticket=generation.get(); val c=JSONObject(input.toString()); require(c.optString("key").isNotBlank() && c.optString("secret").isNotBlank()) { "Enter your Alpaca credentials" }
+  invalidate(); val ticket=generation.get(); val c=JSONObject(input.toString()); BrokerAuth.headers(c)
   require(c.getString("environment") in setOf("paper","live"))
   c.put("discordWebhook",c.optString("discordWebhook").takeIf { it.isNotBlank() }?.let { Discord.destination(it) } ?: "")
   Discord.preview(c)
-  val account=reader(c).account(); current(ticket); c.put("account",account)
+  authorize(c); val account=reader(c).account(); current(ticket); if(c.optString("authMode")=="oauth") require(c.getString("account")==account && c.getString("oauthPurpose")=="alerts") { "OAuth account or purpose differs" }; c.put("account",account)
   val target=state(c)
   if(target.has("destination") && target.getString("destination")!=c.optString("discordWebhook")) {
    require(!hasUnresolved(target)) { "Inspect and close undelivered alerts before changing destination; history is retained" }
@@ -67,10 +72,10 @@ class GuidedAlerts(private val document:AlertsDocument,
   finish(ticket) { verified=true; evidence="Verified read access · ${c.getString("environment")} account ${account.take(8)}. Preview next." }
  }
  fun preview():String { val ticket=generation.get(); check(verified) { "Verify account first" }; val result=Discord.readablePreview(saved()); finish(ticket) { previewed=true }; return result }
- private fun ready():JSONObject { check(verified && previewed) { "Verify account and preview this setup first" }; return saved().also { require(it.optString("discordWebhook").isNotBlank()) { "Enter a Discord webhook and verify setup" } } }
+ private fun ready():JSONObject { check(verified && previewed) { "Verify account and preview this setup first" }; return saved().also { authorize(it); authorize(it,true); require(it.optString("discordWebhook").isNotBlank()) { "Enter a Discord webhook and verify setup" } } }
  fun test():String {
   val ticket=generation.get(); val c=ready(); val store=store(c)
-  val id=Discord.test(store); current(ticket); Discord.deliver(store,c,id) { url,body -> current(ticket); send(url,body) }; current(ticket)
+  val id=Discord.test(store); current(ticket); Discord.deliver(store,c,id) { url,body -> current(ticket); authorize(c,true); send(url,body) }; current(ticket)
   val job=jobs(state(c)).first { it.getString("id")==id }
   finish(ticket) { testEvidence="Synthetic test: ${job.getString("state")} · ${job.optString("detail")}" }
   return testEvidence
@@ -78,18 +83,19 @@ class GuidedAlerts(private val document:AlertsDocument,
  fun enable() { val ticket=generation.get(); val c=ready(); val s=state(c); if(!s.has("after")) { s.put("after",now().toString()); persist() }; finish(ticket) { enabled=true; evidence="Enabled in foreground - new fills after ${s.getString("after")}. Test delivery is optional and separate." } }
  fun isEnabled()=enabled
  fun stop()=invalidate()
+ fun forgetOAuth() { invalidate(); val c=saved(); OAuthInstall.forget(c); root.put("config",c); persist(); configSnapshot=c.toString() }
  fun tick() {
   check(enabled) { "Enable alerts explicitly" }; val ticket=generation.get(); val c=ready(); val s=state(c); val broker=reader(c)
   try {
    require(broker.account()==c.getString("account")) { "Account identity changed; verify again" }; current(ticket)
    // Cursor moves only after each complete page is validated and durably enqueued.
-   val page=broker.fills(s.getString("after"),s.optString("page").ifBlank { null }); current(ticket)
+   authorize(c); val page=broker.fills(s.getString("after"),s.optString("page").ifBlank { null }); current(ticket)
    val records=(0 until page.length()).map { fillRecord(page.getJSONObject(it),Instant.parse(s.getString("after"))) }
    val seen=s.getJSONObject("seen")
    for((id,record) in records) if(!seen.has(id)) { store(c).enqueueAlert("fill:$id",record); seen.put(id,true) }
    if(page.length()>0) { val last=page.getJSONObject(page.length()-1).getString("id"); require(last!=s.optString("page")) { "Broker pagination stalled; monitoring stopped" }; s.put("page",last) }
    persist(); current(ticket)
-   Discord.deliver(store(c),c,send={ url,body -> current(ticket); send(url,body) }); current(ticket)
+   authorize(c,true); Discord.deliver(store(c),c,send={ url,body -> current(ticket); authorize(c,true); send(url,body) }); current(ticket)
    finish(ticket) { evidence="Read-only fills checked ${now()} · ${summary()}" }
   } catch(e:Exception) { enabled=false; verified=false; previewed=false; evidence="Monitoring stopped; verify and enable again. ${if(e is HttpError) "HTTP ${e.status}" else "Broker or delivery check failed"}"; throw e }
  }

@@ -32,11 +32,21 @@ class Vault(context: Context, private val namespace:String="vault") {
  @Synchronized fun read():JSONObject = Settings.active(root())
  @Synchronized fun save(value:JSONObject,newProfile:Boolean=false) { val r=root(); Settings.save(r,value,newProfile); writeRoot(r) }
  @Synchronized fun profiles():List<JSONObject> { val p=root().getJSONArray("profiles"); return (0 until p.length()).map { p.getJSONObject(it) } }
+ @Synchronized fun forgetOAuthCredentials() { val r=root(); val profiles=r.getJSONArray("profiles"); for(i in 0 until profiles.length()) OAuthInstall.forget(profiles.getJSONObject(i).getJSONObject("config")); writeRoot(r) }
  @Synchronized fun select(id:String) { val r=root(); require(profiles().any { it.getString("id")==id }); r.put("active",id); writeRoot(r) }
 }
 
 class EncryptedAlertsDocument(context:Context):AlertsDocument {
  private val vault=Vault(context,"alerts-only")
+ private val sessions=EncryptedCustomerSessions(context)
+ private val service=runCatching { CustomerOAuth.sibling(QuickConnection.defaultOrigin(context)) }.getOrDefault("")
+ override fun read()=vault.readDocument()
+ override fun write(value:JSONObject)=vault.writeDocument(value)
+ override fun customer()=sessions.read().takeIf { it.optString("service")==service } ?: JSONObject()
+}
+
+class EncryptedCustomerSessions(context:Context):CustomerSessionStore {
+ private val vault=Vault(context,"customer-session")
  override fun read()=vault.readDocument()
  override fun write(value:JSONObject)=vault.writeDocument(value)
 }

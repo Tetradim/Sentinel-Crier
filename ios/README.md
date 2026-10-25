@@ -104,3 +104,48 @@ latency. Diagnostics never await quotes before dispatching orders. Quote request
 are capped at eight concurrently; observation upload retries stop after six tries,
 remote fetches after twelve, with at most twenty records processed per pass.
 Restarted incomplete captures are marked unavailable rather than recreated later.
+
+### Customer and provider sign-in (G6b source integration)
+
+Home → Provider connections checks the dedicated `crier-oauth` service before
+showing customer sign-in and provider consent actions. Its default base is the
+bundled relay project's sibling `/functions/v1/crier-oauth`; Advanced accepts only
+an exact `https://<20 lowercase letters>.supabase.co/functions/v1/crier-oauth`
+base. Missing deployment/configuration leaves OAuth unavailable. Existing API-key
+and manually saved Discord webhook setup remain available.
+
+Crier customer passwords are distinct from brokerage passwords. Customer sessions
+use device-only Keychain storage and are pinned to the configured OAuth service.
+Refresh is an explicit, single-attempt operation that first stops the connected
+workspace. An uncertain rotated refresh requires signing in again; a separate
+Keychain owner/service binding remains until explicit logout, preventing an account
+switch from reusing earlier credentials. Official browser consent independently requires the
+same Crier customer. The app registers `sentinelcrier://oauth/complete?flow=...`;
+its strict return matcher requires a live in-memory owner/provider/environment/
+purpose record and device proof. Returns wait until the app is active before
+consuming that pending record; status/redemption responses are retained across
+scene changes without retry. Restarting discards that proof. Return links
+contain no customer or provider credentials. A failed or lost redemption is never
+automatically retried; authorize again.
+
+After consent, **Verify and save credential** requires a disconnected workspace.
+Alpaca installation performs only a GET to the selected paper/live account and
+checks redeemed identity plus saved intent pins before Keychain storage. Broker
+requests use either OAuth Bearer or API-key headers, never both. OAuth credential
+records retain both customer UUID and exact service URL; a matching UUID in another
+Supabase project cannot unlock them, and old OAuth records missing provenance
+require reauthorization. Legacy API-key records remain readable. Discord installation
+uses the manual destination safeguard and rejects changes while delivery entries
+are unresolved; preview and publishing permission are invalidated. Consent never
+connects workers, places an order, activates a channel, sends a test or enables
+publishing. Reconnect and review permission explicitly. Sign-out invalidates shared dispatch permits and stops workers
+before removing OAuth credentials and retains order/delivery journals; credentials
+owned by another Crier customer cannot be reused. API-key credentials remain.
+
+`ProviderConnectionsTests` uses an injected URLProtocol session, temporary Keychain
+service and temporary journals to exercise login → begin → installed return →
+one-use redemption → verified explicit install, plus strict service and auth-header
+boundaries. Run the iOS test target in macOS CI. This Windows workspace has no
+Xcode; signing, real provider registration/deployment and physical consent/browser
+return acceptance remain required separately. No real provider grant, message or
+order was exercised here.

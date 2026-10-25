@@ -28,6 +28,7 @@ targets:
       - path: SentinelCrier/IntentViews.swift
       - path: SentinelCrier/QuickConnection.swift
       - path: SentinelCrier/OAuthReturn.swift
+      - path: SentinelCrier/ProviderConnections.swift
       - path: ../crier/connection-service.json
         buildPhase: resources
       - path: SentinelCrier/SentinelCrierApp.swift
@@ -47,6 +48,12 @@ targets:
       - path: SentinelCrier/VerifiedExecutionOutbox.swift
       - path: SentinelCrier/VerifiedExecutionDiscordPublisher.swift
       - path: SentinelCrier/LiveTradingHome.swift
+    info:
+      path: Generated/Info.plist
+      properties:
+        CFBundleURLTypes:
+          - CFBundleURLName: com.tetradim.sentinelcrier.oauth
+            CFBundleURLSchemes: [sentinelcrier]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier
@@ -68,6 +75,7 @@ targets:
       - path: SentinelCrier/IntentTests.swift
       - path: SentinelCrier/QuickConnectionTests.swift
       - path: SentinelCrier/OAuthReturnTests.swift
+      - path: SentinelCrier/ProviderConnectionsTests.swift
       - path: ../tests/fixtures/oauth-return.json
         buildPhase: resources
       - path: SentinelCrier/Phase2FlowTests.swift

@@ -111,3 +111,32 @@ normal installations. It preserves journals and DPAPI credentials across updates
 uninstall. Close the app before replacing program files; downgrade is unsupported.
 See [Windows release and update instructions](../docs/windows-release.md) for release
 checksums, signing status, build steps, and retained data details.
+
+Provider sign-in is enabled only after the separate configured service returns valid
+capabilities. The bundled Supabase project supplies the default `/functions/v1/crier-oauth`
+base; operators can set `CRIER_OAUTH_SERVICE_URL` to another exact HTTPS Supabase
+function base (20 lowercase project letters). No service/provider secrets are bundled.
+Use Start here to choose alerts or trading, then Provider sign-in to create/sign in to
+your Crier account and authorize a provider in your browser. Browser login must use
+the same Crier customer. The per-user installer registers `sentinelcrier:` and forwards
+opaque return notifications to the running app. A manual return URL field supports
+uninstalled builds. Restarted apps reject old returns because device proofs remain
+in memory. Cancel and start a new flow after an uncertain redemption.
+
+A successful grant is verified and saved with Windows DPAPI only while disconnected;
+reconnect explicitly with the saved credentials. Live access remains an explicit
+reconnect checkbox. OAuth never enables broker orders or Discord delivery. Existing
+pairing, account, journal and Discord outbox restrictions apply. A Discord grant
+requires a previously verified saved account for the selected journey/environment.
+Sign out disconnects workers and removes the customer session while retaining broker
+recovery journals and saved broker credentials. Closing the app retains the encrypted
+customer session; passwords and pending device proofs are never persisted. Session
+refresh is explicit in the client API and never automatically retried after rotation.
+
+OAuth credentials are also pinned to the exact provider-service URL and Crier customer
+UUID. Reconnect and Discord enablement require that original customer/project sign-in;
+a matching UUID in a different Supabase project does not satisfy the pin. Saved
+customer sessions use the same service binding. Provider Bearer credentials without
+ownership metadata are rejected; explicitly entered manual API keys retain the normal
+account/environment recovery path. OAuth Discord ownership metadata is encrypted in
+the same atomic destination write as the webhook, and survives reusing that webhook.

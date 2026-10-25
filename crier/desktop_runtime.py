@@ -11,7 +11,7 @@ from .service_url import service_url
 import httpx
 
 from .device_secrets import load_secret, save_secret
-from .intent_broker import AlpacaIntentBroker, HOSTS
+from .intent_broker import AlpacaIntentBroker, HOSTS, alpaca_headers
 from .intent_device import IntentDevice
 from .intent_routes import Pair
 from .connection_client import ConnectionClient
@@ -23,14 +23,13 @@ def data_directory():
     return Path(os.getenv('LOCALAPPDATA', str(Path.home()/'.local/share'))) / 'SentinelCrier' / 'Desktop'
 
 
-async def discover_account(environment, key, secret, client=None):
-    if environment not in HOSTS or not key.strip() or not secret.strip():
+async def discover_account(environment, key, secret, client=None, *, bearer=''):
+    if environment not in HOSTS:
         raise ValueError('Select an environment and enter both Alpaca credentials.')
     owned = client is None
     client = client or httpx.AsyncClient(timeout=15, trust_env=False, follow_redirects=False)
     try:
-        response = await client.get(HOSTS[environment]+'/v2/account', headers={
-            'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret}, follow_redirects=False)
+        response = await client.get(HOSTS[environment]+'/v2/account', headers=alpaca_headers(key,secret,bearer=bearer), follow_redirects=False)
         response.raise_for_status()
         row = response.json()
         if not row.get('id') or row.get('status') != 'ACTIVE' or row.get('account_blocked') or row.get('trading_blocked'):
@@ -43,16 +42,15 @@ async def discover_account(environment, key, secret, client=None):
             await client.aclose()
 
 
-async def discover_alerts_account(environment, key, secret, client=None):
+async def discover_alerts_account(environment, key, secret, client=None, *, bearer=''):
     """Verify read access; trading permission is irrelevant for fill monitoring."""
     from .alpaca import _identity
-    if environment not in HOSTS or not key.strip() or not secret.strip():
+    if environment not in HOSTS:
         raise ValueError('Select an environment and enter both Alpaca credentials.')
     owned = client is None
     client = client or httpx.AsyncClient(timeout=15, trust_env=False, follow_redirects=False)
     try:
-        response = await client.get(HOSTS[environment]+'/v2/account', headers={
-            'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret}, follow_redirects=False)
+        response = await client.get(HOSTS[environment]+'/v2/account', headers=alpaca_headers(key,secret,bearer=bearer), follow_redirects=False)
         response.raise_for_status()
         return _identity(response.json().get('id'))
     except (httpx.HTTPError, ValueError, TypeError, AttributeError):
@@ -64,9 +62,9 @@ async def discover_alerts_account(environment, key, secret, client=None):
 
 class AlpacaFillReader:
     """Read-only account adapter: deliberately has no order mutation methods."""
-    def __init__(self, environment, key, secret, account):
+    def __init__(self, environment, key, secret, account, *, bearer=''):
         self.environment, self.account = environment, account
-        self.client = httpx.Client(headers={'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret},
+        self.client = httpx.Client(headers=alpaca_headers(key,secret,bearer=bearer),
                                    timeout=15, trust_env=False, follow_redirects=False)
 
     def verify(self, environment):
@@ -91,6 +89,8 @@ class DesktopSession:
         self.credentials = self.folder/'desktop-credentials.secret'
         self.alerts_credentials = self.folder/'desktop-alerts-credentials.secret'
         self.alerts_lookup, self.alerts_factory = alerts_lookup, alerts_factory
+        self.oauth = None
+        self.oauth_jobs = set()
         self.environment = ''
         self.mode = 'disconnected'
         self.alert_poll = asyncio.Lock()
@@ -103,12 +103,146 @@ class DesktopSession:
         self.stop = None
         self.account = ''
         self.closing = False
+        self.auth_closing = False
         self.lifecycle = asyncio.Lock()
         self.intent_publisher=DiscordPublisher(self.folder,Store(self.folder/"alerts.sqlite3"))
         self.publisher = self.intent_publisher
         self.publisher.store.recover()
         self.alert_state={'state':'stopped'}
         self.discord_authorized = False
+
+    def provider_client(self):
+        if self.oauth is None:
+            from .provider_client import ProviderClient
+            from .connection_client import default_origin
+            default = default_origin()
+            base = os.getenv('CRIER_OAUTH_SERVICE_URL',default+'-oauth' if default.endswith('/crier') else '')
+            self.oauth = ProviderClient(base,self.folder/'customer-session.secret')
+        return self.oauth
+
+    async def provider_capabilities(self):
+        return await self.provider_client().capabilities()
+
+    async def customer_login(self, email, password, signup=False):
+        async with self.lifecycle:
+            self.require_disconnected()
+            return await self.provider_client().login(email,password,signup=signup)
+
+    async def customer_refresh(self):
+        async with self.lifecycle:
+            self.require_disconnected()
+            await self.provider_client().refresh()
+            return {'message':'Customer session renewed.'}
+
+    async def stop_oauth_jobs(self):
+        if self.oauth: self.oauth.invalidate()
+        jobs=[task for task in self.oauth_jobs if task is not asyncio.current_task()]
+        for task in jobs: task.cancel()
+        await asyncio.gather(*jobs,return_exceptions=True)
+
+    async def customer_logout(self):
+        self.auth_closing=True
+        try:
+            await self.stop_oauth_jobs()
+            await self.disconnect()
+            if self.oauth:
+                result = await self.oauth.logout()
+            else:
+                (self.folder/'customer-session.secret').unlink(missing_ok=True)
+                result = {'message':'Signed out.'}
+            return result
+        finally:
+            self.auth_closing=False
+
+    def oauth_identity(self):
+        from uuid import UUID
+        from .provider_client import validate_service
+        client=self.provider_client()
+        try:
+            return {'service_url':validate_service(client.base),'owner':str(UUID(client.session['user']['id']))}
+        except (TypeError,KeyError,AttributeError,ValueError):
+            raise ValueError('OAuth customer sign-in required for saved provider credentials.') from None
+
+    def require_oauth_owner(self, row):
+        if row.get('bearer') or row.get('credential_mode')=='oauth' or 'oauth' in row:
+            identity=self.oauth_identity()
+            if row.get('oauth')!=identity:
+                raise ValueError('OAuth customer or service differs from saved credentials; restore the original sign-in.')
+
+    async def provider_begin(self, provider, purpose, environment):
+        self.require_disconnected()
+        capabilities=await self.provider_capabilities()
+        if provider not in capabilities['providers']: raise ValueError('Provider unavailable.')
+        launch=await self.provider_client().begin(provider,'alerts' if provider=='discord' else purpose,environment)
+        self.provider_destination = 'alerts' if purpose=='alerts' else 'intent'
+        return launch
+
+    async def provider_cancel(self):
+        if self.oauth: await self.oauth.cancel()
+        return {'message':'Provider connection cancelled.'}
+
+    async def provider_complete(self, uri):
+        async with self.lifecycle:
+            self.require_disconnected()
+            client=self.provider_client()
+            generation=client.generation
+            identity=self.oauth_identity()
+            grant=await client.complete(uri)
+            if grant['provider']=='discord':
+                if self.provider_destination=='alerts':
+                    if not self.alerts_credentials.exists():
+                        raise ValueError('Connect an alerts account once before installing Discord.')
+                    saved=json.loads(load_secret(self.alerts_credentials))
+                    if saved['environment']!=grant['environment']: raise ValueError('Discord environment mismatch.')
+                    scope=hashlib.sha256(json.dumps([saved['environment'],saved['account']]).encode()).hexdigest()
+                    profile=self.folder/'alerts-profiles'/scope
+                    publisher=DiscordPublisher(profile,Store(profile/'alerts.sqlite3'))
+                    allow_initial=True
+                else:
+                    if not self.credentials.exists(): raise ValueError('Connect a trading account once before installing Discord.')
+                    saved=json.loads(load_secret(self.credentials))
+                    if saved['pair']['environment']!=grant['environment']: raise ValueError('Discord environment mismatch.')
+                    publisher=self.intent_publisher
+                    allow_initial=False
+                self.require_oauth_owner(saved)
+                self.require_oauth_owner(publisher.destination)
+                publisher.configure(grant['credential'],False,allow_initial=allow_initial,oauth=identity)
+            else:
+                trade=grant['purpose']=='trade'
+                path=self.credentials if trade else self.alerts_credentials
+                saved=json.loads(load_secret(path)) if path.exists() else {}
+                self.require_oauth_owner(saved)
+                if trade:
+                    pair=saved.get('pair') or self.connection_client().saved()
+                    if not pair: raise ValueError('Create or receive your pairing before authorizing trading.')
+                    if pair['environment']!=grant['environment']: raise ValueError('Pairing environment mismatch.')
+                lookup=self.account_lookup if trade else self.alerts_lookup
+                account=await lookup(grant['environment'],'','',bearer=grant['credential'])
+                if generation!=client.generation: raise ValueError('Customer session changed.')
+                if account!=grant['account_id']: raise ValueError('Provider account verification mismatch.')
+                if saved and (saved['account']!=account or (saved['pair']['environment'] if trade else saved['environment'])!=grant['environment']):
+                    raise ValueError('Saved recovery records require the original account and environment.')
+                if trade:
+                    journal=self.folder/'journal'
+                    pairing=journal/'intent-pairing.secret'
+                    if pairing.exists() and json.loads(load_secret(pairing))!=pair:
+                        raise ValueError('Journal pairing mismatch.')
+                    import sqlite3
+                    for database in journal.glob('intent-*.sqlite3'):
+                        if database.name=='intent-device.sqlite3': continue
+                        with sqlite3.connect(database) as db:
+                            pin=db.execute('SELECT environment,account FROM intent_pin WHERE id=1').fetchone()
+                            if pin and tuple(pin)!=(grant['environment'],account):
+                                raise ValueError('Journal account/environment mismatch.')
+                row=dict(account=account,key='',secret='',bearer=grant['credential'],oauth=identity)
+                row.update({'pair':pair} if trade else {'environment':grant['environment']})
+                save_secret(path,json.dumps(row))
+            return {'message':'Provider connection saved. Reconnect explicitly; orders and delivery remain disabled.'}
+
+    async def shutdown(self):
+        await self.stop_oauth_jobs()
+        await self.disconnect()
+        if self.oauth: await self.oauth.close()
 
     def connection_client(self):
         saved=json.loads(load_secret(self.credentials)) if self.credentials.exists() else {}
@@ -137,12 +271,15 @@ class DesktopSession:
         return status | dict(saved_enabled=status['enabled'], enabled=status['enabled'] and self.discord_authorized)
 
     def require_connected_publisher(self):
-        if not self.broker or self.closing:
+        if not self.broker or self.closing or self.auth_closing:
             raise ValueError('Connect and verify an account before changing Discord setup.')
 
     async def discord_configure(self, webhook, enabled):
         async with self.lifecycle:
             self.require_connected_publisher()
+            original=self.publisher.destination
+            reuse=not webhook.strip() or webhook.strip()==original['webhook']
+            if reuse: self.require_oauth_owner(original)
             self.publisher.configure(webhook, enabled, allow_initial=self.mode == 'alerts')
             self.discord_authorized = enabled
             return self.discord_status()
@@ -163,6 +300,7 @@ class DesktopSession:
         async with self.lifecycle:
             self.require_connected_publisher()
             publisher = self.publisher
+            self.require_oauth_owner(publisher.destination)
             def send():
                 with httpx.Client(trust_env=False,follow_redirects=False) as client:
                     return publisher.test_message(client)
@@ -188,7 +326,7 @@ class DesktopSession:
                 self.alert_state={'state':'reconnecting','message':'Fill activity unavailable; saved cursor retained. No inferred fills published.'}
 
     def require_disconnected(self):
-        if self.broker or self.device or self.closing:
+        if self.broker or self.device or self.closing or self.auth_closing:
             raise ValueError('Disconnect before changing connection settings.')
 
     async def connect_alerts(self, environment, key, secret, allow_live=False):
@@ -204,10 +342,12 @@ class DesktopSession:
             if saved and saved['environment'] != environment:
                 raise ValueError('Saved alerts credentials are pinned to their original environment.')
             key, secret = (key.strip(), secret.strip()) if key.strip() else (saved.get('key',''), saved.get('secret',''))
-            account = await self.alerts_lookup(environment, key, secret)
+            if saved.get('bearer') and not key: self.require_oauth_owner(saved)
+            bearer = saved.get('bearer','') if not key else ''
+            account = await self.alerts_lookup(environment, key, secret, **({'bearer':bearer} if bearer else {}))
             if saved and saved['account'] != account:
                 raise ValueError('Alerts monitoring is pinned to its original account.')
-            broker = self.alerts_factory(environment, key, secret, account)
+            broker = self.alerts_factory(environment, key, secret, account, **({'bearer':bearer} if bearer else {}))
             previous_publisher = self.publisher
             enrollment = None
             try:
@@ -216,7 +356,7 @@ class DesktopSession:
                 profile.mkdir(parents=True, exist_ok=True)
                 publisher = DiscordPublisher(profile, Store(profile/'alerts.sqlite3'))
                 publisher.store.recover()
-                save_secret(self.alerts_credentials, json.dumps(dict(environment=environment, account=account, key=key, secret=secret)))
+                save_secret(self.alerts_credentials, json.dumps(dict(environment=environment, account=account, key=key, secret=secret, **({'bearer':bearer,'oauth':saved['oauth']} if bearer else {}))))
                 self.publisher = publisher
                 self.broker, self.account, self.environment, self.mode = broker, account, environment, 'alerts'
                 self.alert_state = {'state':'connecting'}
@@ -257,7 +397,9 @@ class DesktopSession:
                 except TimeoutError: pass
 
     def deliver_alerts(self, client):
-        if self.discord_authorized and not self.closing:
+        if self.discord_authorized and not self.closing and not self.auth_closing:
+            try: self.require_oauth_owner(self.publisher.destination)
+            except ValueError: return False
             return self.publisher.deliver(client)
         return False
 
@@ -281,15 +423,17 @@ class DesktopSession:
             if bool(key.strip()) != bool(secret.strip()):
                 raise ValueError('Enter both credentials, or leave both blank to reuse saved credentials.')
             key, secret = (key.strip(), secret.strip()) if key.strip() else (saved.get('key', ''), saved.get('secret', ''))
-            account = await self.account_lookup(pair['environment'], key, secret)
+            if saved.get('bearer') and not key: self.require_oauth_owner(saved)
+            bearer = saved.get('bearer','') if not key else ''
+            account = await self.account_lookup(pair['environment'], key, secret, **({'bearer':bearer} if bearer else {}))
             if saved and (saved['account'] != account or saved['pair'] != pair):
                 raise ValueError('This desktop journal is pinned to its original account and channel. Reuse that pairing.')
-            broker = self.broker_factory(pair['environment'], key, secret, account)
+            broker = self.broker_factory(pair['environment'], key, secret, account, **({'bearer':bearer} if bearer else {}))
             try:
                 device = IntentDevice(self.folder/'journal', broker)
                 device.configure(pair)
                 device.engine.save_settings({'enabled': False})
-                save_secret(self.credentials, json.dumps(dict(pair=pair, key=key, secret=secret, account=account)))
+                save_secret(self.credentials, json.dumps(dict(pair=pair, key=key, secret=secret, account=account, **({'bearer':bearer,'oauth':saved['oauth']} if bearer else {}))))
             except Exception:
                 broker.close()
                 raise
@@ -320,24 +464,24 @@ class DesktopSession:
                     recovery=recovery)
 
     async def diagnostics(self, trade_id, side='buy'):
-        if not self.device or self.closing:
+        if not self.device or self.closing or self.auth_closing:
             raise ValueError('Connect first.')
         return await asyncio.to_thread(self.device.trade_report, trade_id, side)
 
     async def export_diagnostics(self, trade_id, format='json', side='buy'):
-        if not self.device or self.closing:
+        if not self.device or self.closing or self.auth_closing:
             raise ValueError('Connect first.')
         return await asyncio.to_thread(self.device.export_trade, trade_id, format, side)
 
     def settings(self, settings):
-        if not self.device or self.closing:
+        if not self.device or self.closing or self.auth_closing:
             raise ValueError('Connect first.')
         result = self.device.engine.save_settings(settings)
         self.device.changed.set()
         return result
 
     def command(self, action, **values):
-        if not self.device or self.closing:
+        if not self.device or self.closing or self.auth_closing:
             raise ValueError('Connect first.')
         return self.device.command(action, **values).to_dict()
 
@@ -378,12 +522,18 @@ class DesktopWorker:
 
     def call(self, method, *args, **kwargs) -> Future:
         async def invoke():
-            result = getattr(self.session, method)(*args, **kwargs)
-            return await result if asyncio.iscoroutine(result) else result
+            tracked=method.startswith('provider_') or method in ('customer_login','customer_refresh')
+            task=asyncio.current_task()
+            if tracked: self.session.oauth_jobs.add(task)
+            try:
+                result = getattr(self.session, method)(*args, **kwargs)
+                return await result if asyncio.iscoroutine(result) else result
+            finally:
+                if tracked: self.session.oauth_jobs.discard(task)
         return asyncio.run_coroutine_threadsafe(invoke(), self.loop)
 
     def close(self):
-        self.call('disconnect').result()
+        self.call('shutdown').result()
         self.loop.call_soon_threadsafe(self.loop.stop)
         self.thread.join()
         self.loop.run_until_complete(self.loop.shutdown_default_executor())

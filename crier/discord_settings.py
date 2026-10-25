@@ -18,11 +18,25 @@ class DiscordPublisher:
         self.store=store
         self.destination=json.loads(load_secret(self.path)) if self.path.exists() else dict(webhook=webhook,enabled=enabled)
 
-    def configure(self, webhook, enabled, *, allow_initial=False):
+    def configure(self, webhook, enabled, *, allow_initial=False, oauth=None):
         if type(enabled) is not bool: raise ValueError('Select whether delivery is enabled')
         webhook=webhook.strip() or self.destination['webhook']
         validate_webhook(webhook)
         destination=dict(webhook=webhook,enabled=enabled)
+        # Reusing a saved webhook cannot silently turn OAuth into manual setup.
+        if oauth is None and webhook==self.destination['webhook'] and ('oauth' in self.destination or self.destination.get('credential_mode')=='oauth'):
+            oauth=self.destination.get('oauth')
+            if oauth is None: raise ValueError('Missing OAuth customer provenance')
+        if oauth is not None:
+            from uuid import UUID
+            from .provider_client import validate_service
+            try:
+                if not isinstance(oauth,dict) or set(oauth)!={'service_url','owner'}: raise ValueError()
+                validate_service(oauth['service_url'])
+                if str(UUID(oauth['owner']))!=oauth['owner']: raise ValueError()
+            except (ValueError,TypeError,AttributeError,KeyError):
+                raise ValueError('Invalid OAuth customer provenance') from None
+            destination.update(credential_mode='oauth',oauth=dict(oauth))
         with self.store.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             queued=db.execute("SELECT COUNT(*) FROM outbox WHERE status IN ('pending','sending','uncertain','review','failed')").fetchone()[0]

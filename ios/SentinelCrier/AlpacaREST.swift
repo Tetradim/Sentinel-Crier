@@ -7,13 +7,30 @@ enum AlpacaEnvironment: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var baseURL: URL { URL(string: self == .paper ? "https://paper-api.alpaca.markets" : "https://api.alpaca.markets")! }
 }
-struct AlpacaCredentials: Codable { let key: String; let secret: String }
+struct AlpacaCredentials: Codable {
+    let key: String; let secret: String
+    let bearer: String?; let owner: String?; let serviceURL: String?
+    init(key: String, secret: String) { self.key = key; self.secret = secret; bearer = nil; owner = nil; serviceURL = nil }
+    init(bearer: String, owner: String, serviceURL: String? = nil) { key = ""; secret = ""; self.bearer = bearer; self.owner = owner; self.serviceURL = serviceURL }
+    func authorize(_ request: inout URLRequest) throws {
+        if let bearer {
+            guard key.isEmpty, secret.isEmpty, !bearer.isEmpty, bearer.count <= 8192,
+                  !bearer.contains(where: { $0.isWhitespace || $0.isNewline }),
+                  let owner, UUID(uuidString: owner) != nil, let serviceURL, (try? ProviderAPI(base: serviceURL)) != nil else { throw AlpacaError.invalid("Invalid OAuth credentials.") }
+            request.setValue("Bearer " + bearer, forHTTPHeaderField: "Authorization")
+        } else {
+            guard owner == nil, serviceURL == nil, !key.isEmpty, !secret.isEmpty else { throw AlpacaError.invalid("Both API key and secret are required.") }
+            request.setValue(key, forHTTPHeaderField: "APCA-API-KEY-ID")
+            request.setValue(secret, forHTTPHeaderField: "APCA-API-SECRET-KEY")
+        }
+    }
+}
 enum AlpacaKeychain {
     static func query(_ environment: AlpacaEnvironment) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "com.tetradim.sentinelcrier.alpaca", kSecAttrAccount as String: environment.rawValue]
     }
     static func save(_ credentials: AlpacaCredentials, environment: AlpacaEnvironment) throws {
-        guard !credentials.key.isEmpty, !credentials.secret.isEmpty else { throw AlpacaError.invalid("Both API key and secret are required.") }
+        var validation = URLRequest(url: environment.baseURL); try credentials.authorize(&validation)
         let data = try JSONEncoder().encode(credentials)
         let q = query(environment)
         var item = q
@@ -106,16 +123,25 @@ final class AlpacaREST {
     let environment: AlpacaEnvironment
     private let credentials: AlpacaCredentials
     private let session: URLSession
+    private let lifetime = OAuthEffectPermit()
+    func invalidate() { lifetime.invalidate() }
+    var permitsMutations: Bool { lifetime.isCurrent }
+    func freshClient(customer: CustomerSession?) throws -> AlpacaREST {
+        if credentials.owner != nil {
+            guard OAuthOwnership.matches(owner: credentials.owner, serviceURL: credentials.serviceURL, customer: customer) else { throw AlpacaError.invalid("Original Crier customer and service required to resume.") }
+        }
+        return AlpacaREST(environment: environment, credentials: credentials, session: session)
+    }
     init(environment: AlpacaEnvironment, credentials: AlpacaCredentials, session: URLSession = CrierHTTPSession.shared) {
         self.environment = environment; self.credentials = credentials; self.session = session
     }
-    private func request(_ path: String, query: [URLQueryItem] = [], method: String = "GET", body: Data? = nil) async throws -> Data {
+    private func request(_ path: String, query: [URLQueryItem] = [], method: String = "GET", body: Data? = nil, permit: OAuthEffectPermit? = nil) async throws -> Data {
         var parts = URLComponents(url: environment.baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { parts.queryItems = query }
         var request = URLRequest(url: parts.url!); request.httpMethod = method; request.httpBody = body; request.timeoutInterval = 20
-        request.setValue(credentials.key, forHTTPHeaderField: "APCA-API-KEY-ID")
-        request.setValue(credentials.secret, forHTTPHeaderField: "APCA-API-SECRET-KEY")
+        try credentials.authorize(&request)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        guard (method == "GET" || lifetime.isCurrent), permit?.isCurrent != false, !Task.isCancelled else { throw AlpacaError.invalid("Broker operation stopped before dispatch.") }
         // Never retry POST, including transport failures and throttling.
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw AlpacaError.invalid("Invalid broker response.") }
@@ -127,8 +153,7 @@ final class AlpacaREST {
         parts.queryItems = [URLQueryItem(name: "feed", value: option ? "opra" : "iex")]
         if option { parts.queryItems!.append(URLQueryItem(name: "symbols", value: symbol)) }
         var request = URLRequest(url: parts.url!); request.timeoutInterval = 10
-        request.setValue(credentials.key, forHTTPHeaderField: "APCA-API-KEY-ID")
-        request.setValue(credentials.secret, forHTTPHeaderField: "APCA-API-SECRET-KEY")
+        try credentials.authorize(&request)
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw AlpacaError.invalid("Live quote unavailable (feed permission or transport failure).") }
         struct Quote: Decodable { var t: String; var bp: Decimal?; var ap: Decimal? }
@@ -160,10 +185,10 @@ final class AlpacaREST {
         let asset = try JSONDecoder().decode(Asset.self, from: await request("v2/assets/" + symbol))
         guard asset.tradable, asset.status == "active", asset.assetClass == "us_equity" else { throw AlpacaError.invalid("Select an active tradable US stock.") }
     }
-    func submit(_ ticket: AlpacaTicket) async throws -> AlpacaOrder {
+    func submit(_ ticket: AlpacaTicket, permit: OAuthEffectPermit? = nil) async throws -> AlpacaOrder {
         try ticket.validate()
         guard ticket.environment == environment else { throw AlpacaError.invalid("Environment changed. Review again.") }
-        return try JSONDecoder().decode(AlpacaOrder.self, from: await request("v2/orders", method: "POST", body: ticket.body()))
+        return try JSONDecoder().decode(AlpacaOrder.self, from: await request("v2/orders", method: "POST", body: ticket.body(), permit: permit))
     }
     func submitIntent(symbol: String, quantity: Int, price: String?, sell: Bool, option: Bool, clientID: String) async throws -> AlpacaOrder {
         var body: [String: Any] = ["symbol": symbol, "qty": String(quantity), "side": sell ? "sell" : "buy", "type": price == nil ? "market" : "limit", "time_in_force": "day", "client_order_id": clientID]
@@ -178,7 +203,7 @@ final class AlpacaREST {
         guard !id.isEmpty, id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }) else { throw AlpacaError.invalid("Invalid broker order ID.") }
         return try JSONDecoder().decode(AlpacaOrder.self, from: await request("v2/orders/" + id))
     }
-    func cancel(orderID: String) async throws { _ = try await request("v2/orders/" + orderID, method: "DELETE") }
+    func cancel(orderID: String, permit: OAuthEffectPermit? = nil) async throws { _ = try await request("v2/orders/" + orderID, method: "DELETE", permit: permit) }
     func fills(pageToken: String? = nil) async throws -> [AlpacaFill] {
         var query = [URLQueryItem(name: "direction", value: "desc"), URLQueryItem(name: "page_size", value: "100")]
         if let pageToken { query.append(URLQueryItem(name: "page_token", value: pageToken)) }

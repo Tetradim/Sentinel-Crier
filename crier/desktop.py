@@ -21,6 +21,8 @@ class DesktopApp:
         self.connection_jobs = set()
         self.poll = None
         self.connected = False
+        self.provider_purpose = 'alerts'
+        self.provider_available = set()
         self.closing = False
         self.latest = {}
         self.setup_progress = SetupProgress()
@@ -60,6 +62,9 @@ class DesktopApp:
         self.setup_tab = setup
         tabs.select(start)
         self._start(start)
+        customer = ttk.Frame(tabs,padding=14)
+        tabs.add(customer,text='Provider sign-in')
+        self._customer(customer)
         self._alerts_setup(self.alerts_tab)
         self._setup(setup)
         self._pricing(pricing)
@@ -71,6 +76,7 @@ class DesktopApp:
                   style='Subtitle.TLabel').pack(anchor='w', pady=(6,0))
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.after(100, self.refresh)
+        root.after(250, self.provider_inbox)
 
     def _start(self, frame):
         ttk.Label(frame, text='What would you like to do?', font=('Segoe UI', 16, 'bold')).pack(anchor='w', pady=12)
@@ -83,9 +89,70 @@ class DesktopApp:
         if self.connected:
             self.notice.set('Disconnect before changing setup purpose. Existing orders and recovery records remain saved.')
             return
+        self.provider_purpose = 'alerts' if purpose == 'alerts' else 'trade'
         self.tabs.select(self.alerts_tab if purpose == 'alerts' else self.setup_tab)
         self.notice.set('Verify your account, then configure Discord.' if purpose == 'alerts' else
                         'Choose Host to share trades.' if purpose == 'trade' else 'Choose Receive to follow trades.')
+
+    def _customer(self, frame):
+        ttk.Label(frame,text='Crier customer account',font=('Segoe UI',16,'bold')).pack(anchor='w')
+        ttk.Label(frame,text='Choose your journey in Start here. Provider approval saves credentials; reconnect separately.',wraplength=850).pack(anchor='w',pady=8)
+        self.customer_email=self._entry(frame,'Email')
+        self.customer_password=self._entry(frame,'Password',masked=True)
+        row=ttk.Frame(frame); row.pack(anchor='w',pady=8)
+        ttk.Button(row,text='Check provider availability',command=self.check_providers).pack(side='left')
+        ttk.Button(row,text='Sign in',command=lambda:self.customer_login(False)).pack(side='left')
+        ttk.Button(row,text='Renew session',command=lambda:self.submit('customer_refresh',callback=self.provider_message)).pack(side='left')
+        ttk.Button(row,text='Create account',command=lambda:self.customer_login(True)).pack(side='left')
+        ttk.Button(row,text='Sign out and disconnect',command=lambda:self.submit('customer_logout',callback=self.provider_message)).pack(side='left')
+        self.provider_environment=tk.StringVar(value='paper')
+        ttk.Combobox(frame,textvariable=self.provider_environment,values=('paper','live'),state='readonly').pack(anchor='w',pady=8)
+        self.provider_buttons={}
+        for provider,label in [('alpaca','Authorize Alpaca in browser'),('discord','Authorize Discord in browser')]:
+            button=ttk.Button(frame,text=label,state='disabled',command=lambda p=provider:self.begin_provider(p))
+            button.pack(anchor='w',pady=6); self.provider_buttons[provider]=button
+        self.provider_return=self._entry(frame,'Return URL (manual recovery)')
+        ttk.Button(frame,text='Continue provider return',command=self.complete_provider).pack(anchor='w',pady=6)
+        ttk.Button(frame,text='Cancel pending connection',command=lambda:self.submit('provider_cancel',callback=self.provider_message)).pack(anchor='w')
+        self.provider_status=tk.StringVar(value='Provider connections unavailable until the configured service verifies its capabilities.')
+        ttk.Label(frame,textvariable=self.provider_status,wraplength=850).pack(anchor='w',pady=12)
+
+    def provider_message(self, result):
+        self.provider_status.set(result.get('message','Request completed.'))
+
+    def check_providers(self):
+        def ready(result):
+            self.provider_available=set(result['providers'])
+            for provider,button in self.provider_buttons.items():
+                button.configure(state='normal' if provider in self.provider_available else 'disabled')
+            self.provider_status.set('Provider service verified. Sign in, then authorize your selected provider.')
+        self.submit('provider_capabilities',callback=ready)
+
+    def customer_login(self, signup):
+        email,password=self.customer_email.get(),self.customer_password.get()
+        self.customer_password.set('')
+        self.submit('customer_login',email,password,signup,callback=self.provider_message)
+
+    def begin_provider(self, provider):
+        purpose=self.provider_purpose
+        self.submit('provider_begin',provider,purpose,self.provider_environment.get(),callback=lambda url:webbrowser.open(url))
+
+    def complete_provider(self, uri=None):
+        uri=uri or self.provider_return.get()
+        self.provider_return.set('')
+        self.submit('provider_complete',uri,callback=self.provider_message)
+
+    def provider_inbox(self):
+        if self.closing: return
+        from .desktop_oauth_return import take_returns
+        if not hasattr(self.worker,'session'): return
+        try:
+            for uri in take_returns(self.worker.session.folder):
+                self.complete_provider(uri)
+        except OSError:
+            self.notice.set('Provider return inbox busy; retrying shortly.')
+        finally:
+            if not self.closing: self.root.after(500,self.provider_inbox)
 
     def _alerts_setup(self, frame):
         ttk.Label(frame, text='1. Connect your account for fill alerts', font=('Segoe UI', 14, 'bold')).pack(anchor='w', pady=8)
@@ -748,6 +815,7 @@ def smoke_test(report=None):
 
 def main():
     parser = argparse.ArgumentParser(description='Sentinel Crier desktop')
+    parser.add_argument('--oauth-return')
     parser.add_argument('--self-test', action='store_true')
     parser.add_argument('--report')
     args = parser.parse_args()
@@ -755,6 +823,10 @@ def main():
         smoke_test(args.report)
         return
     folder = data_directory(); folder.mkdir(parents=True, exist_ok=True)
+    if args.oauth_return:
+        from .desktop_oauth_return import enqueue_return
+        try: enqueue_return(folder,args.oauth_return)
+        except ValueError: return
     try:
         with single_process(folder/'desktop.lock'):
             root = tk.Tk()
@@ -762,6 +834,7 @@ def main():
             DesktopApp(root, worker)
             root.mainloop()
     except AlreadyRunningError:
+        if args.oauth_return: return
         root = tk.Tk(); root.withdraw()
         messagebox.showinfo('Sentinel Crier', 'Crier desktop is already running.', parent=root)
         root.destroy()

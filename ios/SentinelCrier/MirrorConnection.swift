@@ -119,7 +119,7 @@ actor MirrorSender {
         if let event { next.items[index].event = event }
         try save(next)
     }
-    func deliver(api: AlpacaREST, account: String) async throws -> String {
+    func deliver(api: AlpacaREST, account: String, permit: OAuthEffectPermit = OAuthEffectPermit()) async throws -> String {
         guard !sending else { return "Mirror delivery in progress." }
         sending = true; defer { sending = false }
         guard let pair = try MirrorPairing.load() else { return "Not paired." }
@@ -154,6 +154,7 @@ actor MirrorSender {
             request.setValue("Bearer " + pair.token, forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONEncoder().encode(event)
+            guard permit.isCurrent, !Task.isCancelled else { return "Mirror delivery stopped; journal retained." }
             let (data, response) = try await CrierHTTPSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw AlpacaError.invalid("Mirror receiver unavailable.") }
             if http.statusCode == 422 { try change(item.key, status: "skipped: expired or invalid"); message = "Receiver skipped an expired or unsupported fill."; continue }
