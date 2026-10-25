@@ -271,8 +271,11 @@ class IntentEngine:
             with self._db() as db:
                 latest=db.execute('SELECT * FROM intent_trades WHERE id=?',(tid,)).fetchone()
             if latest['data']!=row['data']: return False
+            current=self.load_settings()
+            if any(current[key]!=settings[key] for key in ('mode','max_slippage_bps','max_slippage_amount')):
+                refusal['reason']='pricing_changed'
+                return False
             if side=='buy':
-                current=self.load_settings()
                 try:
                     sample=self.entry_clock.read()
                     current_time=datetime.fromtimestamp(sample.effective,timezone.utc)

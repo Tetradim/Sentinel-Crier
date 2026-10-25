@@ -74,7 +74,7 @@ class SyncService: Service() {
     catch(error:Exception) { note("broker","blocked",if(error is HttpError && error.status in setOf(401,403)) "authentication_failed" else "reconciliation_required"); throw error }
    }
   }
-  val engine=Engine(journal,config,broker=observedBroker) { getSharedPreferences("controls",MODE_PRIVATE).getBoolean("paused",true) }
+  val engine=Engine(journal,config,broker=observedBroker,entryClock=EntryClock(mono={android.os.SystemClock.elapsedRealtime()})) { getSharedPreferences("controls",MODE_PRIVATE).getBoolean("paused",true) }
   var reconciled=false
   worker("execution") {
    var needsReconciliation=false

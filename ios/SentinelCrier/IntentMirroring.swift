@@ -71,6 +71,9 @@ struct IntentPreferences: Codable {
         paused = try c.decodeIfPresent(Bool.self, forKey: .paused) ?? true
         _ = try price("1", sell: false)
     }
+    func samePricing(as other: IntentPreferences) -> Bool {
+        mode == other.mode && maxSlippageBps == other.maxSlippageBps && maxSlippageAmount == other.maxSlippageAmount
+    }
     func price(_ source: String, sell: Bool) throws -> String? {
         guard ["exact_limit", "market", "bounded_limit"].contains(mode), let value = Decimal(string: source), value > 0,
               (0...1000).contains(maxSlippageBps), let absolute = Decimal(string: maxSlippageAmount), absolute >= 0,
@@ -89,6 +92,11 @@ struct IntentMutation: Codable {
     var order: AlpacaOrder?; var cancelUnknown = false
     var cancelAttemptedAt: Date?
     var notSubmitted: Bool?
+    func validateLocalDisposition() throws {
+        guard notSubmitted != true || (order == nil && !cancelUnknown && cancelAttemptedAt == nil) else {
+            throw AlpacaError.invalid("Contradictory not-submitted order record. Preserve the journal for recovery.")
+        }
+    }
     // Call only after validating a fresh broker lookup for this mutation.
     func mayRetryCancellation(now: Date) -> Bool {
         guard let order, !["filled", "canceled", "expired", "rejected", "replaced", "pending_cancel"].contains(order.status) else { return false }
@@ -215,6 +223,7 @@ struct IntentPairing: Codable {
         self.monotonic = monotonic; entryClock = EntryClock(wall: now, mono: monotonic)
         self.session = session
         state = FileManager.default.fileExists(atPath: file.path) ? try JSONDecoder().decode(IntentState.self, from: Data(contentsOf: file)) : IntentState()
+        for trade in state.trades.values { for mutation in trade.mutations { try mutation.validateLocalDisposition() } }
     }
     static func local() throws -> IntentController {
         let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("SentinelCrier")
@@ -561,6 +570,7 @@ struct IntentPairing: Codable {
             let order = try await api.submitIntent(symbol: e.symbol, quantity: quantity, price: price, sell: sell, option: e.asset == "option", clientID: clientID, canSubmit: { [self] in
                 guard !Task.isCancelled, self.api === api, pair != nil else { refusal = "operation_stopped"; return false }
                 guard state.trades[id]?.desired?.event_id == e.event_id else { refusal = "revision_changed"; return false }
+                guard hosting || state.preferences.samePricing(as: preference) else { refusal = "pricing_changed"; return false }
                 if sell { return true }
                 guard let sample = entryClock.read() else { refusal = "clock_changed"; return false }
                 guard state.trades[id]?.invalidated == false, state.trades[id]?.entrySkipped != true else { refusal = "invalidated"; return false }

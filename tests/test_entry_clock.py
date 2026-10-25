@@ -62,3 +62,14 @@ def test_entry_clock_uncertainty_does_not_block_an_exit(tmp_path):
     clock.read=lambda: (_ for _ in ()).throw(ClockUncertain())
     engine.accept(event('exit',2,buy['trade_id'])); assert engine.tick()[0]['state']=='submitted'
     assert broker.sent[-1]['side']=='sell'
+
+
+def test_pricing_change_during_preflight_never_sends_the_old_price(tmp_path):
+    broker=Broker(); engine=IntentEngine(tmp_path/'orders.db',broker); engine.save_settings({'enabled':True})
+    def checked(order,allowed):
+        engine.save_settings({'mode':'bounded_limit','max_slippage_amount':'0.01'})
+        if not allowed(): raise BrokerSuperseded('Pricing changed before dispatch')
+        broker.submit(order)
+    broker.submit_checked=checked; instruction=event(); engine.accept(instruction)
+    assert engine.tick()[0]['state']=='superseded'; assert not broker.sent
+    assert any(r['details'].get('reason')=='pricing_changed' for r in engine.trade_trace(instruction['trade_id']))

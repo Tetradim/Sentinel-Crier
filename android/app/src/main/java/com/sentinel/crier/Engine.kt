@@ -60,10 +60,12 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
    journal.setMeta("quantity:$client",qty.toString())
    journal.unknown(client,trade,seq,if(sell) "sell" else "buy")
   }
+  fun pricing()=Triple(config.optString("mode","exact_limit"),config.optInt("bps",100),config.optString("amount","0.02"))
+  val submittedPricing=pricing()
   var refused="revision_changed"
   try { val result=broker.submit(e,client,qty,sell) {
    val current=journal.revision(trade)
-   if(current.first!=seq) false else if(sell) true else {
+   if(current.first!=seq) false else if(pricing()!=submittedPricing) { refused="pricing_changed"; false } else if(sell) true else {
     val sample=entryTime.read()
     val created=Instant.parse(e.getString("created_at")); val expiry=Instant.parse(e.getString("expires_at"))
     refused=when { sample==null->"clock_changed"; current.second->"invalidated"; paused()->"entries_paused"; sample.wall<created->"future_created_at"; sample.effective>=expiry->"expired"; sample.effective>created.plusSeconds(config.optInt("age",10).toLong())->"max_age"; e.getInt("quantity")>config.optInt("maxQuantity",1000)->"max_quantity"; else->"" }

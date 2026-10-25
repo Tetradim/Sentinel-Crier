@@ -31,6 +31,13 @@ class EngineTest {
   override fun submit(event:JSONObject,client:String,quantity:Int,sell:Boolean,canSubmit:()->Boolean):JSONObject { beforeSubmit?.invoke(); if(!canSubmit()) throw Superseded(); submissionError?.let { throw it }; posts++; this.quantity=quantity; val r=JSONObject().put("status","accepted").put("id","broker").put("filled_qty","0").put("client_order_id",client).put("symbol",event.getString("symbol")).put("side",if(sell) "sell" else "buy").put("qty",quantity.toString()); remote=r; return r }
  }
  private fun event(action:String="enter",seq:Int=1)=JSONObject().put("event_id","event").put("trade_id","trade").put("sequence",seq).put("action",action).put("symbol","SPY").put("asset","stock").put("quantity",5).put("limit_price","1.00").put("created_at",Instant.now().toString()).put("expires_at",Instant.now().plusSeconds(30).toString())
+ @Test fun pricingChangedDuringPreflightNeverPostsTheOldOrder() {
+  val s=Store(); val b=Fake(); val config=JSONObject().put("account","account").put("role","follower")
+  b.beforeSubmit={ config.put("mode","bounded_limit") }
+  Engine(s,config,b) { false }.step(event())
+  assertEquals(0,b.posts); assertEquals("superseded",s.os.single().state)
+  assertTrue(s.reasons.any { it.contains("pricing_changed") })
+ }
  @Test fun changedClockDefersEntryAndDoesNotBlockCancellation() {
   var wall=Instant.now(); val base=wall; var mono=1000L; val s=Store(); val b=Fake()
   val e=event().put("created_at",base.minusSeconds(1).toString()).put("expires_at",base.plusSeconds(20).toString())
@@ -49,6 +56,20 @@ class EngineTest {
   Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={wall},entryClock=EntryClock({wall},{1000L})) { false }.step(e)
   assertEquals(0,b.posts); assertEquals("superseded",s.os.single().state)
   assertTrue(s.reasons.any { it.contains("clock_changed") })
+ }
+ @Test fun backwardSlewCannotOpenAFutureEntryCreationGate() {
+  val base=Instant.now(); var wall=base; var mono=1000L; val s=Store(); val b=Fake()
+  val engine=Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={wall},entryClock=EntryClock({wall},{mono})) { false }
+  val e=event().put("created_at",base.plusMillis(500).toString()).put("expires_at",base.plusSeconds(20).toString())
+  wall=wall.minusSeconds(1); mono+=1000; engine.step(e)
+  assertEquals(0,b.posts); assertFalse(s.done); assertTrue(s.reasons.any { it.contains("future_created_at") })
+ }
+ @Test fun tightenedQuantityCapDuringPreflightPreventsPost() {
+  val s=Store(); val b=Fake(); val config=JSONObject().put("account","account").put("role","follower")
+  b.beforeSubmit={config.put("maxQuantity",2)}
+  Engine(s,config,b) { false }.step(event())
+  assertEquals(0,b.posts); assertEquals("superseded",s.os.single().state)
+  assertTrue(s.reasons.any { it.contains("max_quantity") })
  }
  private fun engine(s:Store,b:Fake)=Engine(s,JSONObject().put("account","account").put("role","follower"),b) { false }
  @Test fun clientIdMatchesAcrossInstallations() { val first=Store(); val second=Store(); engine(first,Fake()).step(event()); engine(second,Fake()).step(event()); assertEquals("si-event-b",first.os.single().client); assertEquals(first.os.single().client,second.os.single().client) }
