@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "entry": [
+    {"id":"legacy-source","input":{"source_quantity":10,"asset":"stock","limit_price":"10"},"expected":{"decision":"eligible","reason":"calculated","target_quantity":10,"estimated_notional":"100"}},
+    {"id":"fixed-local-units","input":{"source_quantity":10,"asset":"stock","limit_price":"10","policy":{"mode":"fixed","fixed_quantity":3}},"expected":{"decision":"eligible","target_quantity":3,"estimated_notional":"30"}},
+    {"id":"ratio-rounds-down","input":{"source_quantity":7,"asset":"stock","limit_price":"10","policy":{"mode":"ratio","ratio_bps":5000}},"expected":{"decision":"eligible","target_quantity":3}},
+    {"id":"ratio-never-rounds-up-to-one","input":{"source_quantity":1,"asset":"stock","policy":{"mode":"ratio","ratio_bps":5000}},"expected":{"decision":"skip","reason":"below_one_unit","target_quantity":0}},
+    {"id":"option-budget-at-source-limit","input":{"source_quantity":10,"asset":"option","contract_size":100,"limit_price":"0.20","policy":{"mode":"budget","budget":"150"}},"expected":{"decision":"eligible","target_quantity":7,"estimated_notional":"140"}},
+    {"id":"budget-uses-final-bounded-price","input":{"source_quantity":10,"asset":"option","contract_size":100,"limit_price":"0.22","policy":{"mode":"budget","budget":"150"}},"expected":{"decision":"eligible","target_quantity":6,"estimated_notional":"132"}},
+    {"id":"option-source-cap-rejects-before-ratio","input":{"source_quantity":11,"asset":"option","contract_size":100,"limit_price":"0.20","policy":{"mode":"ratio","ratio_bps":1000,"max_source_quantity":10}},"expected":{"decision":"skip","reason":"source_quantity_cap","target_quantity":0}},
+    {"id":"local-cap-does-not-clamp","input":{"source_quantity":2,"asset":"stock","limit_price":"1","policy":{"mode":"fixed","fixed_quantity":10,"max_local_quantity":5}},"expected":{"decision":"skip","reason":"local_quantity_cap","target_quantity":0}},
+    {"id":"notional-cap-rejects","input":{"source_quantity":10,"asset":"option","contract_size":100,"limit_price":"0.20","policy":{"max_entry_notional":"199.99"}},"expected":{"decision":"skip","reason":"entry_notional_cap","target_quantity":0}},
+    {"id":"notional-boundary-inclusive","input":{"source_quantity":10,"asset":"option","contract_size":100,"limit_price":"0.20","policy":{"max_entry_notional":"200"}},"expected":{"decision":"eligible","target_quantity":10,"estimated_notional":"200"}},
+    {"id":"market-cannot-guarantee-budget","input":{"source_quantity":10,"asset":"stock","policy":{"mode":"budget","budget":"100"}},"expected":{"decision":"blocked","reason":"valuation_unavailable","target_quantity":0}},
+    {"id":"market-cannot-guarantee-notional-cap","input":{"source_quantity":10,"asset":"stock","policy":{"max_entry_notional":"100"}},"expected":{"decision":"blocked","reason":"valuation_unavailable"}},
+    {"id":"market-without-notional-guard-is-only-an-estimateless-preview","input":{"source_quantity":10,"asset":"stock"},"expected":{"decision":"eligible","target_quantity":10,"estimated_notional":null}},
+    {"id":"option-size-is-not-guessed","input":{"source_quantity":10,"asset":"option","limit_price":"0.20"},"expected":{"decision":"blocked","reason":"contract_size_unverified"}},
+    {"id":"adjusted-options-unsupported","input":{"source_quantity":10,"asset":"option","contract_size":50,"limit_price":"0.20"},"expected":{"decision":"blocked","reason":"unsupported_contract_size"}},
+    {"id":"decimal-budget-boundary","input":{"source_quantity":10,"asset":"stock","limit_price":"0.03","policy":{"mode":"budget","budget":"0.29"}},"expected":{"decision":"eligible","target_quantity":9,"estimated_notional":"0.27"}}
+  ],
+  "exit": [
+    {"id":"legacy-exit-bounded-by-tracked-holdings","input":{"requested_quantity":10,"bought":4,"sold":1,"available":100,"reconciled":true},"expected":{"decision":"eligible","quantity":3}},
+    {"id":"same-instruction-does-not-resell","input":{"requested_quantity":2,"bought":5,"sold":2,"sold_for_instruction":2,"available":100,"reconciled":true},"expected":{"decision":"skip","reason":"nothing_due","quantity":0}},
+    {"id":"available-holdings-bound","input":{"requested_quantity":5,"bought":5,"sold":0,"available":1,"reconciled":true},"expected":{"decision":"eligible","quantity":1}},
+    {"id":"unknown-outcome-blocks-calculation","input":{"requested_quantity":5,"bought":5,"sold":0,"available":5},"expected":{"decision":"blocked","reason":"reconciliation_required","quantity":0}},
+    {"id":"missing-holdings-is-not-zero-proof","input":{"requested_quantity":5,"bought":5,"sold":0,"available":null,"reconciled":true},"expected":{"decision":"blocked","reason":"availability_unavailable"}},
+    {"id":"reserved-holdings-wait","input":{"requested_quantity":5,"bought":5,"sold":0,"available":0,"reconciled":true},"expected":{"decision":"blocked","reason":"holdings_unavailable"}},
+    {"id":"proportional-partial-source-exit","input":{"mode":"proportional","requested_quantity":2,"bought":7,"sold":0,"available":100,"source_entry_quantity":10,"source_exit_cumulative":2,"reconciled":true},"expected":{"decision":"eligible","quantity":1}},
+    {"id":"proportional-cumulative-not-per-event-rounding","input":{"mode":"proportional","requested_quantity":3,"bought":7,"sold":1,"available":100,"source_entry_quantity":10,"source_exit_cumulative":5,"reconciled":true},"expected":{"decision":"eligible","quantity":2}},
+    {"id":"complete-exit-includes-reconciled-late-fills","input":{"mode":"proportional","requested_quantity":10,"bought":8,"sold":3,"available":100,"source_entry_quantity":10,"source_exit_cumulative":10,"reconciled":true},"expected":{"decision":"eligible","quantity":5}},
+    {"id":"full-close-does-not-use-unrelated-holdings","input":{"mode":"close_tracked","requested_quantity":1,"bought":3,"sold":1,"available":100,"reconciled":true},"expected":{"decision":"eligible","quantity":2}},
+    {"id":"inconsistent-source-counters-block","input":{"mode":"proportional","requested_quantity":1,"bought":3,"sold":0,"available":3,"source_entry_quantity":5,"source_exit_cumulative":6,"reconciled":true},"expected":{"decision":"blocked","reason":"source_exit_inconsistent"}},
+    {"id":"inconsistent-journal-blocks","input":{"requested_quantity":1,"bought":1,"sold":2,"available":100,"reconciled":true},"expected":{"decision":"blocked","reason":"inconsistent_journal"}}
+  ]
+}

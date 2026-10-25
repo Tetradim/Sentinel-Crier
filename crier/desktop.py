@@ -528,9 +528,13 @@ class DesktopApp:
                      values=('exact_limit','bounded_limit','market')).pack(side='left')
         self.slippage = self._entry(frame, 'Maximum slippage ($)', '0.02')
         self.bps = self._entry(frame, 'Maximum slippage (bps)', '100')
-        self.age = self._entry(frame, 'Maximum entry age (sec)', '10')
-        self.quantity_cap = self._entry(frame, 'Maximum entry quantity', '1000')
+        self.age = self._entry(frame, 'Entry submit age (sec)', '10')
+        self.quantity_cap = self._entry(frame, 'Source quantity cap', '1000')
         ttk.Label(frame, text='Bounded limit uses the smaller allowance. Market orders have no price bound.').pack(anchor='w', pady=4)
+        ttk.Label(frame, text='The cap rejects larger source instructions; it does not set each order size. Following uses source units.\n'
+                  'Entry age is checked before submission. Day orders may remain working afterward.\n'
+                  'Pausing new entries leaves cancel and exit instructions active; existing broker orders remain.',
+                  wraplength=700).pack(anchor='w', pady=6)
         ttk.Button(frame, text='Save pricing settings', command=self.save_settings).pack(anchor='w', pady=6)
 
     def copy_invitation(self):

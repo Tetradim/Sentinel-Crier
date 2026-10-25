@@ -97,8 +97,10 @@ struct IntentSettingsView: View {
             }
             Stepper("Slippage: \(preferences.maxSlippageBps) bps", value: $preferences.maxSlippageBps, in: 0...1000)
             TextField("Maximum absolute slippage", text: $preferences.maxSlippageAmount).keyboardType(.decimalPad)
-            Stepper("Maximum age: \(preferences.maxAgeSeconds)s", value: $preferences.maxAgeSeconds, in: 1...30)
-            Stepper("Maximum quantity: \(preferences.maxQuantity)", value: $preferences.maxQuantity, in: 1...1000)
+            Stepper("Entry submit age: \(preferences.maxAgeSeconds)s", value: $preferences.maxAgeSeconds, in: 1...30)
+            Stepper("Source quantity cap: \(preferences.maxQuantity)", value: $preferences.maxQuantity, in: 1...1000)
+            Text("The cap rejects larger source instructions; it does not set each order size. Following uses source units.").font(.footnote)
+            Text("Entry age is checked before submission. Day orders may remain working afterward. Pausing new entries leaves cancel and exit instructions active.").font(.footnote)
             Button("Apply follower settings") { do { try controller.settings(preferences); message = "Saved." } catch { message = error.localizedDescription } }
             Text(controller.message).font(.footnote)
             Text("Unresolved tracked trades: \(controller.state.unresolved.count) • queued relay events: \(controller.state.outgoing.count)").font(.caption)

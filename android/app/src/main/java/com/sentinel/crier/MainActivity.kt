@@ -77,10 +77,10 @@ class MainActivity:Activity() {
   val mode=ChoicePicker("Order pricing",SetupChoices.pricing,old.optString("mode","exact_limit"))
   lateinit var bps:EditText; lateinit var amount:EditText; lateinit var age:EditText; lateinit var max:EditText
   val limits=TextView(this).apply { panel.addView(this) }
-  fun updateLimits() { limits.text="Pricing: ${mode.label()}. Maximum entry quantity: ${max.text} (allowed 1–1000). Entry age: ${age.text}s. Slippage: ${bps.text} bps / $${amount.text} for bounded limits. Limits do not guarantee fills." }
+  fun updateLimits() { limits.text="Pricing: ${mode.label()}. Source quantity cap: ${max.text} (allowed 1–1000). Entry submit age: ${age.text}s. Slippage: ${bps.text} bps / $${amount.text} for bounded limits.\nThe cap rejects larger source instructions; it does not set each order size. Entry age is checked before submission. Day orders may remain working afterward. Pausing new entries leaves cancel and exit instructions active. Limits do not guarantee fills." }
   advanced("Advanced · execution limits") {
    bps=field("Maximum slippage basis points",old.optString("bps","100")); amount=field("Maximum slippage dollars",old.optString("amount","0.02"))
-   age=field("Maximum entry age seconds (1–30)",old.optString("age","10")); max=field("Maximum quantity (1–1000)",old.optString("maxQuantity","1000"))
+   age=field("Entry submit age seconds (1–30)",old.optString("age","10")); max=field("Source quantity cap (1–1000)",old.optString("maxQuantity","1000"))
   }
   updateLimits()
   mode.view.onItemSelectedListener=object:AdapterView.OnItemSelectedListener { override fun onItemSelected(parent:AdapterView<*>?,view:android.view.View?,position:Int,id:Long) { updateLimits() }; override fun onNothingSelected(parent:AdapterView<*>?) {} }
