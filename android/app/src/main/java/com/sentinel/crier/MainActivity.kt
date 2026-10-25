@@ -45,7 +45,10 @@ class MainActivity:Activity() {
   panel=contents
   try { build() } finally { panel=parent }
  }
- private fun field(label:String,value:String="",secret:Boolean=false):EditText { panel.addView(TextView(this).apply { text=label }); return EditText(this).apply { setText(value); if(secret) inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD; panel.addView(this) } }
+ private fun field(label:String,value:String="",secret:Boolean=false):EditText {
+  val input=EditText(this).apply { id=android.view.View.generateViewId(); hint=label; setText(value); if(secret) inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }
+  panel.addView(TextView(this).apply { text=label; labelFor=input.id }); panel.addView(input); return input
+ }
  private fun button(label:String,action:()->Unit):Button = Button(this).apply { text=label; setOnClickListener { try { action() } catch(e:Exception) { status.text=e.message } }; panel.addView(this) }
  private fun background(action:()->String) { val lifecycle=lifecycleRevision; val setupRevision=guided?.revision(); io.submit { if(isDestroyed || (guided!=null && (!foreground || lifecycle!=lifecycleRevision || setupRevision!=guided?.revision()))) { runOnUiThread { alertsPolling=false }; return@submit }; val message=try { action() } catch(e:Exception) { e.message ?: "Operation failed" }; runOnUiThread { status.text=message } } }
  override fun onCreate(state:Bundle?) {
@@ -63,6 +66,7 @@ class MainActivity:Activity() {
   button("Trade / share · place and mirror orders") { chooseJourney("trade") }
   button("Follow · receive a trader’s orders") { chooseJourney("follow") }
   button("Connection health and recovery") { showHealth() }
+  button("Optional paper practice / support") { showPracticeGuide() }
   if(journey=="alerts") { alertsSetup(); return }
   if(journey.isBlank()) { status.text="Choose Alerts, Trade / share, or Follow. No connection or delivery starts from this screen."; return }
   panel.addView(TextView(this).apply { text=if(journey=="follow") "Follow: join by invitation, verify your own account, then explicitly enable execution. Recovery tools remain below." else "Trade / share: Host a connection, verify your account, then explicitly enable execution. Discord sharing is optional." })

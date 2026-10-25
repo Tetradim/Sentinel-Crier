@@ -12,11 +12,13 @@ from .desktop_runtime import DesktopWorker, data_directory
 from .connection_client import default_origin
 from .lock import AlreadyRunningError, single_process
 from .desktop_setup import SetupProgress
+from .desktop_practice import PracticeWindow, readonly_traversal
 
 
 class DesktopApp:
     def __init__(self, root, worker, *, presence=None, startup=False):
         self.root, self.worker = root, worker
+        self.practice_window = None
         self.presence = presence
         self.pending = []
         self.connection_jobs = set()
@@ -85,6 +87,7 @@ class DesktopApp:
         ttk.Label(outer, text='Keep this PC awake. Closing stops Crier unless tray mode is enabled. Quit stops monitoring; broker orders remain.',
                   style='Subtitle.TLabel').pack(anchor='w', pady=(6,0))
         root.protocol('WM_DELETE_WINDOW', self.close)
+        root.bind('<F1>',lambda event:self.open_practice())
         if self.presence is not None:
             self.presence.start()
             if self.presence.error:
@@ -100,6 +103,17 @@ class DesktopApp:
         for label, purpose in [('Send my fills to Discord', 'alerts'), ('Trade/share trades', 'trade'), ('Follow trades', 'follow')]:
             ttk.Button(frame, text=label, command=lambda p=purpose: self.choose_purpose(p)).pack(anchor='w', pady=8)
         ttk.Label(frame, text='Other tools and existing recovery evidence remain available in the tabs above.', wraplength=700).pack(anchor='w', pady=12)
+        ttk.Button(frame,text='Optional paper practice / support (F1)',command=self.open_practice).pack(anchor='w',pady=4)
+
+    def open_practice(self):
+        try:
+            if self.practice_window is not None and self.practice_window.window.winfo_exists():
+                self.practice_window.window.deiconify(); self.practice_window.window.lift()
+            else:
+                self.practice_window=PracticeWindow(self.root)
+            return self.practice_window
+        except (OSError,ValueError):
+            self.notice.set('Practice guide unavailable. See the project README and support page; account controls remain available.')
 
     def choose_purpose(self, purpose):
         if self.connected:
@@ -275,6 +289,7 @@ class DesktopApp:
         ttk.Button(row, text='Preview saved alert', command=self.setup_preview).pack(side='left')
         ttk.Button(row, text='Send labeled test message', command=self.setup_test).pack(side='left', padx=4)
         self.delivery_details = tk.Text(advanced, height=4, wrap='word', state='disabled')
+        readonly_traversal(self.delivery_details)
         self.delivery_details.pack(fill='both', expand=True)
         for value in (self.delivery_webhook, self.delivery_style, self.delivery_quantity, self.delivery_timestamp):
             value.trace_add('write', self.setup_edited)
@@ -653,6 +668,7 @@ class DesktopApp:
             ttk.Button(controls, text='Export ' + format.upper(),
                        command=lambda f=format: self.save_diagnostics(f)).pack(side='left', padx=4)
         self.diagnostic_text = tk.Text(frame, wrap='word', state='disabled', font=('Consolas', 10))
+        readonly_traversal(self.diagnostic_text)
         self.diagnostic_text.pack(fill='both', expand=True)
 
     def selected_diagnostic_trade(self):
@@ -925,6 +941,8 @@ def smoke_test(report=None):
     import os
     import sys
     from .device_secrets import save_secret, load_secret
+    from .customer_guide import load_guide
+    assert len(load_guide().journeys)==3, 'Missing bundled customer practice guide'
     tray_result = 'not_requested'
     assert Path(__file__).with_name('connection-service.json').exists(), 'Missing bundled connection-service resource'
     with tempfile.TemporaryDirectory(prefix='crier-desktop-smoke-') as folder:

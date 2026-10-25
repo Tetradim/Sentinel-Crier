@@ -22,6 +22,9 @@ targets:
       - path: SentinelCrier/AlpacaJournal.swift
       - path: SentinelCrier/AlpacaWorkspace.swift
       - path: SentinelCrier/GuidedSetup.swift
+      - path: SentinelCrier/PracticeGuide.swift
+      - path: ../crier/customer-practice.json
+        buildPhase: resources
       - path: SentinelCrier/MirrorConnection.swift
       - path: SentinelCrier/IntentDiagnostics.swift
       - path: SentinelCrier/IntentMirroring.swift
@@ -73,6 +76,7 @@ targets:
     sources:
       - path: SentinelCrier/AlpacaTests.swift
       - path: SentinelCrier/GuidedSetupTests.swift
+      - path: SentinelCrier/PracticeGuideTests.swift
       - path: SentinelCrier/MirrorTests.swift
       - path: SentinelCrier/IntentDiagnosticsTests.swift
       - path: SentinelCrier/IntentTests.swift
@@ -96,3 +100,34 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier.TradingTests
         GENERATE_INFOPLIST_FILE: YES
+  CustomerUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: CustomerUITests
+    dependencies:
+      - target: SentinelCrier
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tetradim.sentinelcrier.CustomerUITests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: SentinelCrier
+schemes:
+  SentinelCrier:
+    build:
+      targets:
+        SentinelCrier: all
+  TradingTests:
+    build:
+      targets:
+        SentinelCrier: all
+    test:
+      targets:
+        - TradingTests
+  CustomerAcceptance:
+    build:
+      targets:
+        SentinelCrier: all
+    test:
+      targets:
+        - CustomerUITests

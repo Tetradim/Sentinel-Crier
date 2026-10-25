@@ -2,9 +2,9 @@ name: Android build and intent tests
 on:
   workflow_dispatch:
   push:
-    paths: ['release.json', 'android/**', 'crier/connection-service.json', '.github/workflows/android-build.yml']
+    paths: ['release.json', 'android/**', 'crier/connection-service.json', 'crier/customer-practice.json', '.github/workflows/android-build.yml']
   pull_request:
-    paths: ['release.json', 'android/**', 'crier/connection-service.json', '.github/workflows/android-build.yml']
+    paths: ['release.json', 'android/**', 'crier/connection-service.json', 'crier/customer-practice.json', '.github/workflows/android-build.yml']
 permissions:
   contents: read
 jobs:

@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "notice": "Paper practice is optional. This guide does not connect accounts, place orders, send alerts, or authorize live trading. Keep iPhone Crier in the foreground, Android workers available, and the PC awake.",
+  "privacy": "For support, remove API keys, passwords, bearer tokens, invitation links, webhook URLs and account data. Do not upload raw journals or credentials to public issues.",
+  "journeys": [
+    {"id":"alerts","title":"Alerts only","steps":[
+      {"title":"Connect a paper account","body":"Choose Alerts and the paper environment. Verify the account shown after connecting. Alerts-only setup does not need a Host or Receive invitation."},
+      {"title":"Save and preview the destination","body":"Choose the intended Discord channel and save its destination. Preview the format and quantity fields. Saving a destination and viewing a preview do not authorize publishing."},
+      {"title":"Optionally send a labeled test","body":"Request a synthetic test only when you want one. Inspect its acknowledgement and the chosen channel. A test is not a brokerage fill. If acknowledgement is uncertain, inspect Discord before retrying."},
+      {"title":"Explicitly enable publishing","body":"Enable fill delivery when ready. Changing a destination or format can require fresh publishing permission. A successful test never enables order execution."},
+      {"title":"Observe a new paper fill","body":"Wait until monitoring reports observing, then make a supported paper trade in the brokerage. Compare contract, buy or sell side, quantity, premium and time with the broker. The initial activity fetch is a suppressed baseline; historical fills are not a first-success test."},
+      {"title":"Inspect receipt and reconnect behavior","body":"Compare delivery history with the actual Discord message. Disconnect and reconnect, verify the same account, and explicitly enable publishing again. Uncertain receipts retain their evidence; never clear app data to resolve them."}
+    ]},
+    {"id":"trade","title":"Trade / share","steps":[
+      {"title":"Set up a paper host","body":"Choose Trade or Host, select paper, and verify the intended brokerage account. Create an invitation through the existing Host controls. Opening this guide does not create or share one."},
+      {"title":"Pair a paper receiver","body":"On another device, choose Follow or Receive and enter the invitation. Verify its own paper account and role. The devices may use different networks. Enable new receiver entries explicitly when ready."},
+      {"title":"Check the execution settings","body":"Review exact-limit, bounded-limit or explicitly selected market pricing, the source quantity cap and entry submit age. The cap rejects larger instructions; it does not set every order to that size. Working day orders may remain open after the entry age."},
+      {"title":"Enter a paper order inside Crier","body":"Choose a currently supported instrument and a limit you understand. Enter the order in Crier, then compare both broker order records, including the complete option contract when applicable. Orders placed in another brokerage app do not reveal their original submission instantly."},
+      {"title":"Replace or cancel and inspect partial fills","body":"Use the existing replace or cancel controls. Inspect each broker's actual status before assuming an order stopped. Racing fills remain holdings; canceling a buy does not sell filled units."},
+      {"title":"Exit tracked paper holdings","body":"Use an explicit exit instruction. Compare sell quantity, actual fills and remaining holdings on both accounts. Available or unrelated holdings do not increase the units tracked for this trade. Matching prices and fills are not guaranteed."},
+      {"title":"Reconcile after interruption","body":"Return to the app after an interruption and inspect connection health and order history. Unknown submissions require broker reconciliation, not a blind resend or a manual resolved flag. Retain the original account, pairing and journal."}
+    ]},
+    {"id":"follow","title":"Follow trades","steps":[
+      {"title":"Join a paper host","body":"Choose Follow or Receive, enter a paper invitation, and verify your own paper account. Check the account, environment and receiver role before enabling new entries."},
+      {"title":"Review local settings","body":"Review pricing, source quantity cap and entry submit age. Following currently uses source units. Proposed fixed, ratio, budget and proportional-exit policies are design-only and are not selectable live features."},
+      {"title":"Enable deliberately and compare orders","body":"Enable new entries explicitly. Have the host enter a paper order inside Crier. Compare the complete symbol or option contract, side, quantity, limit and actual broker status. A relay receipt alone is not a fill."},
+      {"title":"Check cancel and exit handling","body":"Inspect host cancellation and explicit exits. Pausing new entries leaves cancel and exit instructions active. A cancellation does not close already-filled positions; an exit is bounded by tracked and available holdings."},
+      {"title":"Inspect recovery instead of resending","body":"If a request or acknowledgement is uncertain, open health and tracked order history and reconcile the original account. Never clear the journal or re-pair to bypass an unresolved outcome."},
+      {"title":"Record the actual outcome","body":"Use broker and Discord receipts as applicable. Record first-success timing from your own setup and devices, without secrets. Simulator tests and offline automation timings do not establish real customer setup time or network latency."}
+    ]}
+  ]
+}

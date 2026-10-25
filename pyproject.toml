@@ -23,7 +23,7 @@ crier-desktop = "crier.desktop:main"
 crier = "crier.__main__:main"
 
 [tool.setuptools.package-data]
-crier = ["static/*", "connection-service.json"]
+crier = ["static/*", "connection-service.json", "customer-practice.json"]
 
 [tool.setuptools.packages.find]
 include = ["crier*"]

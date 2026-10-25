@@ -22,6 +22,10 @@ struct GuidedSetupView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Optional practice and support") {
+                    NavigationLink("Optional paper practice", destination: PracticeGuideView())
+                        .accessibilityIdentifier("open-practice-guide")
+                }
                 Section("Account overview") {
                     NavigationLink("Connection health and recovery", destination: NativeHealthView())
                     NavigationLink("Provider connections and Crier sign-in", destination: ProviderConnectionsView())

@@ -20,14 +20,14 @@ val signingValues = signingVariables.associateWith { providers.environmentVariab
 val signingReady = signingValues.values.all { !it.isNullOrBlank() }
 if (signingReady) require(file(signingValues.getValue("ANDROID_KEYSTORE_PATH")!!).isFile) { "Release keystore path must be an existing file" }
 val connectionAssets = tasks.register<Copy>("copyConnectionService") {
- from("../../crier") { include("connection-service.json") }
+ from("../../crier") { include("connection-service.json", "customer-practice.json") }
  into(layout.buildDirectory.dir("generated/connectionAssets"))
 }
 android {
  sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/connectionAssets"))
  namespace = "com.sentinel.crier"
  compileSdk = 35
- defaultConfig { applicationId = "com.sentinel.crier"; minSdk = 26; targetSdk = 35; versionCode = requireNotNull(releaseCode); versionName = releaseName }
+ defaultConfig { applicationId = "com.sentinel.crier"; minSdk = 26; targetSdk = 35; versionCode = requireNotNull(releaseCode); versionName = releaseName; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
  signingConfigs {
   if (signingReady) create("release") {
    storeFile = file(signingValues.getValue("ANDROID_KEYSTORE_PATH")!!)
@@ -42,6 +42,8 @@ android {
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget = "17" }
  sourceSets.getByName("test").resources.srcDir("../../tests/fixtures")
+ sourceSets.getByName("test").resources.srcDir(layout.buildDirectory.dir("generated/connectionAssets"))
+ testOptions { animationsDisabled = true }
 }
 tasks.named("preBuild") { dependsOn(connectionAssets) }
 gradle.taskGraph.whenReady {
@@ -50,3 +52,9 @@ gradle.taskGraph.whenReady {
 }
 dependencies { testImplementation("junit:junit:4.13.2") }
 dependencies { testImplementation("org.json:json:20240303") }
+dependencies {
+ androidTestImplementation("androidx.test:runner:1.6.2")
+ androidTestImplementation("androidx.test:rules:1.6.1")
+ androidTestImplementation("androidx.test.ext:junit:1.2.1")
+ androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+}
