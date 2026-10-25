@@ -45,6 +45,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/webull-connect/token_store.sql
           psql -v ON_ERROR_STOP=1 -f supabase/webull-connect/authorization_flow.sql
           psql -v ON_ERROR_STOP=1 -f supabase/webull-connect/operations.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/provider-connect/flow_store.sql
           for test in supabase/tests/*.sql; do psql -v ON_ERROR_STOP=1 -f "$test"; done
           psql -v ON_ERROR_STOP=1 -c "SET crier.test_dsn = 'host=127.0.0.1 port=5432 dbname=crier_test user=postgres password=local-test-only';" -f supabase/tests/integration/concurrency.sql
           psql -v ON_ERROR_STOP=1 -c "SET crier.test_dsn = 'host=127.0.0.1 port=5432 dbname=crier_test user=postgres password=local-test-only';" -f supabase/tests/integration/webull_sessions_concurrency.sql
