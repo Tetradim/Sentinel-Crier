@@ -27,6 +27,7 @@ targets:
       - path: SentinelCrier/IntentMirroring.swift
       - path: SentinelCrier/IntentViews.swift
       - path: SentinelCrier/QuickConnection.swift
+      - path: SentinelCrier/OAuthReturn.swift
       - path: ../crier/connection-service.json
         buildPhase: resources
       - path: SentinelCrier/SentinelCrierApp.swift
@@ -66,6 +67,9 @@ targets:
       - path: SentinelCrier/IntentDiagnosticsTests.swift
       - path: SentinelCrier/IntentTests.swift
       - path: SentinelCrier/QuickConnectionTests.swift
+      - path: SentinelCrier/OAuthReturnTests.swift
+      - path: ../tests/fixtures/oauth-return.json
+        buildPhase: resources
       - path: SentinelCrier/Phase2FlowTests.swift
       - path: ../tests/fixtures/phase2-protocol.json
         buildPhase: resources

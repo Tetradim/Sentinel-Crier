@@ -11,6 +11,7 @@ dependencies = ["fastapi==0.143.0", "uvicorn==0.54.0", "httpx==0.28.1", "tzdata=
 
 [project.optional-dependencies]
 webull = ["webull-openapi-python-sdk==3.0.3"]
+oauth = ["cryptography==50.0.2"]
 test = ["pytest==9.1.1"]
 desktop-build = ["pyinstaller==6.16.0"]
 

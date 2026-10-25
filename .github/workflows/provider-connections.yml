@@ -1,0 +1,37 @@
+name: Provider connection preparation
+on:
+  workflow_dispatch:
+  push:
+    paths: ['crier/oauth*.py', 'tests/test_oauth*.py', 'tests/fixtures/oauth-return.json', 'pyproject.toml', '.github/workflows/provider-connections.yml']
+  pull_request:
+    paths: ['crier/oauth*.py', 'tests/test_oauth*.py', 'tests/fixtures/oauth-return.json', 'pyproject.toml', '.github/workflows/provider-connections.yml']
+permissions:
+  contents: read
+jobs:
+  offline:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: '3.11'
+          - os: ubuntu-latest
+            python: '3.12'
+          - os: windows-latest
+            python: '3.11'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: python -m pip install -e ".[test,oauth]"
+      - run: python -m pytest -q --junitxml=acceptance-results/provider-preparation.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: provider-preparation-${{ matrix.os }}-${{ matrix.python }}
+          path: acceptance-results/provider-preparation.xml
+          if-no-files-found: warn
