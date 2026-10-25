@@ -1,7 +1,35 @@
 import asyncio
 import json
+import pytest
 
 from scripts.benchmark_relay import run_benchmark, summarize
+
+
+@pytest.mark.parametrize('reject_at',[1,7,41])
+def test_receive_gate_probe_tolerates_one_window_boundary_and_stops_at_rejection(reject_at):
+    from scripts.benchmark_relay import receive_limit_gate
+    from types import SimpleNamespace
+    class Client:
+        calls=0
+        async def post(self,path,**kwargs):
+            self.calls+=1
+            assert path=='/api/connect/receive' and kwargs=={'json':{'code':'!'}}
+            return SimpleNamespace(status_code=429 if self.calls==reject_at else 422)
+    client=Client()
+    assert asyncio.run(receive_limit_gate(client))==429
+    assert client.calls==reject_at
+
+
+def test_receive_gate_probe_is_bounded_and_does_not_hide_missing_rate_limit():
+    from scripts.benchmark_relay import receive_limit_gate
+    from types import SimpleNamespace
+    class Client:
+        calls=0
+        async def post(self,*args,**kwargs):
+            self.calls+=1; return SimpleNamespace(status_code=422)
+    client=Client()
+    assert asyncio.run(receive_limit_gate(client))==422
+    assert client.calls==41
 
 
 def test_real_http_benchmark_preserves_deliveries_across_restart(tmp_path):

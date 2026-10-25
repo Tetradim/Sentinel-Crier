@@ -54,6 +54,16 @@ async def checked(client, method, path, **kwargs):
     return response.json()
 
 
+async def receive_limit_gate(client):
+    # The public gate permits 20 requests per fixed minute. A short probe can
+    # straddle a boundary: 21 attempts need not reject. At most 41 attempts
+    # exercise two windows; keep the first rejection, not the final response.
+    for _ in range(41):
+        response=await client.post('/api/connect/receive',json={'code':'!'})
+        if response.status_code==429: return 429
+    return response.status_code
+
+
 async def run_benchmark(data_dir, *, hosts=1, followers=10, events=50, timeout=60):
     """followers and events are per host; each run requires an empty directory."""
     if min(hosts, followers) < 1 or events < 2 or timeout <= 0:
@@ -182,9 +192,7 @@ async def run_benchmark(data_dir, *, hosts=1, followers=10, events=50, timeout=6
                 gates['malformed_event'] = (await client.post('/api/sync/events', headers=authorization(pairs[0]['host']), json={})).status_code
                 bad_client = await client_for(stack, app, 'malformed-receive')
                 gates['malformed_invitation'] = (await bad_client.post('/api/connect/receive', json={'code': '!'})).status_code
-                for _ in range(20):
-                    rate_response = await bad_client.post('/api/connect/receive', json={'code': '!'})
-                gates['receive_rate_limit'] = rate_response.status_code
+                gates['receive_rate_limit'] = await receive_limit_gate(bad_client)
                 receivers = await checked(client, 'GET', '/api/connect/receivers', headers=authorization(pairs[0]['host']))
                 await checked(client, 'POST', '/api/connect/receivers/' + receivers[0]['id'] + '/revoke', headers=authorization(pairs[0]['host']))
                 rejected = await client.get('/api/sync/events', headers=authorization(follower), params={'wait': 0})
