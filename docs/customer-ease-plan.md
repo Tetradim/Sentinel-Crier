@@ -47,7 +47,7 @@ Phase F is complete for its automated implementation scope. All three clients of
 
 Verification passed **594 local Python tests**, **68 Android JUnit tests** and **94 iOS tests**. CI passed [Windows packaging and installer lifecycle](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40149473582), [the final Android APK/tests](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40150273615), [iOS simulator/unsigned hardware archive](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40149688984), and [backend/iOS tests](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40149692050). Windows CI passed 593/one skip; Linux CI passed 574/20 platform skips. See the [implementation plan](superpowers/plans/2026-10-24-guided-setup.md) and [source-bound report](acceptance/2026-10-24/guided-setup/source-evidence.json).
 
-Phase G connection-flow preparation is next; H and I remain open. No physical test, external consent, real message send or broker order was performed for these changes. OAuth activation, Webull approval and signed iPhone distribution remain external requirements. The complete product is not declared finished.
+Phase G connection-flow preparation is implemented through G.5; customer integration G.6 remains open. The [provider plan](superpowers/plans/2026-10-25-provider-connections.md) and [operator guide](provider-connections.md) distinguish tested Alpaca/Discord exchanges, encrypted custody, authenticated HTTP composition and native return contracts from working customer OAuth. Login/BFF, a Supabase Edge adapter, installed return handlers and credential installation still need source integration. H and I remain open. No physical test, external consent, real message send or broker order was performed for these changes. OAuth activation, Webull approval and signed iPhone distribution remain external requirements. The complete product is not declared finished.
 
 ## Phase F acceptance details
 
@@ -56,3 +56,7 @@ Phase G connection-flow preparation is next; H and I remain open. No physical te
 - Verified setup progress is scoped to account, paper/live environment, pairing and Discord destination as relevant. A saved value is not proof of a fresh network connection; stale/failed verification remains visible.
 - Broker verification, Discord preview/test and permission to send real alerts are separate, explicit actions with clear results. Retry behavior must preserve current uncertain-delivery rules.
 - Reopening a configured app offers reconnect/reuse without retyping credentials, while execution retains its existing paused/authorization behavior. Changing accounts/destinations follows current journal/outbox preservation requirements.
+
+## Phase G preparation status
+
+The dedicated matrix passed Windows Python 3.11 (**765/one optional SDK skip**) and Linux Python 3.11/3.12 (**746/20 platform skips**). Android passed **72 tests** and debug APK packaging; iOS passed **98 tests**, simulator compilation and unsigned hardware archive validation. The [source-bound report](acceptance/2026-10-25/provider-preparation/source-evidence.json) links source `e36d68f`, the collection-time fixture correction `c7ac145`, and all CI runs. Existing API-key/webhook setup remains the customer operating path until G.6 integration and activation are complete.

@@ -2,6 +2,8 @@
 
 This is separately composed server groundwork for Alpaca and Discord OAuth. It is **not deployed**, not connected to the bundled relay, and not an active sign-in option in the customer apps. API-key/webhook setup from Phase F remains the operating path. Webull Connect still needs approval and its own adapter; this code does not implement it.
 
+The Python factory is a reference/test composition. Deploying on the owner's chosen Supabase Free target still needs an Edge-compatible gateway/custody adapter; this preparation does not select or require a new hosting account.
+
 ## What is implemented
 
 `OAuthApplication` pins provider hosts and registered HTTPS callbacks. Alpaca Alerts requests default read-only access; Trade requests only `trading`. Tokens are checked for unexpected scopes, then used for a GET to the selected paper/live account. Discord requests only `webhook.incoming` and validates the selected incoming webhook, guild and channel. Exchanges use bounded response bodies, operation/overall timeouts, no redirects and redacted errors. They never submit orders or send Discord messages.
@@ -72,7 +74,7 @@ Native protected calls use `Authorization: Bearer <customer session>`, not the s
 | `GET /oauth/callback/{provider}` | Bound state/code or denial, flow cookie, same browser owner; Discord also requires `iss=https://discord.com` | Opaque app return; its presence does not indicate success. |
 | `POST /oauth/status` | `flow` | Owner-scoped stage/expiry metadata, no credentials. |
 | `POST /oauth/redeem` | `flow`, original 43-character device `proof` | One-use validated credential envelope; caller must verify expected local identity before storage. |
-| `POST /oauth/cancel` | `flow`, device `proof` | Retained cancellation evidence, sensitive data scrubbed. |
+| `POST /oauth/cancel` | `flow`, device `proof` | Sensitive data scrubbed; cancellation metadata remains until expiry/cleanup. |
 
 Flow TTL is at most five minutes. Ready redemption is at most one minute and never extends the original deadline. An interrupted exchange is not made retryable after restart. Explicitly cancel/re-authorize after uncertainty; inspect/revoke provider authorization separately when appropriate. Cancellation removes local flow custody; it is not a remote provider-token revocation or a broker-order cancellation.
 
@@ -80,6 +82,7 @@ Flow TTL is at most five minutes. Ready redemption is at most one minute and nev
 
 - Register provider applications and exact HTTPS callbacks, establish callback-domain ownership and configure server-only client secrets. No such provider configuration was performed here.
 - Implement and validate the customer login/BFF and native authenticated session lifecycle; wire logout/account changes to pending-flow invalidation.
+- Implement the Supabase Edge deployment adapter for the approved hosting target, retaining the separate credential boundary and the same tested ownership/uncertainty rules.
 - Wire installed app return handlers, authenticated redemption, Bearer-token broker adapters and secure credential installation on each platform. Preserve existing account/environment pins, unresolved-order journals and destination ownership. Do not replace saved keys/destinations or enable execution/delivery merely because consent succeeded.
 - Enforce requested paper/live purpose and verified broker identity again at installation. A selected Discord webhook must follow existing queued/uncertain-message destination safeguards.
 - Complete deployment review, live provider-consent interoperability and physical customer acceptance. No real account, broker order, Discord message or OAuth deployment is exercised by the offline tests.
@@ -91,3 +94,4 @@ The current scope is provider exchange/custody/HTTP composition and return-contr
 - [Alpaca OAuth2 and Trading API](https://docs.alpaca.markets/us/docs/using-oauth2-and-trading-api)
 - [Discord OAuth2](https://docs.discord.com/developers/topics/oauth2)
 - [cryptography release information](https://pypi.org/project/cryptography/)
+- [Supabase authenticated user verification](https://supabase.com/docs/reference/javascript/auth-getuser)

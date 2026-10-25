@@ -1,0 +1,89 @@
+{
+  "phase": "G",
+  "status": "Server and return-contract preparation verified; customer integration remains open",
+  "collected_at_utc": "2026-10-25T05:54:56.4900239Z",
+  "implementation_commit": "e36d68ffe324cd1f762b5680014df38cdd714bce",
+  "test_fixture_correction_commit": "c7ac145e4767bc2ef1fd05e5b652a4e2958c3781",
+  "local_oauth_full_passed": 765,
+  "local_oauth_full_skipped": 1,
+  "focused_oauth_cases": 172,
+  "focused_mirror_and_oauth_after_fixture_correction": 193,
+  "provider_matrix": [
+    {
+      "platform": "provider-preparation-ubuntu-latest-3.11",
+      "passed": 746,
+      "skipped": 20,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "platform": "provider-preparation-ubuntu-latest-3.12",
+      "passed": 746,
+      "skipped": 20,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "platform": "provider-preparation-windows-latest-3.11",
+      "passed": 765,
+      "skipped": 1,
+      "failures": 0,
+      "errors": 0
+    }
+  ],
+  "default_linux_backend_passed": 677,
+  "default_linux_backend_skipped": 22,
+  "android_tests_passed": 72,
+  "ios_tests_passed": 98,
+  "workflows": [
+    {
+      "run_id": 40166904590,
+      "source_commit": "c7ac145e4767bc2ef1fd05e5b652a4e2958c3781",
+      "conclusion": "success",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40166904590",
+      "scope": "Corrected full provider/backend matrix"
+    },
+    {
+      "run_id": 40166643423,
+      "source_commit": "e36d68ffe324cd1f762b5680014df38cdd714bce",
+      "conclusion": "success",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40166643423",
+      "scope": "Android compile, tests, debug APK"
+    },
+    {
+      "run_id": 40166645228,
+      "source_commit": "e36d68ffe324cd1f762b5680014df38cdd714bce",
+      "conclusion": "success",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40166645228",
+      "scope": "iOS simulator and unsigned archive"
+    },
+    {
+      "run_id": 40166646930,
+      "source_commit": "e36d68ffe324cd1f762b5680014df38cdd714bce",
+      "conclusion": "success",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40166646930",
+      "scope": "Native iOS and default backend tests"
+    }
+  ],
+  "archive_report": {
+    "sha256": "201228a6073991ed5d9dad86995a976810f8ea453c17f24afc4658bde5e13a3d",
+    "path": "ios/ios-unsigned-archive-validation.json"
+  },
+  "initial_windows_failure": {
+    "run_id": 40166641534,
+    "fix": "Construct relative event timestamps at test execution; production freshness logic unchanged",
+    "cause": "Pre-existing future timestamp evaluated at collection became current during the longer suite"
+  },
+  "remaining_source_integration": [
+    "Supabase Edge adapter",
+    "Customer login/BFF and native sessions",
+    "Installed app return handlers and authenticated redemption",
+    "Secure broker Bearer-token and Discord destination installation"
+  ],
+  "oauth_deployed": false,
+  "provider_registration_performed": false,
+  "real_provider_consent": false,
+  "broker_orders_placed": false,
+  "discord_messages_sent": false,
+  "physical_acceptance": false
+}
