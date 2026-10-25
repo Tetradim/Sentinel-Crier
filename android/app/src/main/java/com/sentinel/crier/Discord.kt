@@ -43,22 +43,28 @@ object Discord {
   return e.getString("title")+"\n\n"+e.getString("description")+"\n\n"+(0 until f.length()).joinToString("\n") { val item=f.getJSONObject(it); "${item.getString("name")}: ${item.getString("value")}" }
  }
  fun test(journal:AlertStore):String { val id="test:${UUID.randomUUID()}"; journal.enqueueAlert(id,sample()); return id }
- fun deliver(journal:AlertStore,config:JSONObject,jobId:String?=null,send:(String,JSONObject)->JSONObject={ url,body -> Network.request(url,"POST",body=body) }) {
+ fun deliver(journal:AlertStore,config:JSONObject,jobId:String?=null,observe:HealthObserver?=null,send:(String,JSONObject)->JSONObject={ url,body -> Network.request(url,"POST",body=body) }) {
   val webhook=config.optString("discordWebhook"); if(webhook.isBlank()) return
-  if(journal.meta("discordRetryAt").toLongOrNull()?.let { it>System.currentTimeMillis() }==true) return
-  val next=journal.claimAlert(System.currentTimeMillis(),jobId) ?: return
+  if(journal.meta("discordRetryAt").toLongOrNull()?.let { it>System.currentTimeMillis() }==true) { reportHealth(observe,"discord","degraded","rate_limited"); return }
+  val next=journal.claimAlert(System.currentTimeMillis(),jobId) ?: run {
+   if(observe!=null) runCatching { journal.healthStates()?.let { states ->
+    when { "uncertain" in states->reportHealth(observe,"discord","blocked","uncertain"); "blocked" in states || "review" in states->reportHealth(observe,"discord","blocked","rejected"); states.isNotEmpty()->reportHealth(observe,"discord","degraded","waiting_retry"); else->reportHealth(observe,"discord","idle","no_work") }
+   } }; return
+  }
   val id=next.getString("id")
   try {
    // wait=true is required: a message ID is evidence of delivery, a 204 is not.
    val response=send(destination(webhook)+"?wait=true",payload(next.getJSONObject("payload"),config))
    val message=response.optString("id"); require(message.matches(Regex("[0-9]+"))) { "Discord delivery response had no message ID" }
    journal.alertResult(id,"delivered",0,"Discord message $message")
+   reportHealth(observe,"discord","healthy","delivered")
   } catch(error:Exception) {
    val permanent=error is HttpError && error.status in setOf(400,401,403,404)
    val delay=if(error is HttpError && error.status==429) maxOf(1000,error.retryAfter*1000) else minOf(300000,1000L*(1L shl minOf(8,next.getInt("attempts"))))
    if(error is HttpError && error.status==429) journal.setMeta("discordRetryAt",(System.currentTimeMillis()+delay).toString())
    val retryable=error is HttpError && error.status==429
    journal.alertResult(id,if(permanent) "blocked" else if(retryable) "pending" else "uncertain",delay,if(error is HttpError) "HTTP ${error.status}; inspect delivery before retrying" else "Delivery acknowledgement unavailable; inspect Discord before explicit retry (duplicates possible)")
+   reportHealth(observe,"discord",if(retryable) "degraded" else "blocked",if(retryable) "rate_limited" else if(permanent) "rejected" else "uncertain")
   }
  }
 }

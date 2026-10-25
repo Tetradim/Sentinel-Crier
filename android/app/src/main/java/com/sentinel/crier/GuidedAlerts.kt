@@ -32,7 +32,9 @@ class AlertsSessionOwner {
 class GuidedAlerts(private val document:AlertsDocument,
  private val reader:(JSONObject)->FillReadPort={ AlpacaFillReader(it) },
  private val send:(String,JSONObject)->JSONObject={ url,body -> Network.request(url,"POST",body=body) },
- private val now:()->Instant={ Instant.now() }) {
+ private val now:()->Instant={ Instant.now() },private val health:ComponentHealth?=null) {
+ private var healthTicket:ComponentHealth.Ticket?=null
+ private fun note(component:String,state:String,reason:String,observed:ComponentHealth.Ticket?=healthTicket) { observed?.let { reportHealth(health?.observer(it),component,state,reason) } }
  private val generation=AtomicLong()
  @Volatile private var verified=false
  @Volatile private var previewed=false
@@ -43,7 +45,7 @@ class GuidedAlerts(private val document:AlertsDocument,
  @Volatile private var configSnapshot=root.optJSONObject("config")?.toString() ?: "{}"
  fun revision():Long=generation.get()
  fun saved():JSONObject=JSONObject(configSnapshot)
- fun invalidate() { synchronized(generation) { generation.incrementAndGet(); verified=false; previewed=false; enabled=false; testEvidence="No current test evidence"; evidence="Setup changed or monitoring stopped; verify again" } }
+ fun invalidate() { synchronized(generation) { healthTicket?.let { health?.stop(it) }; generation.incrementAndGet(); verified=false; previewed=false; enabled=false; testEvidence="No current test evidence"; evidence="Setup changed or monitoring stopped; verify again" } }
  private fun finish(ticket:Long,action:()->Unit) { synchronized(generation) { current(ticket); action() } }
  private fun current(ticket:Long) { check(ticket==generation.get()) { "Setup changed; result ignored. Verify again." } }
  private fun authorize(c:JSONObject,destination:Boolean=false) {
@@ -69,35 +71,35 @@ class GuidedAlerts(private val document:AlertsDocument,
   }
   target.put("destination",c.optString("discordWebhook"))
   root.put("config",c); persist(); configSnapshot=c.toString()
-  finish(ticket) { verified=true; evidence="Verified read access · ${c.getString("environment")} account ${account.take(8)}. Preview next." }
+  finish(ticket) { healthTicket=health?.begin(ComponentHealth.scope(c,"alerts"),setOf("broker"),"alerts"); note("broker","healthy","verified"); verified=true; evidence="Verified read access · ${c.getString("environment")} account ${account.take(8)}. Preview next." }
  }
  fun preview():String { val ticket=generation.get(); check(verified) { "Verify account first" }; val result=Discord.readablePreview(saved()); finish(ticket) { previewed=true }; return result }
  private fun ready():JSONObject { check(verified && previewed) { "Verify account and preview this setup first" }; return saved().also { authorize(it); authorize(it,true); require(it.optString("discordWebhook").isNotBlank()) { "Enter a Discord webhook and verify setup" } } }
  fun test():String {
   val ticket=generation.get(); val c=ready(); val store=store(c)
-  val id=Discord.test(store); current(ticket); Discord.deliver(store,c,id) { url,body -> current(ticket); authorize(c,true); send(url,body) }; current(ticket)
+  val id=Discord.test(store); current(ticket); Discord.deliver(store,c,id,observe=healthTicket?.let { health?.observer(it) }) { url,body -> current(ticket); authorize(c,true); send(url,body) }; current(ticket)
   val job=jobs(state(c)).first { it.getString("id")==id }
   finish(ticket) { testEvidence="Synthetic test: ${job.getString("state")} · ${job.optString("detail")}" }
   return testEvidence
  }
- fun enable() { val ticket=generation.get(); val c=ready(); val s=state(c); if(!s.has("after")) { s.put("after",now().toString()); persist() }; finish(ticket) { enabled=true; evidence="Enabled in foreground - new fills after ${s.getString("after")}. Test delivery is optional and separate." } }
+ fun enable() { val ticket=generation.get(); val c=ready(); val s=state(c); if(!s.has("after")) { s.put("after",now().toString()); persist() }; finish(ticket) { healthTicket?.let { health?.setActive(it,setOf("broker","fills","discord")) }; enabled=true; evidence="Enabled in foreground - new fills after ${s.getString("after")}. Test delivery is optional and separate." } }
  fun isEnabled()=enabled
  fun stop()=invalidate()
  fun forgetOAuth() { invalidate(); val c=saved(); OAuthInstall.forget(c); root.put("config",c); persist(); configSnapshot=c.toString() }
  fun tick() {
-  check(enabled) { "Enable alerts explicitly" }; val ticket=generation.get(); val c=ready(); val s=state(c); val broker=reader(c)
+  check(enabled) { "Enable alerts explicitly" }; val ticket=generation.get(); val observed=healthTicket; val c=ready(); val s=state(c); val broker=reader(c)
   try {
-   require(broker.account()==c.getString("account")) { "Account identity changed; verify again" }; current(ticket)
+   require(broker.account()==c.getString("account")) { "Account identity changed; verify again" }; current(ticket); note("broker","healthy","verified",observed)
    // Cursor moves only after each complete page is validated and durably enqueued.
    authorize(c); val page=broker.fills(s.getString("after"),s.optString("page").ifBlank { null }); current(ticket)
    val records=(0 until page.length()).map { fillRecord(page.getJSONObject(it),Instant.parse(s.getString("after"))) }
    val seen=s.getJSONObject("seen")
    for((id,record) in records) if(!seen.has(id)) { store(c).enqueueAlert("fill:$id",record); seen.put(id,true) }
    if(page.length()>0) { val last=page.getJSONObject(page.length()-1).getString("id"); require(last!=s.optString("page")) { "Broker pagination stalled; monitoring stopped" }; s.put("page",last) }
-   persist(); current(ticket)
-   authorize(c,true); Discord.deliver(store(c),c,send={ url,body -> current(ticket); authorize(c,true); send(url,body) }); current(ticket)
+   persist(); current(ticket); note("fills","healthy","checked",observed)
+   authorize(c,true); Discord.deliver(store(c),c,observe=observed?.let { health?.observer(it) },send={ url,body -> current(ticket); authorize(c,true); send(url,body) }); current(ticket)
    finish(ticket) { evidence="Read-only fills checked ${now()} · ${summary()}" }
-  } catch(e:Exception) { enabled=false; verified=false; previewed=false; evidence="Monitoring stopped; verify and enable again. ${if(e is HttpError) "HTTP ${e.status}" else "Broker or delivery check failed"}"; throw e }
+  } catch(e:Exception) { note("fills","degraded","connection_failed",observed); observed?.let { health?.setActive(it,emptySet()) }; enabled=false; verified=false; previewed=false; evidence="Monitoring stopped; verify and enable again. ${if(e is HttpError) "HTTP ${e.status}" else "Broker or delivery check failed"}"; throw e }
  }
  private fun fillRecord(f:JSONObject,baseline:Instant):Pair<String,JSONObject> {
   val id=f.getString("id"); require(id.isNotBlank() && f.optString("activity_type")=="FILL")
@@ -114,6 +116,7 @@ class GuidedAlerts(private val document:AlertsDocument,
  private fun store(c:JSONObject):AlertStore=object:AlertStore {
   private val s=state(c)
   override fun meta(key:String)=s.optString(key)
+  override fun healthStates():Set<String> = jobs(s).map { it.getString("state") }.filter { it !in setOf("delivered","discarded") }.toSet()
   override fun setMeta(key:String,value:String) { s.put(key,value); persist() }
   override fun enqueueAlert(id:String,payload:JSONObject) { if(jobs(s).none { it.getString("id")==id }) { s.getJSONArray("jobs").put(JSONObject().put("id",id).put("payload",payload).put("state","pending").put("attempts",0)); persist() } }
   override fun claimAlert(now:Long,id:String?):JSONObject? { val job=jobs(s).firstOrNull { it.getString("state")=="pending" && it.optLong("retryAt")<=now && (id==null || it.getString("id")==id) } ?: return null; job.put("state","uncertain").put("detail","Dispatch started; acknowledgement unavailable").put("attempts",job.getInt("attempts")+1); persist(); return job }

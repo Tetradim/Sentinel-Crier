@@ -62,6 +62,7 @@ class MainActivity:Activity() {
   button("Alerts · publish my broker fills to Discord") { chooseJourney("alerts") }
   button("Trade / share · place and mirror orders") { chooseJourney("trade") }
   button("Follow · receive a trader’s orders") { chooseJourney("follow") }
+  button("Connection health and recovery") { showHealth() }
   if(journey=="alerts") { alertsSetup(); return }
   if(journey.isBlank()) { status.text="Choose Alerts, Trade / share, or Follow. No connection or delivery starts from this screen."; return }
   panel.addView(TextView(this).apply { text=if(journey=="follow") "Follow: join by invitation, verify your own account, then explicitly enable execution. Recovery tools remain below." else "Trade / share: Host a connection, verify your account, then explicitly enable execution. Discord sharing is optional." })
@@ -158,10 +159,23 @@ class MainActivity:Activity() {
   button("Refresh journal status") { status.text="${if(SyncService.active) "Workers active" else "Workers stopped / suspended"} · ${if(getSharedPreferences("controls",MODE_PRIVATE).getBoolean("paused",true)) "entries paused" else "entries enabled"}\n${journal.meta("visibility")}\n${journal.meta("service")}\n${journal.meta("connection")}\n${journal.meta("status")}\n${journal.meta("protocolStatus")}\n${journal.summary()}\nDiscord: ${journal.alertSummary()} ${journal.meta("discordStatus")}" }
   panel.addView(TextView(this).apply { text="Keep Crier running for mirroring. Android may stop background data sync; reopen to resume. Unknown broker outcomes remain blocked until reconciled. Cancel stops the unfilled remainder; Exit closes only this trade's acquired holdings." })
  }
+ private fun showHealth() {
+  HealthDialog.show(this,AppHealth.ledger(applicationContext),if(journey=="alerts") "alerts" else if(journey in setOf("trade","follow")) "intent" else "connection") { action ->
+   when(action) {
+    0 -> { (panel.parent as? ScrollView)?.smoothScrollTo(0,0); status.text="Choose the intended journey and account setup. Reconnect explicitly; saved keys are not current verification." }
+    1 -> android.app.AlertDialog.Builder(this).setTitle("Saved Trade / Follow order evidence").setMessage(journal.unresolved()+"\nInspect the brokerage and reconnect the original account for reconciliation. Do not clear journals to resolve an unknown order.").setPositiveButton("Close",null).show()
+    2 -> android.app.AlertDialog.Builder(this).setTitle("Discord delivery evidence").setMessage(guided?.history() ?: (journal.alertSummary()+"\n"+journal.meta("discordStatus"))).setPositiveButton("Close",null).show()
+    3 -> android.app.AlertDialog.Builder(this).setTitle("Stop local workers?").setMessage("Stops local monitoring and following. Existing brokerage orders remain active; in-flight work drains before stopped status.").setPositiveButton("Stop") { _,_ ->
+     guided?.stop(); getSharedPreferences("controls",MODE_PRIVATE).edit().putBoolean("paused",true).putBoolean("enabled",false).commit()
+     SyncService.stopRequests(); stopService(Intent(this,SyncService::class.java)); status.text="Stop requested; in-flight work drains. Journals and brokerage orders are retained."
+    }.setNegativeButton("Cancel",null).show()
+   }
+  }
+ }
  private fun customerClient():CustomerOAuth {
   val existing=customer
   if(existing!=null) return existing
-  return CustomerOAuth(CustomerOAuth.sibling(QuickConnection.defaultOrigin(this)),EncryptedCustomerSessions(applicationContext),disconnected={ !SyncService.active && !alertsOwner.get { GuidedAlerts(EncryptedAlertsDocument(applicationContext)) }.isEnabled() }).also { customer=it }
+  return CustomerOAuth(CustomerOAuth.sibling(QuickConnection.defaultOrigin(this)),EncryptedCustomerSessions(applicationContext),disconnected={ !SyncService.active && !alertsOwner.get { GuidedAlerts(EncryptedAlertsDocument(applicationContext),health=AppHealth.ledger(applicationContext)) }.isEnabled() }).also { customer=it }
  }
  private fun requireCustomerCredentials(config:JSONObject) {
   val c=customerClient(); val session=EncryptedCustomerSessions(applicationContext).read()
@@ -195,13 +209,13 @@ class MainActivity:Activity() {
      require(grant.getString("oauthOwner")==c.owner() && grant.getString("oauthService")==c.base) { "Customer changed; authorize again" }
      require(!SyncService.active && guided?.isEnabled()!=true) { "Stop all workers and Alerts before installing" }
      val alerts=journey=="alerts"
-     val old=if(alerts) alertsOwner.get { GuidedAlerts(EncryptedAlertsDocument(applicationContext)) }.saved() else oauthConnection ?: Vault(this).read()
+     val old=if(alerts) alertsOwner.get { GuidedAlerts(EncryptedAlertsDocument(applicationContext),health=AppHealth.ledger(applicationContext)) }.saved() else oauthConnection ?: Vault(this).read()
      if(grant.getString("provider")=="alpaca") {
       require(grant.getString("purpose")==if(alerts) "alerts" else "trade") { "Authorization purpose differs from this setup" }
       val installed=OAuthInstall.broker(old,grant,c.owner(),true,create && !alerts) { value -> if(alerts) AlpacaFillReader(value).account() else Broker(value).account() }
       synchronized(SyncService::class.java) {
        require(!SyncService.active && foreground && installLifecycle==lifecycleRevision) { "Screen changed; install again" }
-       if(alerts) alertsOwner.get { GuidedAlerts(EncryptedAlertsDocument(applicationContext)) }.verify(installed)
+       if(alerts) alertsOwner.get { GuidedAlerts(EncryptedAlertsDocument(applicationContext),health=AppHealth.ledger(applicationContext)) }.verify(installed)
        else { require(installed.has("token")) { "Host or Receive first" }; Vault(this).save(installed,create || oauthConnection!=null); oauthConnection=null; journal=Journal(this) }
       }
      } else {
@@ -209,7 +223,7 @@ class MainActivity:Activity() {
       require((!old.has("discordOAuthOwner") && !old.has("discordOAuthService")) || OAuthProvenance.matches(old,c.owner(),c.base,"discordOAuth")) { "Saved destination belongs to another customer" }
       require(old.optString("authMode")!="oauth" || OAuthProvenance.matches(old,c.owner(),c.base)) { "Saved connection belongs to another customer" }
       val next=JSONObject(old.toString()).put("discordWebhook",grant.getString("credential")).put("discordOAuthOwner",c.owner()).put("discordOAuthService",c.base).put("discordGuild",grant.getString("guild_id")).put("discordChannel",grant.getString("channel_id"))
-      if(alerts) { require(foreground && installLifecycle==lifecycleRevision) { "Screen changed; install again" }; alertsOwner.get { GuidedAlerts(EncryptedAlertsDocument(applicationContext)) }.verify(next) }
+      if(alerts) { require(foreground && installLifecycle==lifecycleRevision) { "Screen changed; install again" }; alertsOwner.get { GuidedAlerts(EncryptedAlertsDocument(applicationContext),health=AppHealth.ledger(applicationContext)) }.verify(next) }
       else synchronized(SyncService::class.java) { require(!SyncService.active && foreground && installLifecycle==lifecycleRevision); require(next.optString("discordWebhook")==old.optString("discordWebhook") || !journal.hasUndeliveredAlerts()) { "Inspect and close queued or uncertain Discord messages before changing destination" }; Vault(this).save(next) }
      }
      redeemed=null; runOnUiThread { if(!isDestroyed) { Toast.makeText(this,"Provider installed; verify and enable explicitly",Toast.LENGTH_LONG).show(); recreate() } }; "Provider connection installed encrypted. Workers remain stopped; verify, preview and enable explicitly."
@@ -217,7 +231,7 @@ class MainActivity:Activity() {
    }
    button("Sign out · stop workers and forget provider tokens") {
     SyncService.beginAuthStop()
-    guided?.stop(); alertsOwner.get { GuidedAlerts(EncryptedAlertsDocument(applicationContext)) }.stop()
+    guided?.stop(); alertsOwner.get { GuidedAlerts(EncryptedAlertsDocument(applicationContext),health=AppHealth.ledger(applicationContext)) }.stop()
     getSharedPreferences("controls",MODE_PRIVATE).edit().putBoolean("paused",true).putBoolean("enabled",false).commit()
     SyncService.stopRequests(); stopService(Intent(this,SyncService::class.java))
     io.submit {
@@ -225,7 +239,7 @@ class MainActivity:Activity() {
       val deadline=System.currentTimeMillis()+45000
       while(SyncService.active && System.currentTimeMillis()<deadline) Thread.sleep(100)
       require(!SyncService.active) { "Workers still stopping; sign out again when stopped" }
-      synchronized(SyncService::class.java) { require(!SyncService.active); redeemed=null; returnInbox.clear(); customerClient().invalidate(); Vault(this).forgetOAuthCredentials(); alertsOwner.get { GuidedAlerts(EncryptedAlertsDocument(applicationContext)) }.forgetOAuth(); customerClient().logout(); getSharedPreferences("controls",MODE_PRIVATE).edit().putBoolean("paused",true).putBoolean("enabled",false).commit(); SyncService.finishAuthStop() }
+      synchronized(SyncService::class.java) { require(!SyncService.active); redeemed=null; returnInbox.clear(); customerClient().invalidate(); Vault(this).forgetOAuthCredentials(); alertsOwner.get { GuidedAlerts(EncryptedAlertsDocument(applicationContext),health=AppHealth.ledger(applicationContext)) }.forgetOAuth(); customerClient().logout(); getSharedPreferences("controls",MODE_PRIVATE).edit().putBoolean("paused",true).putBoolean("enabled",false).commit(); SyncService.finishAuthStop() }
       runOnUiThread { if(!isDestroyed) { Toast.makeText(this,"Signed out; journals and evidence retained",Toast.LENGTH_LONG).show(); recreate() } }
       "Signed out. Tokens forgotten; orders, journals and message evidence retained."
      } catch(_:Exception) { "Sign out incomplete. Stop workers and try again; evidence retained." }
@@ -256,7 +270,7 @@ class MainActivity:Activity() {
   recreate()
  }
  private fun alertsSetup() {
-  val g=alertsOwner.get { GuidedAlerts(EncryptedAlertsDocument(applicationContext)) }; guided=g
+  val g=alertsOwner.get { GuidedAlerts(EncryptedAlertsDocument(applicationContext),health=AppHealth.ledger(applicationContext)) }; guided=g
   val saved=g.saved()
   status.text="Alerts only · saved settings are not current verification. No orders are created. Any previously enabled Trade/Follow workers are independent; stop them using the control below."
   panel.addView(TextView(this).apply { text="""1 · Verify read access. No Host, Receive or relay is required.

@@ -6,6 +6,7 @@ interface AlertStore {
  fun enqueueAlert(id:String,payload:JSONObject)
  fun claimAlert(now:Long,id:String?=null):JSONObject?
  fun alertResult(id:String,state:String,delay:Long,detail:String)
+ fun healthStates():Set<String>?=null
 }
 interface IntentStore {
  fun diagnostic(id:String,stage:String,detail:String) {}

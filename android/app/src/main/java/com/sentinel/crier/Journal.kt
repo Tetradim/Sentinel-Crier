@@ -29,6 +29,7 @@ class Journal(context: Context,name:String=Settings.journalName(Vault(context).r
   finally { db.endTransaction() }
  }
  @Synchronized override fun alertResult(id:String,state:String,delay:Long,detail:String) { writableDatabase.execSQL("UPDATE alerts SET state=?,next=?,detail=? WHERE id=?",arrayOf(state,System.currentTimeMillis()+delay,detail,id)); setMeta("discordStatus","$state: $detail") }
+ @Synchronized override fun healthStates():Set<String> = readableDatabase.rawQuery("SELECT DISTINCT state FROM alerts WHERE state NOT IN ('delivered','discarded')",null).use { c -> buildSet { while(c.moveToNext()) add(c.getString(0)) } }
  @Synchronized fun hasUndeliveredAlerts():Boolean = readableDatabase.rawQuery("SELECT COUNT(*) FROM alerts WHERE state IN ('pending','blocked','uncertain')",null).use { it.moveToFirst(); it.getInt(0)>0 }
  @Synchronized fun discardAlerts() { writableDatabase.execSQL("UPDATE alerts SET state='discarded',detail='Explicitly discarded by user before destination change' WHERE state IN ('pending','blocked','uncertain')") }
  @Synchronized fun retryAlerts() { writableDatabase.execSQL("UPDATE alerts SET state='pending',next=0 WHERE state IN ('pending','blocked','uncertain')") }

@@ -29,6 +29,19 @@ class GuidedAlertsTest {
  private fun fill(id:String="fill-1",quantity:String="0.5",price:String="42.07")=JSONObject().put("id",id).put("activity_type","FILL").put("transaction_time","2026-10-24T12:00:01Z").put("symbol","SPY").put("side","buy").put("qty",quantity).put("price",price).put("order_id","broker-order-1")
  private fun ready(g:GuidedAlerts,c:JSONObject=config()) { g.verify(c); g.preview() }
  private fun fail(block:()->Unit) { try { block(); fail("Expected rejection") } catch(_:IllegalArgumentException) {} catch(_:IllegalStateException) {} }
+ @Test fun healthUsesObservedReadsAndAcknowledgementsWithoutRestoringPermission() {
+  val h=ComponentHealth(); val r=Reads(); val g=GuidedAlerts(Memory(),{r},{_,_->JSONObject().put("id","123")},{baseline},h)
+  ready(g); assertEquals("healthy",h.snapshot().first().state); assertEquals("stopped",h.snapshot()[1].state)
+  g.test(); assertEquals("stopped",h.snapshot().last().state); assertNotNull(h.snapshot().last().lastSuccess)
+  g.enable(); g.tick(); assertEquals("healthy",h.snapshot()[1].state)
+  g.stop(); assertTrue(h.snapshot().all { it.state=="stopped" }); assertFalse(g.isEnabled())
+ }
+ @Test fun healthNeverHidesAnUncertainMessageWhenThereIsNothingToRetry() {
+  val h=ComponentHealth(); val d=Memory(); val g=GuidedAlerts(d,{Reads()},{_,_->error("private transport detail")},{baseline},h)
+  ready(g); g.test(); g.enable(); g.tick()
+  assertEquals("blocked",h.snapshot().last().state); assertEquals("uncertain",h.snapshot().last().reason)
+  assertTrue(g.history().contains("uncertain")); g.stop(); assertTrue(g.history().contains("uncertain"))
+ }
  @Test fun oauthDestinationRequiresCurrentOwnerButManualBrokerRecoveryWorks() {
   val d=Memory(); val r=Reads(); var sends=0
   val c=config().put("discordOAuthOwner","11111111-1111-4111-8111-111111111111").put("discordOAuthService","https://abcdefghijklmnopqrst.supabase.co/functions/v1/crier-oauth")

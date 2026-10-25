@@ -1,0 +1,11 @@
+# H.2 native health and recovery
+
+Extend the approved H health design to Android and iOS. Use native views and the existing account/order/delivery journeys, without a new hosting service or network health probes.
+
+Each platform keeps six scoped observations: broker verification, fill reads, relay send/receive, execution worker and Discord acknowledgement. Persist timestamps and enum reason codes in app-private storage. Use monotonic freshness thresholds matching Windows. A process restart preserves history but never active readiness. Connection tickets fence late observations after stop, logout, background suspension or reconnect. Scopes hash environment/account, journey and relevant pairing/destination identity; never persist credentials in health records.
+
+Android uses a process-owned synchronized ledger, asynchronous SharedPreferences persistence, explicit service/session ownership, and a local health/recovery dialog. Alerts remain foreground-only. Service health stops only after the owning workers drain; an old service cannot stop a newer connection's health session. iOS uses an injected ledger/storage boundary, native defaults persistence and a SwiftUI health view in existing navigation. Background suspension invalidates health tickets; foreground reconciliation creates a new ticket before current health can be established.
+
+The screen reports observed success, waiting/idle/stopped, stale, blocked/degraded and clock discontinuity. It shows the latest successful check and a fixed recovery hint. Displaying or refreshing the health view performs no broker/Discord/relay request. Recovery routes open existing setup or retained evidence; explicit disconnect/stop uses existing lifecycle controls. Unknown orders are never manually marked resolved and uncertain messages are never automatically replayed.
+
+Health writes are coalesced and cannot turn diagnostic failure into a failed trading mutation or confirmed delivery. Missing/corrupt storage is visible separately. Tests inject time, storage and HTTP, covering restart, scope isolation, ticket invalidation, clock changes, actual outcomes, lifecycle and preserved journals. Existing signing, provider activation and physical acceptance gates remain external.

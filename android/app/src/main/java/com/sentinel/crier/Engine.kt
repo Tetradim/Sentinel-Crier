@@ -2,6 +2,7 @@ package com.sentinel.crier
 import org.json.JSONObject
 import java.time.Instant
 class Engine(private val journal:IntentStore,private val config:JSONObject,private val broker:BrokerPort=Broker(config),private val clock:()->Instant={ Instant.now() },private val paused:()->Boolean) {
+ var reconciliationHealthy=false; private set
 
  private val terminal=setOf("filled","canceled","expired","rejected","replaced","superseded")
  fun step(e:JSONObject) {
@@ -69,6 +70,7 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
  }
  /** Refresh every outstanding order before allowing new work after process/service resume. */
  fun reconcile(e:JSONObject):Boolean {
+  reconciliationHealthy=false
   require(broker.account()==config.getString("account")) { "Account changed" }
   for(o in journal.orders(e.getString("trade_id"))) if(o.state !in terminal) {
    val remote=broker.order(o.client)
@@ -76,7 +78,7 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
    validate(remote,o.client,e.getString("symbol"),o.side,journal.meta("quantity:${o.client}").toIntOrNull(),o.filled,o.broker)
    journal.update(o.client,remote)
   }
-  return true
+  reconciliationHealthy=true; return true
  }
  private fun validate(order:JSONObject,client:String,symbol:String,side:String,quantity:Int?,previous:Int,expectedBroker:String="") {
   require(order.getString("id").isNotBlank() && (expectedBroker.isBlank() || order.getString("id")==expectedBroker)) { "Broker order ID changed" }
