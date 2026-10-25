@@ -53,9 +53,9 @@ class MainActivity:Activity() {
   panel.addView(TextView(this).apply { text="Keep Crier running for mirroring. Android can suspend or stop background syncing; reopen to reconcile and resume. A running worker does not establish current broker or connection health." })
   status=TextView(this).apply { text="${if(Vault(this@MainActivity).read().has("account")) "Saved setup; reconnect and reconcile before new work. Current connection health is not verified here." else "Connection not ready. Choose Host or Receive, then save and verify your account."}\n${journal.meta("status").ifBlank { "Paused until enabled. Use paper credentials for testing." }}"; panel.addView(this) }
   journey=getSharedPreferences("journey",MODE_PRIVATE).getString("purpose","") ?: ""
-  button("Alerts · publish my broker fills to Discord") { chooseJourney("alerts") }
-  button("Trade / share · place and mirror orders") { chooseJourney("trade") }
-  button("Follow · receive a trader’s orders") { chooseJourney("follow") }
+  button("Alerts Â· publish my broker fills to Discord") { chooseJourney("alerts") }
+  button("Trade / share Â· place and mirror orders") { chooseJourney("trade") }
+  button("Follow Â· receive a traderâ€™s orders") { chooseJourney("follow") }
   if(journey=="alerts") { alertsSetup(); return }
   if(journey.isBlank()) { status.text="Choose Alerts, Trade / share, or Follow. No connection or delivery starts from this screen."; return }
   panel.addView(TextView(this).apply { text=if(journey=="follow") "Follow: join by invitation, verify your own account, then explicitly enable execution. Recovery tools remain below." else "Trade / share: Host a connection, verify your account, then explicitly enable execution. Discord sharing is optional." })
@@ -160,19 +160,19 @@ class MainActivity:Activity() {
  private fun alertsSetup() {
   val g=alertsOwner.get { GuidedAlerts(EncryptedAlertsDocument(applicationContext)) }; guided=g
   val saved=g.saved()
-  status.text="Alerts only · saved settings are not current verification. No orders are created. Any previously enabled Trade/Follow workers are independent; stop them using the control below."
-  panel.addView(TextView(this).apply { text="""1 · Verify read access. No Host, Receive or relay is required.
-2 · Preview a labelled synthetic message.
-3 · Optionally send a test, then explicitly enable broker-fill delivery.
+  status.text="Alerts only Â· saved settings are not current verification. No orders are created. Any previously enabled Trade/Follow workers are independent; stop them using the control below."
+  panel.addView(TextView(this).apply { text="""1 Â· Verify read access. No Host, Receive or relay is required.
+2 Â· Preview a labelled synthetic message.
+3 Â· Optionally send a test, then explicitly enable broker-fill delivery.
 Monitoring runs only while this screen is foreground. Leaving pauses monitoring and clears readiness; return, verify, preview and enable to resume the retained cursor. First enable starts now; earlier fills are not replayed. Android background delivery is not provided by this journey.""" })
   button("Stop existing Trade / Follow workers") {
    getSharedPreferences("controls",MODE_PRIVATE).edit().putBoolean("paused",true).putBoolean("enabled",false).commit()
    stopService(Intent(this,SyncService::class.java)); status.text="Trade / Follow stop requested; its journals are retained."
   }
   val env=ChoicePicker("Alerts account environment",SetupChoices.environment,saved.optString("environment","paper"))
-  val key=field("Alpaca API key · read access",saved.optString("key"),true)
+  val key=field("Alpaca API key Â· read access",saved.optString("key"),true)
   val secret=field("Alpaca secret",saved.optString("secret"),true)
-  val webhook=field("Discord webhook URL · encrypted",saved.optString("discordWebhook"),true)
+  val webhook=field("Discord webhook URL Â· encrypted",saved.optString("discordWebhook"),true)
   val format=ChoicePicker("Alerts message format",SetupChoices.format,saved.optString("discordStyle","card"))
   val template=field("Message template",saved.optString("discordTemplate","{action} {symbol}"))
   fun input()=JSONObject().put("environment",env.value()).put("key",key.text.toString().trim()).put("secret",secret.text.toString().trim()).put("discordWebhook",webhook.text.toString().trim()).put("discordStyle",format.value()).put("discordTemplate",template.text.toString())
@@ -180,16 +180,16 @@ Monitoring runs only while this screen is foreground. Leaving pauses monitoring 
   listOf(key,secret,webhook,template).forEach { it.addTextChangedListener(changed) }
   val pickerChanged=object:AdapterView.OnItemSelectedListener { override fun onItemSelected(parent:AdapterView<*>?,view:android.view.View?,position:Int,id:Long) { g.invalidate() }; override fun onNothingSelected(parent:AdapterView<*>?) {} }
   env.view.onItemSelectedListener=pickerChanged; format.view.onItemSelectedListener=pickerChanged
-  button("1 · Save and verify Alerts account") { val c=input(); background { g.verify(c); g.evidence } }
-  button("2 · Preview synthetic Discord message") { android.app.AlertDialog.Builder(this).setTitle("TEST MESSAGE · no trade or fill").setMessage(g.preview()).setPositiveButton("Close",null).show() }
-  button("3 · Send one synthetic test (optional)") { background { g.test() } }
+  button("1 Â· Save and verify Alerts account") { val c=input(); background { g.verify(c); g.evidence } }
+  button("2 Â· Preview synthetic Discord message") { android.app.AlertDialog.Builder(this).setTitle("TEST MESSAGE Â· no trade or fill").setMessage(g.preview()).setPositiveButton("Close",null).show() }
+  button("3 Â· Send one synthetic test (optional)") { background { g.test() } }
   button("Enable real broker-fill alerts in foreground") { background { g.enable(); g.evidence } }
   button("Stop Alerts and clear readiness") { g.stop(); status.text=g.evidence }
   button("Alerts readiness and delivery history") { background { "${g.evidence}\n${g.testEvidence}\n${g.history()}" } }
   button("Close inspected undelivered messages") {
-   android.app.AlertDialog.Builder(this).setTitle("Close without retrying?").setMessage("Inspect Discord first: an uncertain message may already exist. Closing prevents retries and retains delivery evidence. Stop monitoring first. No automatic uncertain retry is performed.").setPositiveButton("Inspected · close messages") { _,_ -> background { g.closeInspected(); g.history() } }.setNegativeButton("Cancel",null).show()
+   android.app.AlertDialog.Builder(this).setTitle("Close without retrying?").setMessage("Inspect Discord first: an uncertain message may already exist. Closing prevents retries and retains delivery evidence. Stop monitoring first. No automatic uncertain retry is performed.").setPositiveButton("Inspected Â· close messages") { _,_ -> background { g.closeInspected(); g.history() } }.setNegativeButton("Cancel",null).show()
   }
-  button("View retained Trade / Follow recovery") { android.app.AlertDialog.Builder(this).setTitle("Trade / Follow recovery · independent journal").setMessage("${journal.meta("service")}\n${journal.meta("status")}\n${journal.unresolved()}\nChoose Trade or Follow to manage this journal. Alerts controls never reconcile or submit orders.").setPositiveButton("Close",null).show() }
+  button("View retained Trade / Follow recovery") { android.app.AlertDialog.Builder(this).setTitle("Trade / Follow recovery Â· independent journal").setMessage("${journal.meta("service")}\n${journal.meta("status")}\n${journal.unresolved()}\nChoose Trade or Follow to manage this journal. Alerts controls never reconcile or submit orders.").setPositiveButton("Close",null).show() }
   alertsTimer.postDelayed(alertsTick,10000)
  }
  private fun discordSettings(old:JSONObject) {
@@ -209,7 +209,7 @@ Monitoring runs only while this screen is foreground. Leaving pauses monitoring 
   button("Publish manual observation") { val text=observation.text.toString().trim(); require(text.isNotBlank() && text.length<=500); journal.enqueueAlert("manual:${java.util.UUID.randomUUID()}",Discord.record("manual",JSONObject().put("symbol",text).put("action","observation"))); status.text="Manual observation queued; never labelled as a broker fill" }
  }
  override fun onPause() { foreground=false; lifecycleRevision++; alertsPolling=false; guided?.stop(); guided?.let { status.text=it.evidence }; alertsTimer.removeCallbacks(alertsTick); if(::journal.isInitialized) journal.setMeta("visibility","App in background; Android may suspend or stop syncing"); super.onPause() }
- override fun onResume() { super.onResume(); foreground=true; if(::journal.isInitialized) journal.setMeta("visibility","App foreground · explicit reconnect required after restart"); if(guided!=null) { status.text=guided!!.evidence; alertsTimer.removeCallbacks(alertsTick); alertsTimer.postDelayed(alertsTick,10000) } }
+ override fun onResume() { super.onResume(); foreground=true; if(::journal.isInitialized) journal.setMeta("visibility","App foreground Â· explicit reconnect required after restart"); if(guided!=null) { status.text=guided!!.evidence; alertsTimer.removeCallbacks(alertsTick); alertsTimer.postDelayed(alertsTick,10000) } }
  private fun saveDiagnostics(csv:Boolean) { val records=Diagnostics.export(journal); pendingExport=if(csv) Diagnostics.csv(records) else records.toString(2); startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type=if(csv) "text/csv" else "application/json"; putExtra(Intent.EXTRA_TITLE,if(csv) "crier-diagnostics.csv" else "crier-diagnostics.json") },41) }
  override fun onActivityResult(request:Int,result:Int,data:Intent?) { super.onActivityResult(request,result,data); if(request==41 && result==RESULT_OK) { val text=pendingExport ?: return; data?.data?.let { uri -> background { contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray(Charsets.UTF_8)) } ?: error("Unable to write export"); "Diagnostics exported" } }; pendingExport=null } }
  private fun shareDiagnostics(csv:Boolean) { val records=Diagnostics.export(journal); val text=if(csv) Diagnostics.csv(records) else records.toString(2); startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type=if(csv) "text/csv" else "application/json"; putExtra(Intent.EXTRA_SUBJECT,"Crier execution diagnostics"); putExtra(Intent.EXTRA_TEXT,text) },"Share diagnostics")) }
