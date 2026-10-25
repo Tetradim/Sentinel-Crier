@@ -52,7 +52,8 @@ def test_alerts_read_only_discovery_baseline_restart_and_pin(tmp_path, monkeypat
             return httpx.Response(200, json={'id':'123456'})
         with sync_client(transport=httpx.MockTransport(discord)) as client:
             assert not session.publisher.deliver(client)
-            session.discord_configure('https://discord.com/api/webhooks/456/new-token', True)
+            await session.discord_configure('https://discord.com/api/webhooks/456/new-token', True)
+            assert session.discord_authorized
             assert session.publisher.deliver(client)
             assert not session.publisher.deliver(client)
         assert len(sent) == 1
@@ -72,6 +73,7 @@ def test_alerts_read_only_discovery_baseline_restart_and_pin(tmp_path, monkeypat
             session.command('enter')
         broker = session.broker
         await session.disconnect()
+        assert not session.discord_authorized
         assert broker.client.is_closed and session.status()['mode'] == 'disconnected'
         restarted = DesktopSession(tmp_path, start_workers=False)
         with pytest.raises(ValueError, match='environment'):

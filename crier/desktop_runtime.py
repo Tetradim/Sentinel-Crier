@@ -108,6 +108,7 @@ class DesktopSession:
         self.publisher = self.intent_publisher
         self.publisher.store.recover()
         self.alert_state={'state':'stopped'}
+        self.discord_authorized = False
 
     def connection_client(self):
         saved=json.loads(load_secret(self.credentials)) if self.credentials.exists() else {}
@@ -132,22 +133,46 @@ class DesktopSession:
         return await self.connection_client().revoke_receiver(identity)
 
     def discord_status(self):
-        return self.publisher.status()
+        status = self.publisher.status()
+        return status | dict(saved_enabled=status['enabled'], enabled=status['enabled'] and self.discord_authorized)
 
-    def discord_configure(self, webhook, enabled):
-        return self.publisher.configure(webhook, enabled, allow_initial=self.mode == 'alerts')
+    def require_connected_publisher(self):
+        if not self.broker or self.closing:
+            raise ValueError('Connect and verify an account before changing Discord setup.')
 
-    def discord_settings(self, settings):
-        return self.publisher.settings(settings)
+    async def discord_configure(self, webhook, enabled):
+        async with self.lifecycle:
+            self.require_connected_publisher()
+            self.publisher.configure(webhook, enabled, allow_initial=self.mode == 'alerts')
+            self.discord_authorized = enabled
+            return self.discord_status()
+
+    async def discord_settings(self, settings):
+        async with self.lifecycle:
+            self.require_connected_publisher()
+            previous = self.publisher.status()['revision']
+            result = self.publisher.settings(settings)
+            if previous != self.publisher.status()['revision']:
+                self.discord_authorized = False
+            return result
 
     def discord_preview(self, scenario='option_buy', settings=None):
         return self.publisher.preview(scenario,settings)
 
     async def discord_test(self):
-        def send():
-            with httpx.Client(trust_env=False,follow_redirects=False) as client:
-                return self.publisher.test_message(client)
-        return await asyncio.to_thread(send)
+        async with self.lifecycle:
+            self.require_connected_publisher()
+            publisher = self.publisher
+            def send():
+                with httpx.Client(trust_env=False,follow_redirects=False) as client:
+                    return publisher.test_message(client)
+            # Keep the profile stable and wait for threaded delivery even on cancellation.
+            delivery = asyncio.create_task(asyncio.to_thread(send))
+            try:
+                return await asyncio.shield(delivery)
+            except asyncio.CancelledError:
+                await asyncio.gather(delivery, return_exceptions=True)
+                raise
 
     async def poll_alerts(self):
         from .alpaca import poll_once
@@ -227,9 +252,14 @@ class DesktopSession:
             while not stop.is_set():
                 await self.poll_alerts()
                 if stop.is_set(): break
-                await asyncio.to_thread(self.publisher.deliver,client)
+                await asyncio.to_thread(self.deliver_alerts,client)
                 try: await asyncio.wait_for(stop.wait(),2)
                 except TimeoutError: pass
+
+    def deliver_alerts(self, client):
+        if self.discord_authorized and not self.closing:
+            return self.publisher.deliver(client)
+        return False
 
     async def connect(self, pairing_text, key, secret, allow_live=False):
         async with self.lifecycle:
@@ -316,6 +346,7 @@ class DesktopSession:
             if not self.broker:
                 return
             self.closing = True
+            self.discord_authorized = False
             try:
                 self.stop.set()
                 if self.device:

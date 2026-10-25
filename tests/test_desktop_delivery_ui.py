@@ -230,3 +230,74 @@ def test_alerts_disconnect_clears_verified_ui_and_trade_controls(app):
     assert 'not verified' in app.alerts_result.get()
     assert app.alerts_next.instate(['disabled'])
     assert 'Saved connection' in app.summary.get()
+
+
+def verified_alerts(app):
+    app.render(dict(connected=True, mode='alerts', account='account-1234', environment='paper',
+                    pair={}, execution=None, alerts={'state':'observing'}, saved=False))
+    value = status()
+    value.update(configured=True, revision='saved-format')
+    value['settings']['paused'] = False
+    app.render_delivery_status(value)
+
+
+def test_guided_enable_requires_verified_account_and_saved_destination_not_test(app):
+    assert app.guided_enable.instate(['disabled'])
+    verified_alerts(app)
+    assert app.guided_enable.instate(['!disabled'])
+    assert not app.setup_progress.previewed
+    app.guided_enable.invoke()
+    assert app.worker.calls[-1][:3] == ('discord_configure', ('', True), {})
+    assert 'not requested' == app.setup_progress.test_state
+
+
+def test_guided_test_acknowledgement_is_scoped_and_uncertainty_is_visible(app):
+    verified_alerts(app)
+    app.guided_test.invoke()
+    assert app.worker.calls[-1][0] == 'discord_test'
+    test = app.worker.calls[-1][3]
+    test.set_result(dict(id='test', status='uncertain'))
+    app.refresh()
+    assert app.setup_progress.test_state == 'uncertain'
+    assert 'inspect Discord' in app.setup_message.get()
+    assert app.guided_enable.instate(['!disabled'])
+
+
+def test_disconnect_discards_late_preview_and_test_evidence(app):
+    verified_alerts(app)
+    app.guided_preview.invoke()
+    preview = app.worker.calls[-1][3]
+    app.guided_test.invoke()
+    test = app.worker.calls[-1][3]
+    app.submit('disconnect')
+    preview.set_result(dict(content='old preview'))
+    test.set_result(dict(id='old-test', status='delivered'))
+    app.refresh()
+    assert not app.setup_progress.previewed
+    assert app.setup_progress.test_state == 'not requested'
+    assert app.guided_enable.instate(['disabled'])
+
+
+def test_unsaved_destination_edit_invalidates_readiness_until_saved(app):
+    verified_alerts(app)
+    app.delivery_webhook.set('https://discord.com/api/webhooks/123/new')
+    assert app.guided_test.instate(['disabled'])
+    assert app.guided_enable.instate(['disabled'])
+    assert 'Save' in app.setup_message.get()
+
+
+def test_status_poll_during_disconnect_cannot_restore_setup_permission(app):
+    verified_alerts(app)
+    app.submit('disconnect')
+    # A status query can still see the old broker while disconnect waits on a test send.
+    verified_alerts(app)
+    assert not app.setup_progress.can_publish
+    assert app.guided_enable.instate(['disabled'])
+    assert app.alerts_next.instate(['disabled'])
+
+
+def test_disconnected_legacy_save_controls_cannot_edit_previous_profile(app):
+    app.save_delivery_destination()
+    app.save_delivery_style()
+    assert not app.worker.calls
+    assert 'verify' in app.notice.get()

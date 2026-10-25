@@ -1,5 +1,6 @@
 """One durable publisher for desktop and browser settings and explicit test sends."""
 import json
+import hashlib
 import time
 from pathlib import Path
 from uuid import uuid4
@@ -39,8 +40,12 @@ class DiscordPublisher:
         return self.status()
 
     def status(self):
+        settings = self.store.get_settings().model_dump()
+        # No destination secret is returned; presentation changes invalidate setup evidence.
+        presentation = {key: value for key, value in settings.items() if key != 'paused'}
+        revision = hashlib.sha256(json.dumps([self.destination['webhook'], presentation], sort_keys=True, default=str).encode()).hexdigest()
         return dict(configured=bool(self.destination['webhook']),enabled=self.destination['enabled'],
-                    settings=self.store.get_settings().model_dump(),history=self.store.history())
+                    revision=revision, settings=settings,history=self.store.history())
 
     def settings(self, values):
         settings=Settings.model_validate(values)

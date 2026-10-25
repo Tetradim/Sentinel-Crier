@@ -11,16 +11,21 @@ import webbrowser
 from .desktop_runtime import DesktopWorker, data_directory
 from .connection_client import default_origin
 from .lock import AlreadyRunningError, single_process
+from .desktop_setup import SetupProgress
 
 
 class DesktopApp:
     def __init__(self, root, worker):
         self.root, self.worker = root, worker
         self.pending = []
+        self.connection_jobs = set()
         self.poll = None
         self.connected = False
         self.closing = False
         self.latest = {}
+        self.setup_progress = SetupProgress()
+        self.setup_dirty = False
+        self.rendering_setup = False
         root.title('Sentinel Crier • Desktop')
         root.geometry('1080x780')
         root.minsize(850, 680)
@@ -133,6 +138,17 @@ class DesktopApp:
         frame = content
         self.delivery_generation = {'alerts': 0, 'receivers': 0}
         self.delivery_rows = {'alerts': {}, 'receivers': {}}
+        guided = ttk.LabelFrame(frame, text='Discord setup — account, destination, preview, test, enable', padding=8)
+        guided.pack(fill='x', pady=(0,8))
+        self.setup_message = tk.StringVar(value=self.setup_progress.message)
+        ttk.Label(guided, textvariable=self.setup_message, wraplength=720).pack(anchor='w')
+        row = ttk.Frame(guided); row.pack(fill='x', pady=6)
+        self.guided_preview = ttk.Button(row, text='Preview saved format', state='disabled', command=self.setup_preview)
+        self.guided_test = ttk.Button(row, text='Send labeled test', state='disabled', command=self.setup_test)
+        self.guided_enable = ttk.Button(row, text='Enable real alerts', state='disabled', command=lambda: self.setup_delivery(True))
+        self.guided_disable = ttk.Button(row, text='Disable real alerts', state='disabled', command=lambda: self.setup_delivery(False))
+        for button in (self.guided_preview, self.guided_test, self.guided_enable, self.guided_disable):
+            button.pack(side='left', padx=(0,6))
         settings = ttk.LabelFrame(frame, text='Discord delivery', padding=8)
         settings.pack(fill='x')
         self.delivery_webhook = self._entry(settings, 'Webhook (blank reuses saved)', masked=True)
@@ -173,12 +189,62 @@ class DesktopApp:
         advanced = ttk.LabelFrame(frame, text='Advanced: preview and record details', padding=6)
         advanced.pack(fill='both', expand=True, pady=(8,0))
         row = ttk.Frame(advanced); row.pack(fill='x')
-        ttk.Button(row, text='Preview saved alert', command=lambda: self.submit(
-            'discord_preview', callback=self.show_delivery_details)).pack(side='left')
-        ttk.Button(row, text='Send labeled test message', command=lambda: self.submit(
-            'discord_test', callback=self.delivery_test_completed)).pack(side='left', padx=4)
+        ttk.Button(row, text='Preview saved alert', command=self.setup_preview).pack(side='left')
+        ttk.Button(row, text='Send labeled test message', command=self.setup_test).pack(side='left', padx=4)
         self.delivery_details = tk.Text(advanced, height=4, wrap='word', state='disabled')
         self.delivery_details.pack(fill='both', expand=True)
+        for value in (self.delivery_webhook, self.delivery_style, self.delivery_quantity, self.delivery_timestamp):
+            value.trace_add('write', self.setup_edited)
+
+    def setup_edited(self, *_):
+        if self.rendering_setup:
+            return
+        self.setup_dirty = True
+        self.setup_progress.invalidate()
+        self.clear_delivery_list('alerts')
+        self.render_setup_progress()
+
+    def render_setup_progress(self):
+        self.setup_message.set('Save destination / format changes before preview, test or enable.' if self.setup_dirty else self.setup_progress.message)
+        ready = self.setup_progress.can_publish and not self.setup_dirty
+        for button in (self.guided_preview, self.guided_test, self.guided_enable, self.guided_disable):
+            button.configure(state='normal' if ready else 'disabled')
+
+    def setup_callback(self, callback):
+        token = self.setup_progress.token
+        def current(value):
+            if token == self.setup_progress.token and not self.setup_dirty:
+                callback(value, token)
+        return current
+
+    def setup_preview(self):
+        if not self.setup_progress.can_publish or self.setup_dirty:
+            self.notice.set('Verify an account and save the Discord destination / format first.')
+            return
+        def completed(value, token):
+            self.setup_progress.preview(token)
+            self.show_delivery_details(value)
+            self.render_setup_progress()
+        self.submit('discord_preview', callback=self.setup_callback(completed))
+
+    def setup_test(self):
+        if not self.setup_progress.can_publish or self.setup_dirty:
+            self.notice.set('Verify an account and save the Discord destination / format first.')
+            return
+        def completed(value, token):
+            self.setup_progress.test(token, value.get('status'))
+            self.delivery_test_completed(value)
+            self.render_setup_progress()
+        self.submit('discord_test', callback=self.setup_callback(completed))
+
+    def setup_delivery(self, enabled):
+        if not self.setup_progress.can_publish or self.setup_dirty:
+            return
+        # Empty destination deliberately reuses the saved secret; draft input is never sent.
+        self.clear_delivery_list('alerts')
+        current = self.delivery_list_callback('alerts', self.render_delivery_status)
+        self.submit('discord_configure', '', enabled, callback=self.setup_callback(
+            lambda value, token: current(value)))
 
     def _delivery_table(self, frame, columns, height):
         row = ttk.Frame(frame); row.pack(fill='x')
@@ -229,9 +295,18 @@ class DesktopApp:
         self.clear_delivery_list('alerts')
         self.delivery_enabled.set(value['enabled'])
         settings = value['settings']
-        self.delivery_style.set(settings['format'])
-        self.delivery_quantity.set(settings['show_quantity'])
-        self.delivery_timestamp.set(settings['show_time'])
+        self.rendering_setup = True
+        try:
+            self.delivery_style.set(settings['format'])
+            self.delivery_quantity.set(settings['show_quantity'])
+            self.delivery_timestamp.set(settings['show_time'])
+            self.delivery_webhook.set('')
+        finally:
+            self.rendering_setup = False
+        self.setup_dirty = False
+        self.setup_progress.destination(value.get('revision', ''), configured=value.get('configured', False),
+                                        enabled=value['enabled'], paused=settings.get('paused', False))
+        self.render_setup_progress()
         for record in value['history']:
             self.delivery_rows['alerts'][record['id']] = dict(record)
             fill = record['fill']
@@ -263,15 +338,29 @@ class DesktopApp:
         self.submit('receivers', callback=self.delivery_list_callback('receivers', self.render_receivers))
 
     def save_delivery_destination(self):
+        if not self.connected:
+            self.notice.set('Connect and verify the intended account before saving its destination.')
+            return
         self.clear_delivery_list('alerts')
         self.submit('discord_configure', self.delivery_webhook.get(), self.delivery_enabled.get(),
                     callback=self.delivery_list_callback('alerts', self.render_delivery_status))
 
     def save_delivery_style(self):
+        if not self.connected:
+            self.notice.set('Connect and verify the intended account before saving its format.')
+            return
         values = dict(format=self.delivery_style.get(), show_quantity=self.delivery_quantity.get(),
                       show_time=self.delivery_timestamp.get())
-        self.submit('discord_status', callback=lambda value: self.submit('discord_settings',
-            dict(value['settings'], **values), callback=self.show_delivery_details))
+        def saved(value):
+            self.show_delivery_details(value)
+            self.refresh_delivery_history()
+        self.clear_delivery_list('alerts')
+        generation = self.delivery_generation['alerts']
+        def current(value):
+            if generation == self.delivery_generation['alerts']:
+                self.submit('discord_settings', dict(value['settings'], **values),
+                            callback=self.delivery_list_callback('alerts', saved))
+        self.submit('discord_status', callback=current)
 
     def delivery_test_completed(self, value):
         self.show_delivery_details(value)
@@ -482,11 +571,19 @@ class DesktopApp:
     def submit(self, method, *args, callback=None, **kwargs):
         if self.closing:
             return
-        if method in ('connect', 'connect_alerts', 'disconnect', 'host', 'receive'):
+        lifecycle = method in ('connect', 'connect_alerts', 'disconnect', 'host', 'receive')
+        if lifecycle:
+            self.setup_progress.account(None)
+            self.setup_dirty = False
+            self.render_setup_progress()
+            self.poll = None
             self.clear_delivery_list('alerts')
             self.clear_delivery_list('receivers')
         self.notice.set('Working…')
-        self.pending.append((self.worker.call(method, *args, **kwargs), callback))
+        future = self.worker.call(method, *args, **kwargs)
+        if lifecycle:
+            self.connection_jobs.add(future)
+        self.pending.append((future, callback))
 
     def connect(self):
         self.connect_button.configure(state='disabled')
@@ -535,8 +632,12 @@ class DesktopApp:
         execution = state['execution'] or {}
         enabled = execution.get('settings', {}).get('enabled', False)
         alerts_mode = state.get('mode') == 'alerts'
+        scope = (state.get('mode', 'intent'), state.get('environment', pair.get('environment')),
+                 state.get('account'), pair.get('token')) if self.connected and not self.connection_jobs else None
+        self.setup_progress.account(scope)
+        self.render_setup_progress()
         self.alerts_connect.configure(state='disabled' if self.connected else 'normal')
-        self.alerts_next.configure(state='normal' if self.connected and alerts_mode else 'disabled')
+        self.alerts_next.configure(state='normal' if self.connected and alerts_mode and not self.connection_jobs else 'disabled')
         if self.connected and alerts_mode:
             account = '…' + state['account'][-4:]
             monitor = state.get('alerts', {}).get('state', 'connecting')
@@ -548,9 +649,9 @@ class DesktopApp:
         else:
             self.alerts_result.set('Account not verified. Connect to check read access.')
             self.summary.set('Disconnected • ' + ('Saved connection available' if state['saved'] or state.get('saved_alerts') else 'Set up a connection to begin'))
-        host = self.connected and pair.get('role') == 'host'
+        host = self.connected and not self.connection_jobs and pair.get('role') == 'host'
         for button in self.execution_buttons:
-            button.configure(state='normal' if self.connected and not alerts_mode else 'disabled')
+            button.configure(state='normal' if self.connected and not alerts_mode and not self.connection_jobs else 'disabled')
         for button in self.host_buttons:
             button.configure(state='normal' if host else 'disabled')
         trades = execution.get('trades', [])
@@ -576,13 +677,16 @@ class DesktopApp:
         for future, callback in self.pending:
             if not future.done():
                 remaining.append((future, callback)); continue
+            self.connection_jobs.discard(future)
             try:
                 result = future.result()
                 if callback: callback(result)
                 self.notice.set('Saved / completed. Check activity for actual broker status.')
             except Exception as exc:
                 self.notice.set(str(exc) if isinstance(exc, ValueError) else 'Operation failed. Check connection and local journal.')
-                if not self.connected: self.connect_button.configure(state='normal')
+                if not self.connected:
+                    self.connect_button.configure(state='normal')
+                    self.alerts_connect.configure(state='normal')
         self.pending = remaining
         if self.poll is None:
             self.poll = self.worker.call('status')
