@@ -63,6 +63,8 @@ Keep the receiving app running. iOS suspension can stop networking; Android back
 
 Windows offers optional tray mode and current-user sign-in startup in **Start here → Windows background options**. Both are off by default. Sign-in always starts disconnected; the tray can show Crier, pause new entries, or quit. See the [Windows guide](desktop/README.md#tray-and-windows-sign-in-options).
 
+The source quantity cap rejects larger instructions; it does not choose an order size. Entry age applies before submission, while day orders may keep working afterward. The [execution settings guide](docs/execution-policies.md) explains the current behavior and distinguishes H.5's proposed sizing policies from available live features.
+
 ## Run the Python monitor and console
 
 Requires **Python 3.11+**. From PowerShell:

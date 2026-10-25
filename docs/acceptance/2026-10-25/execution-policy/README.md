@@ -1,0 +1,9 @@
+# H.5 execution-policy design acceptance
+
+Source `993ee65` implements a pure sizing/exit reference and clarifies the existing settings in Windows, Android and iOS. It does **not activate new live sizing modes**. The [design contract](../../../superpowers/specs/2026-10-25-execution-policy-design.md) separates active behavior from proposed execution work. The [source-bound report](source-evidence.json) records final CI revisions, results and artifact hashes.
+
+The reference covers source/fixed/ratio/budget targets, explicit source/local/notional limits, verified standard option size, strict decimal inputs, requested/proportional/full-tracked exits, cumulative counters and authoritative holding bounds. Its 28 scenarios and 55 reference tests include invariant loops, forbidden network/file I/O, and unchanged real legacy-settings/journal evidence. The entry result is a first-entry total target; it is not a remaining-order or authorization engine.
+
+Local verification passed **922 Python tests/one optional Webull SDK skip**, **119 focused policy/engine/clock tests**, and **105 Android tests**. Final CI passed Windows Python **922/one skip**, Linux Python **892/31 skips** in both matrix environments, backend **823/33 skips**, **105 Android tests**, **121 iOS tests**, debug/native packaging and Windows installer lifecycle checks. The Windows release environment passed **853/three optional skips**. Existing broker permission, uncertainty, cancellation and reconciliation behavior is retained.
+
+No broker orders, Discord messages, service deployment, signing or physical acceptance occurred. New live sizing/notional enforcement, proportional exits, timed cancellation and automatic repricing remain unimplemented design options. H.5's approved design scope is distinct from activating them. Phase I customer acceptance is the next approved implementation phase.

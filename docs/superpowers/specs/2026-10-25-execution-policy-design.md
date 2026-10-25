@@ -20,6 +20,8 @@ Existing settings must migrate to the legacy behavior without decreasing or incr
 
 All quantities are whole units. Decimal amounts are strings, never binary floating-point values. Reject booleans as numbers, malformed/nonfinite/negative values and unknown fields. The reference has technical bounds of 20 decimal digits and eight fractional places; source/fixed/target caps remain at most 1,000, matching the current protocol envelope.
 
+Price, budget, confirmed costs and notional limits must share a verified currency. The reference performs no currency conversion or currency verification; a future runtime plan must pin account/instrument currency and reject mismatches rather than compare unrelated amounts.
+
 The local target is calculated once for an accepted entry plan:
 
 - **Source:** source quantity.
@@ -47,7 +49,7 @@ A zero due quantity in this preview is not proof of broker terminal status and m
 
 The following are prerequisites to a later execution implementation, not claims about this reference model:
 
-1. Save an immutable local plan with account/environment/pair/trade identity, source revision, policy version/revision, sizing inputs, verified contract size, final price basis and target. Persist it before the durable unknown-order reservation. Do not modify the signed source event.
+1. Save an immutable local plan with account/environment/pair/trade identity, source revision, policy version/revision, sizing inputs, verified contract size/currency, final price basis and target. Persist it before the durable unknown-order reservation. Do not modify the signed source event.
 2. Apply changed policies only to new trades after explicit review while entries are paused. Open trades retain their plan through restart. An explicit source replace revision may create a new plan revision; favorable quotes alone never increase the target or produce another buy.
 3. Subtract **cumulative purchases**, not current net holdings, when calculating remaining entry units. Selling must not replenish a trade's entry budget. Check confirmed spent notional plus live reservations and the proposed buy against the limit. Missing fill cost/contract size or uncertain reservations block additional notional-controlled entries.
 4. Recheck plan/revision, current permissions, quantity/notional bounds and broker identity at final dispatch. A source cancel invalidates entry and cancels outstanding orders through existing reconciliation; it does not close already-filled holdings by implication. Unknown mutations are reconciled and never replayed merely because a policy changed.

@@ -1,0 +1,223 @@
+{
+  "phase": "H.5",
+  "status": "Policy design and non-executing reference verified; phase I customer acceptance remains open",
+  "collected_at_utc": "2026-10-25T22:16:27.184734+00:00",
+  "source_commit": "993ee65659ddd885d532f3b3be76626795296fed",
+  "ci_runs": [
+    {
+      "conclusion": "success",
+      "databaseId": 40238633126,
+      "headSha": "993ee65659ddd885d532f3b3be76626795296fed",
+      "name": "Provider connection preparation",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40238633126"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40238636943,
+      "headSha": "993ee65659ddd885d532f3b3be76626795296fed",
+      "name": "Android build and intent tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40238636943"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40238640533,
+      "headSha": "993ee65659ddd885d532f3b3be76626795296fed",
+      "name": "iOS build",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40238640533"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40238648586,
+      "headSha": "993ee65659ddd885d532f3b3be76626795296fed",
+      "name": "Crier live-trading safety checks",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40238648586"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40238653355,
+      "headSha": "993ee65659ddd885d532f3b3be76626795296fed",
+      "name": "Windows release",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40238653355"
+    }
+  ],
+  "local_python": {
+    "passed": 922,
+    "skipped": 1,
+    "optional_skip": "Webull SDK absent from OAuth test environment"
+  },
+  "focused_python_tests": 119,
+  "reference_tests": 55,
+  "reference_scenarios": 28,
+  "local_android_tests": 105,
+  "python_matrix": [
+    {
+      "path": "matrix/provider-preparation-ubuntu-latest-3.11/provider-preparation.xml",
+      "tests": 923,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 31
+    },
+    {
+      "path": "matrix/provider-preparation-ubuntu-latest-3.12/provider-preparation.xml",
+      "tests": 923,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 31
+    },
+    {
+      "path": "matrix/provider-preparation-windows-latest-3.11/provider-preparation.xml",
+      "tests": 923,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    }
+  ],
+  "backend": [
+    {
+      "path": "behavior/python.xml",
+      "tests": 856,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 33
+    }
+  ],
+  "android": [
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.ComponentHealthTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.CustomerOAuthTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.DiagnosticsTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.EngineTest.xml",
+      "tests": 25,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.EntryClockTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.ExecutionStartGateTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.GuidedAlertsTest.xml",
+      "tests": 24,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.HealthPersistenceTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.OAuthReturnTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.Phase2FlowTest.xml",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.PolicyTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.SetupChoicesTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "ios_behavior": {
+    "tests": 121,
+    "failures": 0,
+    "run": 40238648586
+  },
+  "windows_release_python": {
+    "passed": 853,
+    "skipped": 3
+  },
+  "artifacts": [
+    {
+      "path": "ios-unsigned-archive-validation.json",
+      "sha256": "201228a6073991ed5d9dad86995a976810f8ea453c17f24afc4658bde5e13a3d"
+    },
+    {
+      "path": "windows-installer-acceptance.json",
+      "sha256": "31a298f81f80077b91a4c2434dd50cedd0acbc2707ef50fb35cd393008553a01"
+    },
+    {
+      "path": "policy-preview-results.json",
+      "sha256": "080e2cf6589595f8b37f9a19b07eab5b23d41f5d74726c52134e0b99d8719871"
+    }
+  ],
+  "fixture_git_blob_sha256": "ebb789eb19167a2ae970876770f82133f43e8360806d1542e308fb3d0b7185e2",
+  "scope": [
+    "Explicit source/fixed/ratio/budget design with strict decimal quantity/notional arithmetic",
+    "Requested/proportional/full-tracked exit reference with reconciliation and holding bounds",
+    "Legacy projection leaves saved settings and actual journals unchanged",
+    "Preview model tested with network and file I/O forbidden; scenario runner reads its fixture file",
+    "Plain-language source-cap and entry-age/resting-order explanation in all three clients"
+  ],
+  "new_live_sizing_modes": false,
+  "execution_wired": false,
+  "automatic_repricing": false,
+  "saved_defaults_changed": false,
+  "limits": [
+    "Reference entry quantity is a first-entry total target, not a durable remaining-order planner",
+    "Notional estimates exclude fees and are not broker buying-power approval",
+    "Proportional live exits need complete authenticated cumulative source history",
+    "Future activation needs immutable local plans, migration, partial-fill cost/reservation handling and native conformance",
+    "No new timed cancellation, live notional cap or proportional exit execution is implemented",
+    "Phase I customer acceptance remains the next approved source-work phase",
+    "Signing, physical acceptance and provider activation remain external"
+  ],
+  "deployed": false,
+  "physical_acceptance": false,
+  "real_broker_orders": 0,
+  "real_discord_messages": 0
+}
