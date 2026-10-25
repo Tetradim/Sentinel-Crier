@@ -122,7 +122,7 @@ final class IntentRecoveryTests: XCTestCase {
         XCTAssertEqual(script.snapshot().deletes, 1)
         controller.disconnect()
         let restored = try IntentController(file: file, now: { clock.date })
-        try restored.connect(api: api, account: "account-a", pairing: pair, startWorkers: false)
+        try restored.connect(api: api.freshClient(customer: nil), account: "account-a", pairing: pair, startWorkers: false)
         defer { restored.disconnect() }
         clock.date.addTimeInterval(1)
         await restored.process()
@@ -153,7 +153,7 @@ final class IntentRecoveryTests: XCTestCase {
         saved.trades[desired.trade_id]!.mutations[0].cancelAttemptedAt = clock.date
         try JSONEncoder().encode(saved).write(to: file)
         let restored = try IntentController(file: file, now: { clock.date })
-        try restored.connect(api: api, account: "account-a", pairing: pair, startWorkers: false)
+        try restored.connect(api: api.freshClient(customer: nil), account: "account-a", pairing: pair, startWorkers: false)
         defer { restored.disconnect() }
         clock.date.addTimeInterval(4)
         await restored.process()

@@ -64,8 +64,14 @@ enum OAuthOwnership {
         return customer?.user.id == owner && customer?.serviceURL == serviceURL
     }
 }
-/// Injectable per-test service name; session tokens never enter defaults or URLs.
-struct CustomerSessionVault {
+protocol CustomerSessionStorage {
+    func load() -> CustomerSession?
+    func save(_ value: CustomerSession?) throws
+    func binding() -> CustomerSessionVault.Binding?
+    func saveBinding(_ binding: CustomerSessionVault.Binding?) throws
+}
+/// Production custody uses Keychain; unhosted unit tests inject an in-memory store.
+struct CustomerSessionVault: CustomerSessionStorage {
     var service = "com.tetradim.sentinelcrier.customer"
     private var query: [String: Any] { [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: "session"] }
     struct Binding: Codable, Equatable { let owner: String; let serviceURL: String }
@@ -125,10 +131,10 @@ struct ProviderGrant: Decodable {
     private var active = true
     private var lifecycle = UUID()
     private var activeWaiters: [CheckedContinuation<Void, Never>] = []
-    private let vault: CustomerSessionVault
+    private let vault: any CustomerSessionStorage
     private var api: ProviderAPI?
     private let network: URLSession
-    init(vault: CustomerSessionVault = CustomerSessionVault(), network: URLSession = CrierHTTPSession.shared) { self.vault = vault; self.network = network; customer = vault.load(); hasRetainedIdentity = vault.binding() != nil }
+    init(vault: any CustomerSessionStorage = CustomerSessionVault(), network: URLSession = CrierHTTPSession.shared) { self.vault = vault; self.network = network; customer = vault.load(); hasRetainedIdentity = vault.binding() != nil }
     func suspend(_ value: Bool) {
         guard active == value else { return }
         active = !value; lifecycle = UUID()

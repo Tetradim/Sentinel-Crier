@@ -18,6 +18,19 @@ private final class ProviderMockProtocol: URLProtocol {
     }
     override func stopLoading() {}
 }
+private final class MemoryCustomerSessionStorage: CustomerSessionStorage {
+    private var session: CustomerSession?
+    private var identity: CustomerSessionVault.Binding?
+    func load() -> CustomerSession? { session }
+    func binding() -> CustomerSessionVault.Binding? { identity }
+    func saveBinding(_ value: CustomerSessionVault.Binding?) throws { identity = value }
+    func save(_ value: CustomerSession?) throws {
+        if let value {
+            identity = CustomerSessionVault.Binding(owner: value.user.id, serviceURL: try XCTUnwrap(value.serviceURL))
+        }
+        session = value
+    }
+}
 final class ProviderConnectionsTests: XCTestCase {
     let base = "https://abcdefghijklmnopqrst.supabase.co/functions/v1/crier-oauth"
     let owner = "11111111-1111-4111-8111-111111111111"
@@ -49,7 +62,7 @@ final class ProviderConnectionsTests: XCTestCase {
         XCTAssertNil(request.value(forHTTPHeaderField: "APCA-API-KEY-ID")); XCTAssertNil(request.value(forHTTPHeaderField: "APCA-API-SECRET-KEY"))
     }
     @MainActor func testMockedSignInConsentReturnAndExplicitSafeInstall() async throws {
-        let vault = CustomerSessionVault(service: "test.customer." + UUID().uuidString)
+        let vault = MemoryCustomerSessionStorage()
         defer { try? vault.save(nil); try? vault.saveBinding(nil) }
         let flow = String(repeating: "A", count: 43)
         let jwt = try token(); var redeemCount = 0; var accountGets = 0; var saved: AlpacaCredentials?
@@ -122,7 +135,7 @@ final class ProviderConnectionsTests: XCTestCase {
             return try encode(["id": "different-account", "status": "ACTIVE", "buying_power": "1", "equity": "1", "trading_blocked": false, "account_blocked": false])
         }
         defer { session.invalidateAndCancel() }
-        let vault = CustomerSessionVault(service: "test.customer." + UUID().uuidString)
+        let vault = MemoryCustomerSessionStorage()
         defer { try? vault.save(nil); try? vault.saveBinding(nil) }
         let connections = ProviderConnections(vault: vault, network: session)
         await connections.receive(URL(string: "sentinelcrier://oauth/complete?flow=" + String(repeating: "A", count: 43))!, environment: .paper, purpose: "alerts")
@@ -168,7 +181,7 @@ final class ProviderConnectionsTests: XCTestCase {
             XCTAssertNotNil(workspace.account)
             let ticket = AlpacaTicket(id: "test-paused-confirm", environment: .paper, accountID: "account-a", symbol: "AAPL", quantity: 1, limitPrice: 1, side: "buy", positionIntent: nil, multiplier: 1, reviewedAt: Date())
             workspace.review = ticket
-            let order = try JSONDecoder().decode(AlpacaOrder.self, from: encode(["id": "broker-order", "client_order_id": ticket.id, "symbol": "AAPL", "status": "new", "qty": "1", "filled_qty": "0", "side": "buy"]))
+            let order = try JSONDecoder().decode(AlpacaOrder.self, from: encode(["id": "broker-order", "client_order_id": ticket.id, "symbol": "AAPL", "status": "new", "qty": "1", "limit_price": "1", "filled_qty": "0", "side": "buy"]))
             if cancel { try await journal.begin(ticket); try await journal.record(order, ticket: ticket) }
             let snapshot = await journal.snapshot()
             let submission = snapshot.submissions.first
@@ -183,7 +196,7 @@ final class ProviderConnectionsTests: XCTestCase {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
-        let vault = CustomerSessionVault(service: "test.customer." + UUID().uuidString)
+        let vault = MemoryCustomerSessionStorage()
         defer { try? vault.save(nil); try? vault.saveBinding(nil) }
         let other = "22222222-2222-4222-8222-222222222222"
         let jwt = try token(); let otherJWT = try token(owner: other)
