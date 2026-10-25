@@ -1,0 +1,210 @@
+{
+  "phase": "H.3",
+  "status": "Scoped source verification complete; H.4 and H.5 remain open",
+  "collected_at_utc": "2026-10-25T21:00:10.997452+00:00",
+  "initial_source_commit": "41eaa1430d2a825499734e00007e12a19c7bae29",
+  "source_commit": "88ac564c19731769eb975832f58535902eded7e3",
+  "ci_runs": [
+    {
+      "conclusion": "success",
+      "databaseId": 40232617946,
+      "headSha": "88ac564c19731769eb975832f58535902eded7e3",
+      "name": "Android build and intent tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40232617946"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40232621407,
+      "headSha": "88ac564c19731769eb975832f58535902eded7e3",
+      "name": "iOS build",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40232621407"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40232626401,
+      "headSha": "88ac564c19731769eb975832f58535902eded7e3",
+      "name": "Crier live-trading safety checks",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40232626401"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40232630510,
+      "headSha": "88ac564c19731769eb975832f58535902eded7e3",
+      "name": "Provider connection preparation",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40232630510"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40232634601,
+      "headSha": "88ac564c19731769eb975832f58535902eded7e3",
+      "name": "Windows release",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40232634601"
+    }
+  ],
+  "local_python": {
+    "passed": 840,
+    "skipped": 1,
+    "optional_skip": "Webull SDK absent in OAuth test environment"
+  },
+  "local_android": {
+    "tests": 105,
+    "failures": 0
+  },
+  "android": [
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.ComponentHealthTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.CustomerOAuthTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.DiagnosticsTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.EngineTest.xml",
+      "tests": 25,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.EntryClockTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.ExecutionStartGateTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.GuidedAlertsTest.xml",
+      "tests": 24,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.HealthPersistenceTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.OAuthReturnTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.Phase2FlowTest.xml",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.PolicyTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.SetupChoicesTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "backend": [
+    {
+      "path": "behavior/python.xml",
+      "tests": 774,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 25
+    }
+  ],
+  "python_matrix": [
+    {
+      "path": "matrix/provider-preparation-ubuntu-latest-3.11/provider-preparation.xml",
+      "tests": 841,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 23
+    },
+    {
+      "path": "matrix/provider-preparation-ubuntu-latest-3.12/provider-preparation.xml",
+      "tests": 841,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 23
+    },
+    {
+      "path": "matrix/provider-preparation-windows-latest-3.11/provider-preparation.xml",
+      "tests": 841,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    }
+  ],
+  "ios_behavior": {
+    "tests": 121,
+    "failures": 0,
+    "run": 40232626401
+  },
+  "artifacts": [
+    {
+      "path": "ios-unsigned-archive-validation.json",
+      "sha256": "201228a6073991ed5d9dad86995a976810f8ea453c17f24afc4658bde5e13a3d"
+    },
+    {
+      "path": "windows-installer-acceptance.json",
+      "sha256": "73a5e9e2c8e2ac9daf4c3bdea5a73fd2f23ddf4832ba201a7a4801449df518f8"
+    }
+  ],
+  "scope": [
+    "Monotonic local entry continuity and raw-wall future-start gate",
+    "Final dispatch revision, lifecycle, freshness, quantity and pricing checks",
+    "Typed durable known-not-submitted iOS records and contradictory-record rejection",
+    "Android sleep-inclusive elapsed time",
+    "Same-attempt initial read-only iOS account refresh deduplication",
+    "Bounded ConnectError/ConnectTimeout/PoolTimeout delivery retries; ambiguous outcomes remain uncertain"
+  ],
+  "limits": [
+    "No cross-device UTC synchronization or static skew detection",
+    "Required broker mutation preflights and unknown-POST reconciliation retained",
+    "Cancel/exit/reconciliation bypass the new entry-clock gate; existing cancellation backoff is unchanged",
+    "H.4 optional tray/startup and H.5 deliberate sizing/entry/exit policy remain open",
+    "Signing, physical acceptance and provider activation remain external"
+  ],
+  "deployed": false,
+  "physical_acceptance": false,
+  "real_broker_orders": 0,
+  "real_discord_messages": 0
+}

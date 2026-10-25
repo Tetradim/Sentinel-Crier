@@ -10,4 +10,6 @@ For iOS intent submissions, check current API/lifecycle identity, revision, paus
 
 Classify HTTPX ConnectError, ConnectTimeout and PoolTimeout as pre-send failures with the existing bounded retry policy. ReadTimeout, WriteTimeout, protocol failures and ambiguous HTTP responses remain uncertain and are not automatically replayed. Never report delivery without a valid acknowledged message ID.
 
+Compare the current pricing mode and configured slippage against the settings used to form an order at final dispatch. A change refuses the unsent entry or exit with `pricing_changed`; it does not reprice or replay the order. Existing host defaults remain unchanged. Android's running service uses `elapsedRealtime`, which includes device sleep, for entry-clock continuity. On loading the iOS journal, reject a contradictory local not-submitted marker that also contains a broker order or cancellation attempt.
+
 Tests inject time, broker preflight delays, revisions and HTTP responses. Cover clock changes before/during preflight, deferred versus skipped decisions, unchanged cancel/exit behavior, initial account-read counts, final iOS refusal and unknown POST persistence. No real order, provider login, message or deployment is needed.
