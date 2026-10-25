@@ -75,3 +75,17 @@ def test_failed_health_write_is_visible_but_never_interrupts_broker_work(tmp_pat
     monkeypatch.setattr(session.health,'record',failed)
     session.observe('broker','healthy','verified')
     assert session.status()['health_error']
+
+
+def test_locked_diagnostics_database_does_not_delay_the_worker_loop(tmp_path):
+    import sqlite3
+    import time
+    from contextlib import closing
+    session=DesktopSession(tmp_path,start_workers=False)
+    with closing(sqlite3.connect(session.health.path)) as other:
+        other.execute('BEGIN IMMEDIATE')
+        started=time.monotonic()
+        session.observe('broker','healthy','verified')
+        elapsed=time.monotonic()-started
+        assert session.health_error
+        assert elapsed<0.5

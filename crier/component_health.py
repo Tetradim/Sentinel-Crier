@@ -40,7 +40,8 @@ class ComponentHealth:
         self.begin_session()
 
     def _db(self):
-        db=sqlite3.connect(self.path,timeout=5,isolation_level=None)
+        # Diagnostics are expendable; never wait behind an external SQLite writer.
+        db=sqlite3.connect(self.path,timeout=0,isolation_level=None)
         db.row_factory=sqlite3.Row
         return db
 
