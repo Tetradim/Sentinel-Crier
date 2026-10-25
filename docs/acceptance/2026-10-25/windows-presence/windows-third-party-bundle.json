@@ -1,0 +1,8 @@
+{
+  "versions": {
+    "pystray": "0.19.5",
+    "pillow": "13.0.0",
+    "six": "1.17.0"
+  },
+  "tray_source_files": 13
+}

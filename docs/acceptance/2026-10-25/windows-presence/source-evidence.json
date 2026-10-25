@@ -1,0 +1,102 @@
+{
+  "phase": "H.4",
+  "status": "Optional Windows presence source and hosted-runner packaging verified; H.5 remains open",
+  "collected_at_utc": "2026-10-25T21:52:27.909573+00:00",
+  "source_commit": "7f8efe37068ce036246867c019df62287da3b8c5",
+  "ci_runs": [
+    {
+      "conclusion": "success",
+      "databaseId": 40237087762,
+      "headSha": "7f8efe37068ce036246867c019df62287da3b8c5",
+      "name": "Windows release",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40237087762"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40237090951,
+      "headSha": "7f8efe37068ce036246867c019df62287da3b8c5",
+      "name": "Provider connection preparation",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40237090951"
+    }
+  ],
+  "local_python": [
+    {
+      "path": "local/local-python.xml",
+      "tests": 868,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    }
+  ],
+  "python_matrix": [
+    {
+      "path": "matrix/provider-preparation-ubuntu-latest-3.11/provider-preparation.xml",
+      "tests": 868,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 31
+    },
+    {
+      "path": "matrix/provider-preparation-ubuntu-latest-3.12/provider-preparation.xml",
+      "tests": 868,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 31
+    },
+    {
+      "path": "matrix/provider-preparation-windows-latest-3.11/provider-preparation.xml",
+      "tests": 868,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "windows-installer-acceptance.json",
+      "sha256": "95d7e843f6d059ca01568ded6d0748da2f070a19ebcfc21753ee9193b5b1be51"
+    },
+    {
+      "path": "windows-packaged-smoke.json",
+      "sha256": "dc64896554c2f52c8a04f4a15823cfecdb49069711b9a9368c82094ce495adcf"
+    },
+    {
+      "path": "windows-third-party-bundle.json",
+      "sha256": "c87a47e2f3c09206b9787b7efd06e84e6c35200b8d010ab49555fc3c7ccfef96"
+    }
+  ],
+  "focused_tests": 62,
+  "scope": [
+    "Default-off tray preference and explicit current-user startup registration",
+    "Tk-thread queued Show/Pause/Quit actions; no tray enable-entries action",
+    "Tray readiness, late-setup shutdown fencing, failure-visible fallback and existing disconnect flow",
+    "All sign-in launches disconnected; frozen Windows executable only",
+    "Packaged native icon ready/stopped with no network calls",
+    "Installer default-off, explicit startup opt-in preserved on upgrade and removed on uninstall",
+    "Exact installed tray library source/build files and license notices included and verified inside the ZIP"
+  ],
+  "limits": [
+    "Physical Explorer/taskbar interaction and real Windows sign-in remain untested",
+    "No automatic broker connection, restored order permission or new Discord authorization",
+    "No iOS/Android code changed in H.4",
+    "H.5 deliberate sizing and entry/exit policy design remains open",
+    "Signing, physical acceptance and provider activation remain external"
+  ],
+  "deployed": false,
+  "physical_acceptance": false,
+  "real_broker_orders": 0,
+  "real_discord_messages": 0,
+  "implementation_commit": "9264df2ba39a548fa556dba452d54367bb8293ca",
+  "release_python": {
+    "passed": 798,
+    "skipped": 3,
+    "evidence": "Successful Windows release workflow console summary"
+  },
+  "dependency_bundle": {
+    "tray_source_files": 13,
+    "sources_match_pinned_distribution": true,
+    "upstream_license_and_build_files_match": true
+  }
+}

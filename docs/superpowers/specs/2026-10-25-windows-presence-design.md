@@ -8,4 +8,6 @@ Use pystray's Windows backend with a generated Pillow icon. Native callbacks enq
 
 Prefer a supported tray library to Win32 window-procedure hooks or a new Windows service. Keep a visible window as the fallback instead of allowing an invisible worker. Do not change existing price/sizing policies, process locks or OAuth-return handling. Tests use fake registry/tray boundaries and hidden Tk windows; actual packaged tray startup/shutdown is checked on the ephemeral Windows CI runner, without broker or Discord calls. Physical Explorer/taskbar interaction remains deferred.
 
+Windows packages also carry the exact installed tray library's Python source, upstream source-build files and GPL/LGPL license texts. Pillow/six notices and installed dependency versions accompany them. The source bundler refuses a mismatched tray version or missing source/license data. This preserves dependency terms without changing Crier's application license.
+
 Tray lifecycle reference: [pystray usage](https://pystray.readthedocs.io/en/latest/usage.html), inspected 2026-10-25. Windows permits its event loop on a worker thread; callbacks must not touch Tk directly.
