@@ -1,0 +1,2 @@
+# Preserve downloaded acceptance evidence byte-for-byte for recorded checksums.
+docs/acceptance/2026-10-25/dispatch-freshness/*.json -text whitespace=cr-at-eol
