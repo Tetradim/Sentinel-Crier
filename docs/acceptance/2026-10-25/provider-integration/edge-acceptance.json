@@ -1,0 +1,33 @@
+{
+  "schema": "crier.provider-edge-acceptance.v1",
+  "scenarios": [
+    {
+      "name": "capabilities and internal prefix use pinned public base",
+      "status": "passed"
+    },
+    {
+      "name": "customer login does not install browser cookies",
+      "status": "passed"
+    },
+    {
+      "name": "login form durable CSRF and same-owner consent to one-use receipt",
+      "status": "passed"
+    },
+    {
+      "name": "shared launch ticket cannot bind a different browser customer",
+      "status": "passed"
+    },
+    {
+      "name": "ambiguous exchange remains nonretryable; cancel removes custody",
+      "status": "passed"
+    },
+    {
+      "name": "Discord issuer/cookie denial and verified channel receipt use actual SQL",
+      "status": "passed"
+    }
+  ],
+  "external_calls": "synthetic_only",
+  "broker_orders": 0,
+  "discord_messages": 0,
+  "deployed": false
+}

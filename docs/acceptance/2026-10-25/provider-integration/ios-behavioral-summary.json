@@ -1,0 +1,10 @@
+{
+  "source_commit": "2159e3bab126a331a1c25d796d92abf9c6f1a597",
+  "run": 40200121155,
+  "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40200121155",
+  "tests": 107,
+  "failures": 0,
+  "unexpected_failures": 0,
+  "scope": "iPhone simulator; injected network and test session storage; production Keychain remains external physical acceptance",
+  "log_sha256": "75df2a64b75efc4a5cae18fac12894f0abe2c18ec3fc42b015993fdab8dee8cf"
+}

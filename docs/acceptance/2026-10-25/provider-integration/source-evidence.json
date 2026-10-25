@@ -1,0 +1,190 @@
+{
+  "phase": "G.6",
+  "status": "G.6 scoped source integration verified; live activation remains external",
+  "collected_at_utc": "2026-10-25T14:10:38.162544+00:00",
+  "edge_source": "d2b02c69ec7817342599e4168929def612e3166b",
+  "native_source": "cecaefbe31d547dda50c6bf3e23f34463cf1d967",
+  "local": {
+    "python_passed": 800,
+    "python_skipped": 1,
+    "android_tests": 86,
+    "deno_tests": 17,
+    "synthetic_gateway_scenarios": 6,
+    "supplemental_regression": "Manual broker recovery retains and quarantines an OAuth Discord destination while signed out."
+  },
+  "python_matrix": [
+    {
+      "platform": "provider-preparation-ubuntu-latest-3.11",
+      "tests": 800,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 21,
+      "passed": 779
+    },
+    {
+      "platform": "provider-preparation-ubuntu-latest-3.12",
+      "tests": 800,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 21,
+      "passed": 779
+    },
+    {
+      "platform": "provider-preparation-windows-latest-3.11",
+      "tests": 800,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "passed": 799
+    }
+  ],
+  "android": {
+    "tests": 86,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 86
+  },
+  "ci_runs": [
+    {
+      "conclusion": "success",
+      "databaseId": 40199133183,
+      "headSha": "d2b02c69ec7817342599e4168929def612e3166b",
+      "name": "Provider Edge integration",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40199133183"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40199136426,
+      "headSha": "d2b02c69ec7817342599e4168929def612e3166b",
+      "name": "Supabase relay tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40199136426"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40199390896,
+      "headSha": "cecaefbe31d547dda50c6bf3e23f34463cf1d967",
+      "name": "Provider connection preparation",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40199390896"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40199393979,
+      "headSha": "cecaefbe31d547dda50c6bf3e23f34463cf1d967",
+      "name": "Windows release",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40199393979"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40199396780,
+      "headSha": "cecaefbe31d547dda50c6bf3e23f34463cf1d967",
+      "name": "Android build and intent tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40199396780"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40199399942,
+      "headSha": "cecaefbe31d547dda50c6bf3e23f34463cf1d967",
+      "name": "iOS build",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40199399942"
+    },
+    {
+      "conclusion": "failure",
+      "databaseId": 40199403145,
+      "headSha": "cecaefbe31d547dda50c6bf3e23f34463cf1d967",
+      "name": "Crier live-trading safety checks",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40199403145"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40200121155,
+      "headSha": "2159e3bab126a331a1c25d796d92abf9c6f1a597",
+      "name": "Crier live-trading safety checks",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40200121155"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40200124153,
+      "headSha": "2159e3bab126a331a1c25d796d92abf9c6f1a597",
+      "name": "iOS build",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40200124153"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "edge-acceptance.json",
+      "sha256": "c60a705acbaf711191a38d60b97d75e171f6e5de4e2411d8e5a15f070f079371"
+    },
+    {
+      "path": "windows-installer-acceptance.json",
+      "sha256": "6b90a37de33488706cf7b04ef28f361bd96696447d7d968f21c04b04fb121a05"
+    },
+    {
+      "path": "ios-unsigned-archive-validation.json",
+      "sha256": "201228a6073991ed5d9dad86995a976810f8ea453c17f24afc4658bde5e13a3d",
+      "source_commit": "2159e3bab126a331a1c25d796d92abf9c6f1a597"
+    },
+    {
+      "path": "ios-behavioral-summary.json",
+      "sha256": "6dd3872e47a25585e28ad3b0ea1182145dd8dc9e91eb2d4df2db2547616bfa6f"
+    }
+  ],
+  "deployed": false,
+  "live_provider_consent_tested": false,
+  "physical_acceptance": false,
+  "broker_orders": 0,
+  "discord_messages": 0,
+  "supplemental_regression_commit": "1884e988af3a44bf704d2255682ef77bcc458de9",
+  "ios_correction_commit": "2159e3bab126a331a1c25d796d92abf9c6f1a597",
+  "initial_ios_behavioral_failure": {
+    "run": 40199403145,
+    "tests": 107,
+    "assertion_failures": 21,
+    "causes": [
+      "Recovery fixtures reused deliberately invalidated REST clients",
+      "Saved-order cancellation fixture omitted required limit_price",
+      "Unhosted customer login tests assumed Keychain access"
+    ],
+    "correction": "Inject in-memory session storage in tests; production still uses Keychain. Reconnect recovery tests with fresh clients; retain stale-client rejection tests. Supply complete broker order fixture."
+  },
+  "initial_default_python": {
+    "tests": 733,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 23
+  },
+  "corrected_default_python": {
+    "tests": 734,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 23
+  },
+  "final_successful_gates": [
+    40199133183,
+    40199136426,
+    40199390896,
+    40199393979,
+    40199396780,
+    40200124153,
+    40200121155
+  ],
+  "ios_behavioral": {
+    "source_commit": "2159e3bab126a331a1c25d796d92abf9c6f1a597",
+    "run": 40200121155,
+    "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40200121155",
+    "tests": 107,
+    "failures": 0,
+    "unexpected_failures": 0,
+    "scope": "iPhone simulator; injected network and test session storage; production Keychain remains external physical acceptance",
+    "log_sha256": "75df2a64b75efc4a5cae18fac12894f0abe2c18ec3fc42b015993fdab8dee8cf"
+  }
+}

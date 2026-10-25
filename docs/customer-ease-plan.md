@@ -60,3 +60,15 @@ Phase G connection-flow preparation is implemented through G.5; customer integra
 ## Phase G preparation status
 
 The dedicated matrix passed Windows Python 3.11 (**765/one optional SDK skip**) and Linux Python 3.11/3.12 (**746/20 platform skips**). Android passed **72 tests** and debug APK packaging; iOS passed **98 tests**, simulator compilation and unsigned hardware archive validation. The [source-bound report](acceptance/2026-10-25/provider-preparation/source-evidence.json) links source `e36d68f`, the collection-time fixture correction `c7ac145`, and all CI runs. Existing API-key/webhook setup remains the customer operating path until G.6 integration and activation are complete.
+
+## Phase G.6 integration status
+
+The separate Supabase Edge service and customer login/BFF, encrypted one-use Postgres custody, installed native returns and provider credential installation are implemented in `d2b02c6` and `cecaefb`. The [integration plan](superpowers/plans/2026-10-25-provider-edge-integration.md) and [source-bound acceptance report](acceptance/2026-10-25/provider-integration/source-evidence.json) supersede the earlier preparation report's unwired-integration status.
+
+Review fixes cover in-flight cancellation, Windows callback-file publication, Android queued-start/logout races, unchanged-destination ownership preservation and iOS stale mutation tasks/background resume. Customer/project ownership is checked at credential installation and use. A manually keyed broker can recover while an OAuth Discord destination remains quarantined; unresolved evidence is preserved.
+
+Activation remains external: register provider apps/callbacks, configure protected secrets, deploy the separate service and validate real consent. Webull approval/adapter, signing and physical acceptance remain deferred. No real provider consent, order or Discord message was used by the automated verification.
+
+The next independent implementation phase is H: operational health/freshness and recovery presentation. OAuth activation need not block that source work. Existing execution-price/risk behavior must remain explicit; no automatic policy changes are implied by the connection work.
+
+G.6 scoped source verification is complete. Local checks passed **800 Python tests/one optional SDK skip**, **86 Android JUnit tests**, **17 Deno tests**, and six synthetic gateway/SQL scenarios. CI passed real PostgreSQL concurrency/permissions, the Python platform matrix, Android debug packaging, Windows installer lifecycle and corrected iOS simulator/unsigned archive plus **107 behavioral tests**. The initial iOS fixture/storage assumptions and their correction `2159e3b` remain recorded in the integration report. These results do not constitute deployment, provider consent or physical acceptance.

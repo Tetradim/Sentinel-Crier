@@ -25,7 +25,7 @@ The implemented trading clients currently use **Alpaca**. **Webull Connect is no
 | Windows | Alpaca desktop client, Host / Receive, Discord configuration and diagnostics. Installer/portable candidates produced; installer lifecycle tested in CI. Publisher signing is absent. |
 | Python console | Local monitor/publisher, manual receipt review, alert preview/history and optional intent execution. |
 
-**Provider OAuth:** Alpaca/Discord server-flow and native return-contract preparation is tested. Customer login, Supabase deployment and credential installation are still unwired; current apps use API keys/webhooks. See [provider connection status](docs/provider-connections.md).
+**Provider OAuth:** The separate Supabase service and Windows/iOS/Android customer sign-in, return handling and credential installation are implemented. Activation still needs deployment, registered Alpaca/Discord applications and real consent acceptance. API-key/webhook setup remains available. See [provider connection status](docs/provider-connections.md).
 | Alpaca | Paper/live clients for whole-share stocks and standard long single-leg options. The separate Python fill monitor also handles supported fractional stock fills. |
 | Tradier | Read-only Python polling adapter; account-specific validation is required. |
 | Webull Trading API | Experimental Python SDK observer with separate enrollment and verification requirements. |

@@ -26,9 +26,9 @@ The authenticated owner comes from a trusted server verifier, never request JSON
 
 ## Remaining customer integration
 
-- [ ] G.6 Implement the Supabase Edge deployment adapter, login/BFF and native session lifecycle, installed callback handlers, authenticated redemption and secure Bearer-token/Discord destination installation with identity/journal checks. These are remaining source integration tasks; adding provider keys alone does not complete them. Preserve explicit publishing/trading permission and current API-key recovery throughout.
+- [x] G.6 source integration: Supabase Edge adapter, login/BFF, native session lifecycle, installed callback handlers, authenticated redemption and secure Bearer-token/Discord destination installation with identity/journal checks. Follow-up verification and external activation are tracked in [the G.6 plan](2026-10-25-provider-edge-integration.md). API-key recovery and explicit publishing/trading permission remain intact.
 
-The [operator guide](../../provider-connections.md) documents current composition and remaining work. This plan does not claim working customer OAuth while G.6 remains open.
+The [operator guide](../../provider-connections.md) documents current composition and remaining activation work. Provider registration, deployment and real consent acceptance are not established by source integration.
 
 ## Verification evidence
 
@@ -38,4 +38,4 @@ Independent reviews led to mandatory same-owner browser authentication, conserva
 
 The implementation revision also passed [72 Android tests/debug APK packaging](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40166643423), [iOS simulator/unsigned hardware archive](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40166645228), and [98 iOS tests/default backend](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40166646930). The default Linux profile passed 677/22 skips, including the explicitly absent optional OAuth dependency. The dedicated matrix executes those OAuth tests.
 
-The [source-bound report](../../acceptance/2026-10-25/provider-preparation/source-evidence.json) records exact revisions, counts, the initial fixture failure and unresolved integration scope. No provider consent, remote deployment, broker order, Discord message or physical acceptance was performed. G.1–G.5 preparation is verified; G.6 and live activation remain open.
+The [preparation report](../../acceptance/2026-10-25/provider-preparation/source-evidence.json) records those earlier revisions and the initial fixture correction. G.6 supersedes its integration status; see [current integration evidence](../../acceptance/2026-10-25/provider-integration/source-evidence.json). No provider consent, remote deployment, broker order, Discord message or physical acceptance was performed.
