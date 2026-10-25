@@ -1,6 +1,6 @@
 """Native Windows desktop for the shared iOS/Android/PC intent protocol."""
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import tempfile
@@ -55,10 +55,11 @@ class DesktopApp:
         tabs.add(setup, text='Host / Receive')
         tabs.add(pricing, text='Pricing')
         delivery = ttk.Frame(tabs, padding=14)
+        self.delivery_tab=delivery
         tabs.add(delivery, text='Discord & receivers')
         self.build_delivery(delivery)
         diagnostics = ttk.Frame(tabs, padding=14)
-        tabs.add(diagnostics, text='Diagnostics')
+        tabs.add(diagnostics, text='Health')
         self.setup_tab = setup
         tabs.select(start)
         self._start(start)
@@ -69,7 +70,13 @@ class DesktopApp:
         self._setup(setup)
         self._pricing(pricing)
         self._activity(self.activity)
-        self._diagnostics(diagnostics)
+        health_sections=ttk.Notebook(diagnostics); health_sections.pack(fill='both',expand=True)
+        connection_health=ttk.Frame(health_sections,padding=8)
+        timeline=ttk.Frame(health_sections,padding=8)
+        health_sections.add(connection_health,text='Connections')
+        health_sections.add(timeline,text='Trade timeline')
+        self._health(connection_health)
+        self._diagnostics(timeline)
         self.notice = tk.StringVar(value='Choose Send my fills to Discord, Trade/share trades, or Follow trades in Start here.')
         ttk.Label(outer, textvariable=self.notice, wraplength=1000).pack(anchor='w', pady=(12,0))
         ttk.Label(outer, text='Keep this PC awake and Crier running. Closing stops monitoring and mirroring; existing broker orders remain.',
@@ -576,6 +583,49 @@ class DesktopApp:
             button.configure(state='disabled')
             self.host_buttons.append(button)
 
+    def _health(self, frame):
+        ttk.Label(frame,text='Connection health',font=('Segoe UI',14,'bold')).pack(anchor='w')
+        ttk.Label(frame,text='Last successes are evidence, not permission to trade. Reconnect after restart to verify again.',wraplength=700).pack(anchor='w',pady=8)
+        self.health_rows=ttk.Treeview(frame,columns=('component','state','success','recovery'),show='headings',height=6,selectmode='browse')
+        for column,title,width in [('component','Component',120),('state','State',105),('success','Last success (local)',160),('recovery','Recovery',325)]:
+            self.health_rows.heading(column,text=title); self.health_rows.column(column,width=width,minwidth=65,stretch=True)
+        self.health_rows.pack(fill='x',pady=8)
+        self.health_notice=tk.StringVar(value='No current health evidence. Connect the intended account to begin.')
+        self.health_data={}
+        self.health_rows.bind('<<TreeviewSelect>>',lambda event:self.show_health_detail())
+        ttk.Label(frame,textvariable=self.health_notice,wraplength=700).pack(anchor='w',pady=8)
+        actions=ttk.Frame(frame); actions.pack(anchor='w',pady=8)
+        ttk.Button(actions,text='Account setup',command=lambda:self.tabs.select(self.alerts_tab if self.latest.get('mode')=='alerts' else self.setup_tab)).pack(side='left',padx=3)
+        self.health_activity_button=ttk.Button(actions,text='Order activity',command=lambda:self.tabs.select(self.activity))
+        self.health_activity_button.pack(side='left',padx=3)
+        ttk.Button(actions,text='Discord history',command=lambda:self.tabs.select(self.delivery_tab)).pack(side='left',padx=3)
+        ttk.Button(actions,text='Disconnect',command=lambda:self.submit('disconnect')).pack(side='left',padx=3)
+        ttk.Label(frame,text='Idle means no queued work; it does not prove the remote service is reachable. Inspect uncertain orders or messages before retrying.',wraplength=700).pack(anchor='w',pady=8)
+
+    def show_health_detail(self):
+        selected=self.health_rows.selection()
+        row=self.health_data.get(selected[0]) if selected else None
+        if row:
+            reason=(row.get('reason') or 'No check in this connection').replace('_',' ')
+            self.health_notice.set(f"{row['label']}: {reason}. {row['recovery']}")
+
+    def render_health(self, rows, unavailable=False):
+        self.health_data={row['component']:row for row in rows}
+        for row in rows:
+            timestamp=row.get('last_success')
+            try: success=datetime.fromtimestamp(timestamp,timezone.utc).astimezone().strftime('%Y-%m-%d %H:%M:%S') if timestamp is not None else 'Never confirmed'
+            except (ValueError,TypeError,OSError,OverflowError): success='Timestamp unavailable'
+            values=(row['label'],row['state'].replace('_',' ').title(),success,row['recovery'])
+            if self.health_rows.exists(row['component']): self.health_rows.item(row['component'],values=values)
+            else: self.health_rows.insert('','end',iid=row['component'],values=values)
+        for identity in self.health_rows.get_children():
+            if identity not in self.health_data: self.health_rows.delete(identity)
+        if unavailable:
+            self.health_notice.set('Health history unavailable; statuses may be incomplete. Trading and delivery journals are retained.')
+        else:
+            self.health_notice.set('Select a component for details. Stopped components require explicit reconnect or enable.')
+            self.show_health_detail()
+
     def _diagnostics(self, frame):
         ttk.Label(frame, text='Execution evidence', font=('Segoe UI', 12, 'bold')).pack(anchor='w')
         ttk.Label(frame, text='Select a trade in Trading & activity, then load its local timeline. Remote device records are not merged.',
@@ -690,6 +740,7 @@ class DesktopApp:
 
     def render(self, state):
         self.latest = state
+        self.render_health(state.get('health',[]),state.get('health_error',False))
         if self.connected != state['connected']:
             self.clear_delivery_list('alerts')
             self.clear_delivery_list('receivers')

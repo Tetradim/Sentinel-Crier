@@ -18,6 +18,34 @@ def test_success_records_discord_message_id(tmp_path):
     row = db.history()[0]
     assert row["status"] == "sent" and row["message_id"] == "987"
 
+
+def test_health_reports_confirmed_send_and_never_leaks_transport_details(tmp_path):
+    db=prepared(tmp_path); observed=[]
+    with httpx.Client(transport=httpx.MockTransport(lambda r:httpx.Response(200,json={'id':'987'}))) as client:
+        deliver_once(db,URL,client,observe=lambda *args:observed.append(args))
+    assert observed==[('discord','healthy','delivered')]
+    assert db.history()[0]['status']=='sent'
+    assert not deliver_once(db,URL,client,observe=lambda *args:observed.append(args))
+    assert observed[-1]==('discord','idle','no_work')
+
+
+def test_health_failure_cannot_interrupt_delivery_or_authorize_uncertain_retry(tmp_path):
+    db=prepared(tmp_path)
+    def timeout(request): raise httpx.ReadTimeout('Bearer private-credential')
+    observed=[]
+    with httpx.Client(transport=httpx.MockTransport(timeout)) as client:
+        deliver_once(db,URL,client,observe=lambda *args:observed.append(args))
+    assert observed==[('discord','blocked','uncertain')]
+    assert db.history()[0]['status']=='uncertain'; assert db.claim() is None
+    with httpx.Client(transport=httpx.MockTransport(lambda r: (_ for _ in ()).throw(AssertionError('No retry')))) as client:
+        assert not deliver_once(db,URL,client,observe=lambda *args:observed.append(args))
+    assert observed[-1]==('discord','blocked','uncertain')
+    db2=prepared(tmp_path/'another')
+    def broken(*args): raise RuntimeError('health disk unavailable')
+    with httpx.Client(transport=httpx.MockTransport(lambda r:httpx.Response(200,json={'id':'988'}))) as client:
+        assert deliver_once(db2,URL,client,observe=broken)
+    assert db2.history()[0]['status']=='sent'
+
 def test_rate_limit_defers_without_marking_sent(tmp_path):
     db = prepared(tmp_path)
     with httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(429,json={"retry_after":30}))) as client:

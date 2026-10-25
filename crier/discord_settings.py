@@ -16,6 +16,7 @@ class DiscordPublisher:
     def __init__(self, folder, store, webhook='', enabled=False):
         self.path=Path(folder)/'discord-destination.secret'
         self.store=store
+        self.observe=None
         self.destination=json.loads(load_secret(self.path)) if self.path.exists() else dict(webhook=webhook,enabled=enabled)
 
     def configure(self, webhook, enabled, *, allow_initial=False, oauth=None):
@@ -71,7 +72,7 @@ class DiscordPublisher:
 
     def deliver(self, client):
         if not self.destination['enabled'] or self.store.get_settings().paused: return False
-        return deliver_once(self.store,self.destination['webhook'],client)
+        return deliver_once(self.store,self.destination['webhook'],client,observe=self.observe)
 
     def retry(self, identity):
         with self.store.connect() as db:
@@ -104,5 +105,5 @@ class DiscordPublisher:
             db.execute('INSERT INTO outbox(id,created,fill,payload) VALUES (?,?,?,?)',
                        (identity,time.time(),json.dumps(fill),json.dumps(payload)))
         # A test action sends only this job; it never drains old live alerts.
-        deliver_once(self.store,self.destination['webhook'],client,job_id=identity)
+        deliver_once(self.store,self.destination['webhook'],client,job_id=identity,observe=self.observe)
         return next(row for row in self.store.history() if row['id']==identity)

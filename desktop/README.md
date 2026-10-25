@@ -140,3 +140,23 @@ customer sessions use the same service binding. Provider Bearer credentials with
 ownership metadata are rejected; explicitly entered manual API keys retain the normal
 account/environment recovery path. OAuth Discord ownership metadata is encrypted in
 the same atomic destination write as the webhook, and survives reusing that webhook.
+
+## Component health
+
+Open **Health → Connections** for independent broker, fill-monitor, trade-sharing,
+trade-receiving, execution-worker and Discord status. Checks observe the operations
+Crier already performs; opening the panel sends no additional requests. Last successes
+are saved per account/environment/connection, but restart and reconnect require fresh
+checks. Stopped, waiting, idle, stale, blocked and degraded states have distinct meanings.
+Idle sharing means there is no queued work, not proof that the relay is reachable.
+
+Freshness is measured with a monotonic clock. A changed PC clock is displayed and
+requires a clock check/reconnect; it does not silently extend execution instructions.
+The panel offers setup, order activity, Discord history and disconnect actions.
+**Health → Trade timeline** retains the existing execution evidence and exports.
+Inspect unknown broker outcomes or uncertain Discord messages before retrying. Health
+never resolves an order or grants trading/publishing permission. If health storage is
+unavailable, the panel reports that separately; existing trading journals are retained.
+
+This health panel is the Windows H.1 implementation. Equivalent native mobile health
+presentation, tray/startup options and execution-policy review remain later H slices.

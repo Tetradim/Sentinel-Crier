@@ -302,6 +302,28 @@ def test_disconnected_legacy_save_controls_cannot_edit_previous_profile(app):
     assert not app.worker.calls
     assert 'verify' in app.notice.get()
 
+
+def test_health_panel_shows_component_evidence_without_starting_workers(app):
+    app.render_health([dict(component='broker',label='Broker account',state='stale',last_success=1000,reason='verified',recovery='Reconnect the same account.')],False)
+    assert 'Stale' in app.health_rows.item('broker','values')
+    assert app.health_rows.item('broker','values')[-1]=='Reconnect the same account.'
+    assert not app.worker.calls
+    app.health_activity_button.invoke()
+    assert app.tabs.select()==str(app.activity)
+    app.render_health([],True)
+    assert 'unavailable' in app.health_notice.get()
+
+
+def test_health_actions_fit_minimum_window_and_invalid_timestamps_do_not_break_status(app):
+    app.root.attributes('-alpha',0); app.root.geometry('850x680'); app.root.deiconify()
+    tab=next(tab for tab in app.tabs.tabs() if app.tabs.tab(tab,'text')=='Health')
+    app.tabs.select(tab); app.root.update()
+    button=app.health_activity_button
+    assert button.winfo_height()>=20
+    assert button.winfo_rooty()+button.winfo_height()<=app.root.winfo_rooty()+app.root.winfo_height()
+    app.render_health([dict(component='broker',label='Broker account',state='clock_changed',last_success=1e100,reason='verified',recovery='Check the PC clock.')])
+    assert app.health_rows.item('broker','values')[2]=='Timestamp unavailable'
+
 def test_provider_panel_capabilities_and_purpose(tk_root, monkeypatch):
     window=tk.Toplevel(tk_root); window.withdraw()
     worker=Worker(); desktop=DesktopApp(window,worker)

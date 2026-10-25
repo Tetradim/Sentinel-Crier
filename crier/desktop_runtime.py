@@ -4,6 +4,7 @@ from concurrent.futures import Future
 import json
 import hashlib
 import os
+import sqlite3
 from pathlib import Path
 import threading
 from .service_url import service_url
@@ -17,6 +18,7 @@ from .intent_routes import Pair
 from .connection_client import ConnectionClient
 from .store import Store
 from .discord_settings import DiscordPublisher
+from .component_health import ComponentHealth
 
 
 def data_directory():
@@ -86,6 +88,12 @@ class DesktopSession:
                  alerts_lookup=discover_alerts_account, alerts_factory=AlpacaFillReader):
         self.folder = Path(folder)
         self.folder.mkdir(parents=True, exist_ok=True)
+        self.health_error=False
+        try:
+            self.health=ComponentHealth(self.folder/'component-health.sqlite3')
+            self.health_scope=self.health.latest_scope()
+        except (OSError,sqlite3.Error):
+            self.health=None; self.health_scope='unconfigured'; self.health_error=True
         self.credentials = self.folder/'desktop-credentials.secret'
         self.alerts_credentials = self.folder/'desktop-alerts-credentials.secret'
         self.alerts_lookup, self.alerts_factory = alerts_lookup, alerts_factory
@@ -106,10 +114,35 @@ class DesktopSession:
         self.auth_closing = False
         self.lifecycle = asyncio.Lock()
         self.intent_publisher=DiscordPublisher(self.folder,Store(self.folder/"alerts.sqlite3"))
+        self.intent_publisher.observe=self.observe
         self.publisher = self.intent_publisher
         self.publisher.store.recover()
         self.alert_state={'state':'stopped'}
         self.discord_authorized = False
+
+    def observe(self, component, state, reason):
+        if self.health is None: return
+        try:
+            self.health.record(self.health_scope,component,state,reason)
+            self.health_error=False
+        except (OSError,sqlite3.Error): self.health_error=True
+
+    def begin_health(self, environment, account, pair=None):
+        self.health_scope=hashlib.sha256(json.dumps([environment,account,pair],sort_keys=True).encode()).hexdigest()
+        if self.health: self.health.begin_session()
+        self.observe('broker','healthy','verified')
+
+    def component_status(self):
+        active=set()
+        if self.broker and not self.closing and not self.auth_closing:
+            active.add('broker')
+            if hasattr(self.broker,'client'): active.add('fills')
+            if self.device:
+                active.add('execution')
+                active.add('relay_send' if self.device.pair['role']=='host' else 'relay_receive')
+            if self.discord_authorized: active.add('discord')
+        try: return self.health.snapshot(self.health_scope,active) if self.health else []
+        except (OSError,sqlite3.Error): self.health_error=True; return []
 
     def provider_client(self):
         if self.oauth is None:
@@ -318,11 +351,18 @@ class DesktopSession:
             if not self.broker or not hasattr(self.broker,'client'): return
             broker, account = self.broker, self.account
             def poll():
-                broker.verify(broker.environment)
+                try: broker.verify(broker.environment)
+                except Exception as exc:
+                    auth=isinstance(exc,httpx.HTTPStatusError) and exc.response.status_code in (401,403)
+                    self.observe('broker','blocked' if auth else 'degraded','authentication_failed' if auth else 'connection_failed')
+                    raise
+                self.observe('broker','healthy','verified')
                 return poll_once(self.publisher.store,broker.client,account,broker.environment)
             try:
                 self.alert_state=await asyncio.to_thread(poll)
+                self.observe('fills','healthy','checked')
             except Exception:
+                self.observe('fills','degraded','connection_failed')
                 self.alert_state={'state':'reconnecting','message':'Fill activity unavailable; saved cursor retained. No inferred fills published.'}
 
     def require_disconnected(self):
@@ -358,7 +398,9 @@ class DesktopSession:
                 publisher.store.recover()
                 save_secret(self.alerts_credentials, json.dumps(dict(environment=environment, account=account, key=key, secret=secret, **({'bearer':bearer,'oauth':saved['oauth']} if bearer else {}))))
                 self.publisher = publisher
+                publisher.observe=self.observe
                 self.broker, self.account, self.environment, self.mode = broker, account, environment, 'alerts'
+                self.begin_health(environment,account)
                 self.alert_state = {'state':'connecting'}
                 self.stop = asyncio.Event()
                 enrollment = asyncio.create_task(self.poll_alerts())
@@ -399,7 +441,9 @@ class DesktopSession:
     def deliver_alerts(self, client):
         if self.discord_authorized and not self.closing and not self.auth_closing:
             try: self.require_oauth_owner(self.publisher.destination)
-            except ValueError: return False
+            except ValueError:
+                self.observe('discord','blocked','customer_required')
+                return False
             return self.publisher.deliver(client)
         return False
 
@@ -439,6 +483,8 @@ class DesktopSession:
                 raise
             self.device, self.broker, self.account = device, broker, account
             self.environment, self.mode = pair['environment'], 'intent'
+            self.begin_health(pair['environment'],account,pair)
+            device.observe=self.observe
             self.publisher = self.intent_publisher
             # Enroll pre-existing activity silently before the user enables orders.
             await self.poll_alerts()
@@ -460,7 +506,7 @@ class DesktopSession:
         return dict(state, connected=self.broker is not None and not self.closing, mode=self.mode, environment=self.environment,
                     account=self.account, saved=self.credentials.exists(), saved_alerts=self.alerts_credentials.exists(),
                     runtime='foreground' if self.broker else 'stopped',
-                    alerts=self.alert_state,
+                    alerts=self.alert_state, health=self.component_status(), health_error=self.health_error,
                     recovery=recovery)
 
     async def diagnostics(self, trade_id, side='buy'):

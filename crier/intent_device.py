@@ -18,12 +18,14 @@ from .intent_protocol import IntentEvent
 from .intent_engine import IntentEngine
 from .diagnostics_client import DiagnosticsClient
 from .trade_diagnostics import trade_report, export_trade_json, export_trade_csv
+from .component_health import emit
 
 class IntentDevice:
-    def __init__(self,folder,broker=None):
+    def __init__(self,folder,broker=None,*,observe=None):
         self.folder=Path(folder); self.folder.mkdir(parents=True,exist_ok=True)
         self.path=self.folder/'intent-device.sqlite3'; self.broker=broker
         self.pair=None; self.engine=None; self.message='Not paired'; self.lock=threading.RLock()
+        self.observe=observe
         self.changed=asyncio.Event()
         self.publish_changed=asyncio.Event()
         with self.db() as db:
@@ -149,6 +151,7 @@ class IntentDevice:
             while not stop.is_set():
                 self.publish_changed.clear()
                 if self.pair and self.pair['role']=='host' and self.engine:
+                    if not self.outgoing(): emit(self.observe,'relay_send','idle','no_work')
                     for row in self.outgoing():
                         if stop.is_set(): break
                         try:
@@ -161,20 +164,24 @@ class IntentDevice:
                             with self.db() as db: db.execute("UPDATE outgoing SET state='sent' WHERE id=?",(row['id'],))
                             self._trace(row['trade_id'],'relay_publish_acknowledged',event_id=row['id'],http_status=response.status_code)
                             self.message='Intent delivered'
+                            emit(self.observe,'relay_send','healthy','delivered')
                             failures=0
                         except httpx.HTTPStatusError as exc:
                             if exc.response.status_code in (400,404,409,410,422):
                                 with self.db() as db: db.execute("UPDATE outgoing SET state='rejected' WHERE id=?",(row['id'],))
                                 self._trace(row['trade_id'],'relay_publish_rejected',event_id=row['id'],http_status=exc.response.status_code)
                                 self.message='Relay rejected an instruction; inspect local orders. Other instructions continue.'
+                                emit(self.observe,'relay_send','blocked','rejected')
                                 continue
                             failures+=1
+                            emit(self.observe,'relay_send','blocked' if exc.response.status_code in (401,403) else 'degraded','authentication_failed' if exc.response.status_code in (401,403) else 'connection_failed')
                             if exc.response.status_code in (401,403,409):
                                 self.message='Relay rejected delivery; check pairing or channel. Queue retained.'
                             else:
                                 self.message='Relay delivery pending; retrying with backoff'
                             break
                         except Exception:
+                            emit(self.observe,'relay_send','degraded','connection_failed')
                             failures+=1
                             self.message='Relay delivery pending; retrying with backoff'
                             break
@@ -222,7 +229,10 @@ class IntentDevice:
                         self.changed.set()
                         with self.db() as db: db.execute('INSERT OR REPLACE INTO cursors VALUES (?,?)',(fingerprint,item['cursor']))
                     self.message='Following; invalid relay event quarantined for inspection' if quarantined else 'Following; connected'
-                except Exception:
+                    emit(self.observe,'relay_receive','degraded' if quarantined else 'healthy','invalid_events' if quarantined else 'checked')
+                except Exception as exc:
+                    auth=isinstance(exc,httpx.HTTPStatusError) and exc.response.status_code in (401,403)
+                    emit(self.observe,'relay_receive','blocked' if auth else 'degraded','authentication_failed' if auth else 'connection_failed')
                     self.message='Receiver disconnected; reconnecting without replaying expired entries'
                     try: await asyncio.wait_for(stop.wait(),1)
                     except TimeoutError: pass
@@ -235,11 +245,15 @@ class IntentDevice:
             if self.engine:
                 try:
                     results=await asyncio.to_thread(self.engine.tick)
+                    reconciliation=any(r.get('state')=='reconcile_required' for r in results)
+                    emit(self.observe,'execution','blocked' if reconciliation else 'healthy','reconciliation_required' if reconciliation else 'checked')
                     if self.pair and self.pair['role']=='host':
                         for result in results:
                             if result.get('state')=='rejected':
                                 with self.db() as db: row=db.execute('SELECT action FROM outgoing WHERE pair=? AND trade_id=? ORDER BY sequence DESC LIMIT 1',(self.fingerprint,result['trade_id'])).fetchone()
                                 if row and row[0] in ('enter','replace'): self.command('cancel',trade_id=result['trade_id'])
-                except Exception: self.message='Execution requires reconciliation; inspect saved orders'
+                except Exception:
+                    emit(self.observe,'execution','blocked','reconciliation_required')
+                    self.message='Execution requires reconciliation; inspect saved orders'
             try: await asyncio.wait_for(self.changed.wait(),2)
             except TimeoutError: pass
