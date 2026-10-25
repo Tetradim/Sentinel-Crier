@@ -180,6 +180,37 @@ def test_bearer_reconnect_rejects_missing_or_other_customer_project(tmp_path,pro
     asyncio.run(run())
 
 
+def test_manual_broker_recovery_quarantines_logged_out_oauth_destination(tmp_path):
+    import httpx
+    async def run():
+        async def lookup(*args,**kwargs): return OWNER
+        session=DesktopSession(tmp_path,start_workers=False,alerts_lookup=lookup,
+            alerts_factory=lambda *a,**k:SimpleNamespace(close=lambda:None))
+        async def poll(): pass
+        session.poll_alerts=poll
+        base='https://'+'a'*20+'.supabase.co/functions/v1/crier-oauth'
+        session.oauth=SimpleNamespace(base=base,session=None)
+        await session.connect_alerts('paper','manual-key','manual-secret')
+        session.publisher.configure('https://discord.com/api/webhooks/123/token',False,
+            oauth={'service_url':base,'owner':OWNER})
+        with session.publisher.store.connect() as db:
+            db.execute("INSERT INTO outbox(id,created,fill,payload,status) VALUES ('retained',1,'{}','{}','uncertain')")
+        await session.disconnect()
+        await session.connect_alerts('paper','','')
+        assert session.broker is not None
+        with pytest.raises(ValueError,match='sign-in required'): await session.discord_test()
+        with pytest.raises(ValueError,match='sign-in required'): await session.discord_configure('',True)
+        session.discord_authorized=True
+        def no_network(request): pytest.fail('Quarantined destination must never send')
+        with httpx.Client(transport=httpx.MockTransport(no_network)) as http:
+            assert not session.deliver_alerts(http)
+        with session.publisher.store.connect() as db:
+            assert db.execute("SELECT status FROM outbox WHERE id='retained'").fetchone()[0]=='uncertain'
+        assert session.publisher.destination['oauth']['owner']==OWNER
+        await session.disconnect()
+    asyncio.run(run())
+
+
 def test_customer_session_is_bound_to_exact_service(tmp_path):
     import httpx
     from crier.provider_client import ProviderClient
