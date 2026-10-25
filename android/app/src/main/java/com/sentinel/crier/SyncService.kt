@@ -5,12 +5,17 @@ import android.os.IBinder
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 class SyncService: Service() {
- companion object { @Volatile var active=false; private set }
+ companion object { @Volatile var active=false; private set
+  const val EXPLICIT_START="com.sentinel.crier.EXPLICIT_EXECUTION_START"
+  fun acceptsStart(action:String?)=action==EXPLICIT_START
+ }
+ private var started=false
  private val pool=Executors.newFixedThreadPool(5)
  @Volatile private var running=true
  override fun onBind(intent:Intent?):IBinder?=null
- override fun onCreate() {
-  super.onCreate(); synchronized(SyncService::class.java) { active=true }
+ override fun onCreate() { super.onCreate() }
+ private fun startWorkers() {
+  started=true; synchronized(SyncService::class.java) { active=true }
   val manager=getSystemService(NotificationManager::class.java)
   manager.createNotificationChannel(NotificationChannel("sync","Crier execution",NotificationManager.IMPORTANCE_LOW))
   val open=PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java),PendingIntent.FLAG_IMMUTABLE)
@@ -51,7 +56,11 @@ class SyncService: Service() {
   }
   worker { Discord.deliver(journal,config); Thread.sleep(1000) }
  }
- override fun onStartCommand(intent:Intent?,flags:Int,startId:Int)=START_STICKY
+ override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
+  if(!acceptsStart(intent?.action)) { if(!started) stopSelf(); return START_NOT_STICKY }
+  if(!started) startWorkers()
+  return START_NOT_STICKY
+ }
  override fun onTimeout(startId:Int,fgsType:Int) { getSharedPreferences("controls",MODE_PRIVATE).edit().putBoolean("paused",true).putBoolean("enabled",false).commit(); Journal(this).setMeta("service","Background sync timed out Â· entries paused. Open Crier and reconnect; broker reconciliation runs before new work."); stopSelf() }
- override fun onDestroy() { running=false; pool.shutdownNow(); Thread { while(!pool.awaitTermination(1,TimeUnit.SECONDS)) {} ; try { val journal=Journal(this); if(!journal.meta("service").startsWith("Background sync timed out")) journal.setMeta("service","Workers stopped · reconnect to reconcile and resume"); journal.close() } finally { synchronized(SyncService::class.java) { active=false } } }.start(); super.onDestroy() }
+ override fun onDestroy() { running=false; pool.shutdownNow(); Thread { while(!pool.awaitTermination(1,TimeUnit.SECONDS)) {} ; try { if(started) { val journal=Journal(this); if(!journal.meta("service").startsWith("Background sync timed out")) journal.setMeta("service","Workers stopped · reconnect to reconcile and resume"); journal.close() } } finally { synchronized(SyncService::class.java) { active=false } } }.start(); super.onDestroy() }
 }
