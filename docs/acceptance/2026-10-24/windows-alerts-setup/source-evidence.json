@@ -1,0 +1,13 @@
+{
+  "source_commit": "70397e3b2f97d63ae35fba28fc35e730fdd5d4a9",
+  "workflow_run": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40144737872",
+  "workflow_conclusion": "success",
+  "local_python_passed": 576,
+  "ci_python_passed": 575,
+  "ci_python_skipped": 1,
+  "installer_report": "installer-acceptance.json",
+  "installer_report_sha256": "2d3de9d665bd81773c4108a3fd96e6b438db5f76be9d5c8448fabb3a1e10fdb6",
+  "broker_acceptance_performed": false,
+  "discord_message_sent": false,
+  "physical_customer_machine_verified": false
+}

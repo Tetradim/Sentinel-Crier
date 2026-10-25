@@ -15,21 +15,26 @@ This mode makes read-only Alpaca requests and creates no Host/Receive pairing, r
 
 A fresh alerts profile can bind never-attempted pending messages to its first explicitly saved destination. Prior delivery attempts, uncertain results or a lost previously configured destination still require inspection/restoration; no messages are silently discarded or rerouted.
 
-## Run
+## Download and launch
 
 1. Download `SentinelCrier-Windows.zip` from the **Windows desktop** GitHub Actions
    artifact, or use the locally built ZIP in `dist/`.
 2. Extract the entire ZIP to a normal folder. Keep `SentinelCrier.exe` and `_internal`
    together. Double-click `SentinelCrier.exe`. No separate Python install is required.
-3. Open **Host / Receive**. Paste the invitation shared by the iPhone host.
-4. Enter this PC account's Alpaca API key and secret. The account ID is discovered
+
+For Discord alerts only, follow the alerts setup above. For trade mirroring, continue below.
+
+## Follow another device's trades
+
+1. Open **Host / Receive**. Paste the invitation shared by the iPhone host.
+2. Enter this PC account's Alpaca API key and secret. The account ID is discovered
    automatically. Paper credentials require a paper channel. Live channels require
    explicitly selecting **Allow connection to a live-money account**.
-5. Click **Receive / reconnect**. Confirm the environment, account ID and follower role shown at
+3. Click **Receive / reconnect**. Confirm the environment, account ID and follower role shown at
    the top. Connecting always starts new entries paused.
-6. In **Pricing**, select exact-limit, bounded-limit or market pricing and save settings. In
+4. In **Pricing**, select exact-limit, bounded-limit or market pricing and save settings. In
    **Trading & activity**, click **Enable new entries** when ready to receive trades.
-7. Place a trade **inside Crier on the iPhone**. Its order instruction travels through
+5. Place a trade **inside Crier on the iPhone**. Its order instruction travels through
    the relay immediately, without waiting for a host fill. PC activity shows the
    instruction and the PC account's own broker order status and filled quantity.
 
