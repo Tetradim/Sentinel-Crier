@@ -195,6 +195,9 @@ def main(argv=None):
         require(actual_local_appdata() == Path(os.environ['LOCALAPPDATA']).resolve(),
                 'LOCALAPPDATA differs from the actual Windows user data location')
         guard_runner(os.environ, os.name, registry_entries())
+        from crier.desktop_presence import RunRegistry, StartupRegistration
+        startup_registry = RunRegistry()
+        require(startup_registry.get() is None, 'Runner contains existing Crier startup registration')
         installer, compiler, source = args.installer.resolve(), args.compiler.resolve(), args.program_source.resolve()
         require(installer.is_file() and compiler.is_file() and (source / 'SentinelCrier.exe').is_file(),
                 'Release installer, compiler or actual desktop payload missing')
@@ -223,7 +226,13 @@ def main(argv=None):
             require(run_command(install_command(payload, program, work / (label + '.log')),
                                 report['commands']) == 0, label + ' failed')
             verify_install(program, version, expected)
+            startup = StartupRegistration(program / 'SentinelCrier.exe', frozen=True)
+            if label == 'install':
+                require(not startup.enabled and startup_registry.get() is None, 'Installer enabled sign-in startup')
+                startup.set_enabled(True)
+            require(startup.enabled, 'Explicit sign-in registration was lost during install/upgrade')
             report['stages'].append(dict(stage=label, version=version,
+                                         startup_opt_in_preserved=True,
                                          data=verify_data(journal, credential, dummy, hashes)))
         before = program_hashes(program)
         code = run_command(install_command(installer, program, work / 'downgrade.log'), report['commands'])
@@ -240,9 +249,11 @@ def main(argv=None):
         while time.monotonic() < deadline and (program.exists() or registry_entries()):
             time.sleep(0.25)
         require(not program.exists() and not registry_entries(), 'Uninstall left program files or registration')
+        require(startup_registry.get() is None, 'Uninstall left Crier sign-in registration')
         install_owned = False
         report['stages'].append(dict(stage='uninstall', program_removed=True, uninstall_registry_removed=True,
                                      data=verify_data(journal, credential, dummy, hashes)))
+        report['startup'] = dict(default_off=True, explicit_opt_in=True, preserved_on_upgrade=True, removed_on_uninstall=True)
         report['status'] = 'passed'
     except Exception as exc:
         # Exception type only: no credentials, raw registry values or subprocess output.

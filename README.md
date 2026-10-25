@@ -61,6 +61,8 @@ The current relay transports instructions and diagnostic observations. It does n
 
 Keep the receiving app running. iOS suspension can stop networking; Android background-service limits can interrupt work; Windows must remain awake. A persistent connection or overlay is not an all-day execution guarantee.
 
+Windows offers optional tray mode and current-user sign-in startup in **Start here → Windows background options**. Both are off by default. Sign-in always starts disconnected; the tray can show Crier, pause new entries, or quit. See the [Windows guide](desktop/README.md#tray-and-windows-sign-in-options).
+
 ## Run the Python monitor and console
 
 Requires **Python 3.11+**. From PowerShell:

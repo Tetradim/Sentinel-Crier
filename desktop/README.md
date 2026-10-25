@@ -24,6 +24,14 @@ A fresh alerts profile can bind never-attempted pending messages to its first ex
 
 For Discord alerts only, follow the alerts setup above. For trade mirroring, continue below.
 
+## Tray and Windows sign-in options
+
+In **Start here → Windows background options**, enable **Keep Crier running in the tray** if closing its window should leave monitoring running. Both background options are off by default. The tray offers **Show Crier**, **Pause new entries**, and **Quit Crier**. Quit stops workers through the normal disconnect flow; existing broker orders remain. A failed or stopped tray restores the window. The PC still needs to stay awake.
+
+**Open Crier at Windows sign-in** is available in the packaged Windows app. It registers only the current user's installed executable, with no credentials in the startup command. It always opens disconnected and does not authorize orders or publishing. Reconnect explicitly, then enable the permissions you want. If tray mode is also enabled and its icon starts successfully, the sign-in launch begins in the tray. Disabling tray mode restores the window. Uninstall removes Crier's matching startup registration and preserves journals and credentials as before.
+
+Source users can install the optional tray dependencies with `python -m pip install -e ".[desktop]"`; automatic sign-in registration requires the packaged executable.
+
 ## Follow another device's trades
 
 1. Open **Host / Receive**. Paste the invitation shared by the iPhone host.
@@ -158,5 +166,5 @@ Inspect unknown broker outcomes or uncertain Discord messages before retrying. H
 never resolves an order or grants trading/publishing permission. If health storage is
 unavailable, the panel reports that separately; existing trading journals are retained.
 
-This health panel is the Windows H.1 implementation. Equivalent native mobile health
-presentation, tray/startup options and execution-policy review remain later H slices.
+Native mobile health and H.3 dispatch safeguards are also implemented. Optional Windows
+tray/startup controls are described above; deliberate execution-policy design remains H.5.

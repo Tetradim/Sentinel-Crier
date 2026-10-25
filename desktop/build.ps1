@@ -4,7 +4,7 @@ $repo = Split-Path -Parent $PSScriptRoot
 Push-Location $repo
 try {
     $serviceResource = (Join-Path $repo 'crier/connection-service.json') + ';crier'
-    & $Python -m PyInstaller --noconfirm --clean --windowed --onedir --name SentinelCrier --paths $repo --add-data $serviceResource --specpath build desktop/launch.py
+    & $Python -m PyInstaller --noconfirm --clean --windowed --onedir --name SentinelCrier --paths $repo --add-data $serviceResource --hidden-import pystray._win32 --specpath build desktop/launch.py
     if ($LASTEXITCODE -ne 0) { throw 'Desktop packaging failed' }
     Copy-Item -LiteralPath desktop/README.md -Destination dist/SentinelCrier/README.md
     Copy-Item -LiteralPath release.json -Destination dist/SentinelCrier/release.json

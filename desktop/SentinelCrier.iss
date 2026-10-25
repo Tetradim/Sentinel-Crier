@@ -33,6 +33,18 @@ Root: HKCU; Subkey: "Software\Classes\sentinelcrier\shell\open\command"; ValueTy
 [Icons]
 Name: "{userprograms}\Sentinel Crier"; Filename: "{app}\SentinelCrier.exe"
 [Code]
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  ExistingCommand, OwnCommand: String;
+begin
+  if CurUninstallStep = usPostUninstall then begin
+    OwnCommand := '"' + ExpandConstant('{app}\SentinelCrier.exe') + '" --startup';
+    if RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'SentinelCrierDesktop', ExistingCommand) then
+      if CompareText(ExistingCommand, OwnCommand) = 0 then
+        RegDeleteValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'SentinelCrierDesktop');
+  end;
+end;
+
 function OpenProgram(FileName: String; Access, Share: LongWord;
   Security: THandle; Creation, Flags: LongWord; Template: THandle): THandle;
   external 'CreateFileW@kernel32.dll stdcall';

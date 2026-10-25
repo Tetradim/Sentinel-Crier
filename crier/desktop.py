@@ -15,8 +15,9 @@ from .desktop_setup import SetupProgress
 
 
 class DesktopApp:
-    def __init__(self, root, worker):
+    def __init__(self, root, worker, *, presence=None, startup=False):
         self.root, self.worker = root, worker
+        self.presence = presence
         self.pending = []
         self.connection_jobs = set()
         self.poll = None
@@ -63,6 +64,8 @@ class DesktopApp:
         self.setup_tab = setup
         tabs.select(start)
         self._start(start)
+        if self.presence is not None:
+            self._presence_controls(start)
         customer = ttk.Frame(tabs,padding=14)
         tabs.add(customer,text='Provider sign-in')
         self._customer(customer)
@@ -79,9 +82,15 @@ class DesktopApp:
         self._diagnostics(timeline)
         self.notice = tk.StringVar(value='Choose Send my fills to Discord, Trade/share trades, or Follow trades in Start here.')
         ttk.Label(outer, textvariable=self.notice, wraplength=1000).pack(anchor='w', pady=(12,0))
-        ttk.Label(outer, text='Keep this PC awake and Crier running. Closing stops monitoring and mirroring; existing broker orders remain.',
+        ttk.Label(outer, text='Keep this PC awake. Closing stops Crier unless tray mode is enabled. Quit stops monitoring; broker orders remain.',
                   style='Subtitle.TLabel').pack(anchor='w', pady=(6,0))
         root.protocol('WM_DELETE_WINDOW', self.close)
+        if self.presence is not None:
+            self.presence.start()
+            if self.presence.error:
+                self.notice.set(self.presence.error)
+            if startup and self.presence.tray_ready:
+                root.withdraw()
         root.after(100, self.refresh)
         root.after(250, self.provider_inbox)
 
@@ -791,6 +800,9 @@ class DesktopApp:
     def refresh(self):
         if self.closing:
             return
+        self.poll_presence()
+        if self.closing:
+            return
         remaining = []
         for future, callback in self.pending:
             if not future.done():
@@ -814,8 +826,73 @@ class DesktopApp:
             self.poll = None
         self.root.after(250, self.refresh)
 
-    def close(self):
+    def _presence_controls(self, frame):
+        options = ttk.LabelFrame(frame, text='Windows background options', padding=10)
+        options.pack(fill='x', pady=12)
+        self.tray_choice = tk.BooleanVar(value=self.presence.tray_enabled)
+        ttk.Checkbutton(options, text='Keep Crier running in the tray when I close its window',
+                        variable=self.tray_choice, command=self.toggle_tray).pack(anchor='w')
+        self.startup_choice = tk.BooleanVar(value=False)
+        self.startup_button = ttk.Checkbutton(options, text='Open Crier at Windows sign-in (disconnected)',
+                            variable=self.startup_choice, command=self.toggle_startup)
+        self.startup_button.pack(anchor='w', pady=6)
+        try:
+            self.startup_choice.set(self.presence.startup.enabled)
+            if not self.presence.startup.available:
+                self.startup_button.configure(state='disabled')
+        except OSError:
+            self.startup_button.configure(state='disabled')
+        ttk.Label(options, text='Sign-in never connects or enables entries. Use Show Crier in the tray to reconnect.\n'
+                  'Startup requires the packaged Windows app. Quit Crier stops monitoring; existing broker orders remain.',
+                  wraplength=700).pack(anchor='w')
+
+    def show_window(self):
+        self.root.deiconify()
+        self.root.lift()
+
+    def toggle_tray(self):
+        try:
+            self.presence.set_tray(self.tray_choice.get())
+            self.notice.set('Tray preference saved. Quit Crier stops monitoring and mirroring.')
+        except ValueError as exc:
+            self.notice.set(str(exc))
+        self.tray_choice.set(self.presence.tray_enabled)
+        if not self.presence.tray_ready:
+            self.show_window()
+
+    def toggle_startup(self):
+        try:
+            self.presence.startup.set_enabled(self.startup_choice.get())
+            self.notice.set('Windows sign-in preference saved. Crier always starts disconnected.')
+        except (OSError, ValueError) as exc:
+            self.notice.set(str(exc) if isinstance(exc, ValueError) else 'Cannot update Windows startup registration.')
+        try:
+            self.startup_choice.set(self.presence.startup.enabled)
+        except OSError:
+            self.startup_choice.set(False)
+
+    def poll_presence(self):
+        if self.presence is None:
+            return
+        for action in self.presence.poll():
+            if self.closing:
+                break
+            if action == 'pause':
+                self.submit('settings', {'enabled':False})
+            elif action == 'show':
+                self.show_window()
+            elif action == 'quit':
+                self.show_window()
+                self.close(quit=True)
+        if self.presence.error:
+            self.notice.set(self.presence.error)
+
+    def close(self, *, quit=False):
         if self.closing:
+            return
+        if not quit and self.presence is not None and self.presence.tray_enabled and self.presence.tray_ready:
+            self.root.withdraw()
+            self.notice.set('Crier is still running. Use Show Crier or Quit Crier in the tray.')
             return
         if self.connected and not messagebox.askokcancel('Close Crier',
                 'Mirroring will stop. Existing broker orders remain active. Close Crier?', parent=self.root):
@@ -833,13 +910,18 @@ class DesktopApp:
                 self.notice.set('Shutdown failed. Inspect broker orders and try disconnecting again.')
                 self.root.after(250, self.refresh)
                 return
+            if self.presence is not None:
+                self.presence.stop()
             self.worker.close()
             self.root.destroy()
         finish()
 
 
 def smoke_test(report=None):
+    import os
+    import sys
     from .device_secrets import save_secret, load_secret
+    tray_result = 'not_requested'
     assert Path(__file__).with_name('connection-service.json').exists(), 'Missing bundled connection-service resource'
     with tempfile.TemporaryDirectory(prefix='crier-desktop-smoke-') as folder:
         path = Path(folder)
@@ -848,7 +930,8 @@ def smoke_test(report=None):
         root = tk.Tk(); root.withdraw()
         worker = DesktopWorker(path)
         try:
-            app = DesktopApp(root, worker)
+            from .desktop_presence import Presence
+            app = DesktopApp(root, worker, presence=Presence(path))
             state = worker.call('status').result(timeout=5)
             assert not state['connected']
             app.render(state)
@@ -860,13 +943,24 @@ def smoke_test(report=None):
             worker.call('disconnect').result(timeout=5)
             worker.close()
             root.destroy()
+    if sys.platform == 'win32' and os.getenv('GITHUB_ACTIONS') == 'true' and os.getenv('RUNNER_ENVIRONMENT') == 'github-hosted':
+        from .windows_tray import WindowsTray
+        tray = WindowsTray(lambda action: None)
+        try:
+            assert tray.start(), 'Packaged notification-area icon failed to become ready'
+        finally:
+            tray.stop()
+        assert not tray.alive, 'Packaged notification-area thread failed to stop'
+        tray_result = 'ready_and_stopped'
     if report:
-        Path(report).write_text(json.dumps({'ok':True,'network_calls':0,'ui':'Tk','credentials':'round-trip passed'}), encoding='utf-8')
+        Path(report).write_text(json.dumps({'ok':True,'network_calls':0,'ui':'Tk','credentials':'round-trip passed','tray':tray_result}), encoding='utf-8')
 
 
 def main():
     parser = argparse.ArgumentParser(description='Sentinel Crier desktop')
-    parser.add_argument('--oauth-return')
+    launch = parser.add_mutually_exclusive_group()
+    launch.add_argument('--oauth-return')
+    launch.add_argument('--startup', action='store_true')
     parser.add_argument('--self-test', action='store_true')
     parser.add_argument('--report')
     args = parser.parse_args()
@@ -882,10 +976,11 @@ def main():
         with single_process(folder/'desktop.lock'):
             root = tk.Tk()
             worker = DesktopWorker(folder)
-            DesktopApp(root, worker)
+            from .desktop_presence import Presence
+            DesktopApp(root, worker, presence=Presence(folder), startup=args.startup)
             root.mainloop()
     except AlreadyRunningError:
-        if args.oauth_return: return
+        if args.oauth_return or args.startup: return
         root = tk.Tk(); root.withdraw()
         messagebox.showinfo('Sentinel Crier', 'Crier desktop is already running.', parent=root)
         root.destroy()

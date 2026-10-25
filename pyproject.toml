@@ -13,7 +13,8 @@ dependencies = ["fastapi==0.143.0", "uvicorn==0.54.0", "httpx==0.28.1", "tzdata=
 webull = ["webull-openapi-python-sdk==3.0.3"]
 oauth = ["cryptography==50.0.2"]
 test = ["pytest==9.1.1"]
-desktop-build = ["pyinstaller==6.16.0"]
+desktop = ["pystray==0.19.5; sys_platform == 'win32'", "pillow==13.0.0; sys_platform == 'win32'"]
+desktop-build = ["pyinstaller==6.16.0", "pystray==0.19.5; sys_platform == 'win32'", "pillow==13.0.0; sys_platform == 'win32'"]
 
 [project.gui-scripts]
 crier-desktop = "crier.desktop:main"
