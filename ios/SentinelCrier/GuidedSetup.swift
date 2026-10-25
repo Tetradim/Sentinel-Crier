@@ -23,6 +23,7 @@ struct GuidedSetupView: View {
         NavigationStack {
             Form {
                 Section("Account overview") {
+                    NavigationLink("Connection health and recovery", destination: NativeHealthView())
                     NavigationLink("Provider connections and Crier sign-in", destination: ProviderConnectionsView())
                     NavigationLink("Account balances and saved positions", destination: BrokerageOverview())
                 }

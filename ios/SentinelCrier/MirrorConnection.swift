@@ -119,12 +119,13 @@ actor MirrorSender {
         if let event { next.items[index].event = event }
         try save(next)
     }
-    func deliver(api: AlpacaREST, account: String, permit: OAuthEffectPermit = OAuthEffectPermit()) async throws -> String {
+    func deliver(api: AlpacaREST, account: String, permit: OAuthEffectPermit = OAuthEffectPermit(), observe: (@Sendable (HealthObservation, HealthReason) async -> Void)? = nil) async throws -> String {
         guard !sending else { return "Mirror delivery in progress." }
         sending = true; defer { sending = false }
         guard let pair = try MirrorPairing.load() else { return "Not paired." }
         guard pair.environment == api.environment else { return "Pairing is for \(pair.environment.rawValue)." }
         let items = state.items.filter { $0.state == "pending" && $0.account == account && $0.environment == api.environment && $0.pair == pair.fingerprint }
+        if items.isEmpty { await observe?(.idle, .noWork) }
         var message = "Paired. Waiting for new fills."
         for item in items {
             let event: MirrorFillEvent
@@ -157,12 +158,13 @@ actor MirrorSender {
             guard permit.isCurrent, !Task.isCancelled else { return "Mirror delivery stopped; journal retained." }
             let (data, response) = try await CrierHTTPSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw AlpacaError.invalid("Mirror receiver unavailable.") }
-            if http.statusCode == 422 { try change(item.key, status: "skipped: expired or invalid"); message = "Receiver skipped an expired or unsupported fill."; continue }
+            if http.statusCode == 422 { try change(item.key, status: "skipped: expired or invalid"); await observe?(.blocked, .rejected); message = "Receiver skipped an expired or unsupported fill."; continue }
             guard http.statusCode == 200 else { throw AlpacaError.invalid("Mirror delivery pending (HTTP \(http.statusCode)). Check pairing and receiver.") }
             struct Result: Decodable { let state: String; let note: String }
             let result = try JSONDecoder().decode(Result.self, from: data)
             // Unknown is retried only for receiver reconciliation, never a second POST to the broker.
             if result.state != "unknown" { try change(item.key, status: result.state) }
+            await observe?(result.state == "unknown" ? .blocked : .healthy, result.state == "unknown" ? .reconciliationRequired : .delivered)
             message = "Mirror: \(result.state). \(result.note)"
             if result.state == "unknown" { break }
         }

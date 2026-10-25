@@ -11,18 +11,45 @@ final class AlpacaWorkspace: ObservableObject {
     }
     @Published private(set) var purpose: GuidedPurpose?
     @Published private(set) var readiness = GuidedReadiness()
+    let health: NativeHealth
+    private var healthTicket: NativeHealth.Ticket?
+    private var healthBaseScope = ""
+    private var legacyHealth = false
     private let defaults: UserDefaults
     private var effectPermit = OAuthEffectPermit()
-    private var scopeGeneration = UUID() { didSet { effectPermit.invalidate(); effectPermit = OAuthEffectPermit() } }
+    private var scopeGeneration = UUID() { didSet { effectPermit.invalidate(); effectPermit = OAuthEffectPermit(); if let healthTicket { health.stop(healthTicket) }; healthTicket = nil } }
     private var discordScope: String?
     private let testDiscord: () async throws -> String
     private let webhook: () -> URL?
     private let loadIntentPairing: () throws -> IntentPairing?
     private let deliverDiscord: ((AlpacaEnvironment, String) async throws -> Void)?
     private func publishFills(environment: AlpacaEnvironment, accountID: String) async throws {
+        let observed = healthTicket; let ledger = health
         if let deliverDiscord { try await deliverDiscord(environment, accountID) }
-        else { try await publisher?.deliver(environment: environment, accountID: accountID, permit: effectPermit) }
+        else { try await publisher?.deliver(environment: environment, accountID: accountID, permit: effectPermit, observe: { state, reason in
+            if let observed { await ledger.record(observed, .discord, state, reason) }
+        }) }
     }
+
+    private func healthNote(_ ticket: NativeHealth.Ticket?, _ component: HealthComponent, _ state: HealthObservation, _ reason: HealthReason) {
+        if let ticket { health.record(ticket, component, state, reason) }
+    }
+    private func healthActivity() -> Set<HealthComponent> {
+        guard foreground, account != nil else { return [] }
+        var active: Set<HealthComponent> = [.broker, .fills]
+        if executionJourney, intent?.connected == true {
+            active.insert(.execution); active.insert(intent?.hosting == true ? .relaySend : .relayReceive)
+        } else if legacyHealth { active.insert(.relaySend) }
+        if canDeliver { active.insert(.discord) }; return active
+    }
+    private func bindHealth() {
+        guard foreground, account != nil, !healthBaseScope.isEmpty else { return }
+        if let healthTicket { health.stop(healthTicket) }
+        let ticket = health.begin(scope: NativeHealth.scope([healthBaseScope, destinationScope()]), active: healthActivity())
+        healthTicket = ticket; let ledger = health
+        intent?.onHealth = { [weak ledger] component, state, reason in ledger?.record(ticket, component, state, reason) }
+    }
+    private func updateHealthActivity() { if let healthTicket { health.setActive(healthTicket, healthActivity()) } }
 
     func selectPurpose(_ value: GuidedPurpose?) {
         guard !busy, account == nil else { return }
@@ -39,31 +66,36 @@ final class AlpacaWorkspace: ObservableObject {
     func discordConfigurationChanged() {
         readiness.previewed = false; readiness.testResult = nil; readiness.deliveryEnabled = false
         discordScope = nil; scopeGeneration = UUID()
+        bindHealth()
     }
     func previewDiscord() {
         guard readiness.verified, webhook() != nil else { message = "Connect and save a destination first."; return }
         discordScope = destinationScope(); readiness.previewed = true
         readiness.testResult = nil; readiness.deliveryEnabled = false
+        updateHealthActivity()
     }
     func sendDiscordTest() async {
         guard !busy, foreground, readiness.verified, readiness.previewed, discordScope == destinationScope() else { message = "Connect and preview the current destination first."; return }
         busy = true; readiness.testResult = nil
-        let generation = scopeGeneration; let scope = destinationScope()
+        let generation = scopeGeneration; let scope = destinationScope(); let observed = healthTicket
         defer { busy = false }
         do {
             let result = try await testDiscord()
             guard foreground, generation == scopeGeneration, scope == destinationScope() else { return }
             readiness.testResult = result; message = result
+            healthNote(observed, .discord, .healthy, .delivered)
         } catch {
             guard generation == scopeGeneration, scope == destinationScope() else { return }
             readiness.testResult = "Test not confirmed. Check Discord before retrying; it may have arrived."
             message = readiness.testResult!
+            healthNote(observed, .discord, .blocked, .uncertain)
         }
     }
     func enableDiscordDelivery(_ enabled: Bool) {
-        guard enabled else { readiness.deliveryEnabled = false; return }
+        guard enabled else { readiness.deliveryEnabled = false; updateHealthActivity(); return }
         guard foreground, readiness.verified, readiness.previewed, discordScope == destinationScope(), webhook() != nil else { message = "Connect and preview this destination before enabling delivery."; return }
         readiness.deliveryEnabled = true
+        updateHealthActivity()
         message = "Fill delivery enabled for this account and destination while Crier stays active."
     }
     private var canDeliver: Bool {
@@ -92,7 +124,7 @@ final class AlpacaWorkspace: ObservableObject {
     private let loadCredentials: (AlpacaEnvironment) throws -> AlpacaCredentials
     private let saveCredentials: (AlpacaCredentials, AlpacaEnvironment) throws -> Void
     init(journal suppliedJournal: AlpacaJournal? = nil, intentController: IntentController? = nil,
-         defaults: UserDefaults = .standard,
+         defaults: UserDefaults = .standard, health suppliedHealth: NativeHealth? = nil,
          testDiscord: @escaping () async throws -> String = { try await DiscordAlertSettings.test() },
          webhook: @escaping () -> URL? = StandaloneConfiguration.webhook,
          deliverDiscord: ((AlpacaEnvironment, String) async throws -> Void)? = nil,
@@ -102,6 +134,7 @@ final class AlpacaWorkspace: ObservableObject {
          loadCustomer: @escaping () -> CustomerSession? = { CustomerSessionVault().load() },
          saveCredentials: @escaping (AlpacaCredentials, AlpacaEnvironment) throws -> Void = { try AlpacaKeychain.save($0, environment: $1) }) {
         self.loadIntentPairing = loadIntentPairing
+        self.health = suppliedHealth ?? NativeHealth(storage: DefaultsHealthStorage(defaults: defaults))
         self.defaults = defaults; self.testDiscord = testDiscord; self.webhook = webhook; self.deliverDiscord = deliverDiscord
         purpose = defaults.string(forKey: "guidedPurpose").flatMap(GuidedPurpose.init(rawValue:))
         self.loadCustomer = loadCustomer; self.makeClient = makeClient; self.loadCredentials = loadCredentials; self.saveCredentials = saveCredentials
@@ -146,7 +179,8 @@ final class AlpacaWorkspace: ObservableObject {
         if let intent, !intent.state.accountID.isEmpty, intent.state.accountID != current.id {
             throw AlpacaError.invalid("Saved channel belongs to another account. Reconnect its original keys and resolve its journal before changing accounts.")
         }
-        if let pairing = try loadIntentPairing() {
+        let savedPairing = try loadIntentPairing()
+        if let pairing = savedPairing {
             try intent?.validateIdentity(account: current.id, environment: environment, pairing: pairing)
         }
         // Verify candidate credentials and journal identity before replacing working keys.
@@ -154,6 +188,10 @@ final class AlpacaWorkspace: ObservableObject {
         if supplied { try saveCredentials(credentials, environment) }
         review = nil; positions = []; contracts = []
         account = current; api = client; readiness.verified = true
+        let legacy = executionJourney && savedPairing == nil ? try? MirrorPairing.load() : nil
+        legacyHealth = legacy != nil
+        healthBaseScope = NativeHealth.scope([environment.rawValue, current.id, purpose?.rawValue ?? "", savedPairing?.fingerprint ?? "", legacy?.fingerprint ?? "", credentials.owner ?? "", credentials.serviceURL ?? ""])
+        bindHealth(); healthNote(healthTicket, .broker, .healthy, .verified)
         if foreground {
             try await refreshConnected()
             guard foreground, generation == scopeGeneration, !Task.isCancelled else { throw AlpacaError.invalid("Connection interrupted. Reconnect explicitly.") }
@@ -173,6 +211,7 @@ final class AlpacaWorkspace: ObservableObject {
                 throw AlpacaError.invalid("Intent resume interrupted. Reconcile again before restarting execution.")
             }
             try intent.connect(api: api, account: account, pairing: pairing)
+            updateHealthActivity()
         } catch { intent.disconnect(); suspended = true; throw error }
     }
     func connect(key: String, secret: String) async {
@@ -344,6 +383,7 @@ final class AlpacaWorkspace: ObservableObject {
             api = try previous.freshClient(customer: loadCustomer())
         }
         do {
+            if healthTicket == nil { bindHealth() }
             let generation = scopeGeneration
             try await refreshConnected()
             guard foreground, generation == scopeGeneration, !Task.isCancelled else { return }
@@ -358,9 +398,12 @@ final class AlpacaWorkspace: ObservableObject {
     } }
     private func refreshConnected() async throws {
         guard foreground, let api, let account, let journal else { return }
+        let observed = healthTicket; var checking: HealthComponent = .broker
+        do {
         let generation = scopeGeneration; let permit = effectPermit; let selectedEnvironment = environment
         let current = try await api.account()
         guard generation == scopeGeneration, selectedEnvironment == environment, foreground, current.id == account.id else { throw AlpacaError.invalid("Authenticated account changed. Disconnect and reconnect.") }
+        healthNote(observed, .broker, .healthy, .verified)
         let currentPositions = try await api.positions()
         guard foreground, generation == scopeGeneration, permit.isCurrent else { return }
         self.account = current; positions = currentPositions
@@ -371,6 +414,7 @@ final class AlpacaWorkspace: ObservableObject {
                 try await journal.record(order, ticket: submission.ticket) }
             catch AlpacaError.http(404) { continue } // Unknown remains durable. 404 does not authorize resubmission.
         }
+        checking = .fills
         let baseline = await journal.baseline(environment: environment, accountID: account.id)
         var cursor: String?; var seen = Set<String>()
         var newest: String?
@@ -394,11 +438,23 @@ final class AlpacaWorkspace: ObservableObject {
         for fill in collected.reversed() { try await journal.ingest(fill, environment: environment, accountID: account.id) }
         if executionJourney, try loadIntentPairing() == nil { try await mirrorSender?.ingest(Array(collected.reversed()), environment: environment, account: account.id) }
         try await journal.setBaseline(newest ?? baseline ?? "__empty__", environment: environment, accountID: account.id)
+        healthNote(observed, .fills, .healthy, .checked)
         guard foreground, generation == scopeGeneration, permit.isCurrent, !Task.isCancelled else { return }
-        do { if executionJourney, try loadIntentPairing() == nil { mirrorMessage = try await mirrorSender?.deliver(api: api, account: account.id, permit: permit) ?? "Mirror journal unavailable." } }
-        catch { mirrorMessage = error.localizedDescription }
-        if canDeliver { try await publishFills(environment: environment, accountID: account.id) }
+        do { if executionJourney, try loadIntentPairing() == nil {
+            let ledger = health
+            mirrorMessage = try await mirrorSender?.deliver(api: api, account: account.id, permit: permit, observe: { state, reason in
+                if let observed { await ledger.record(observed, .relaySend, state, reason) }
+            }) ?? "Mirror journal unavailable."
+        } }
+        catch { mirrorMessage = error.localizedDescription; healthNote(observed, .relaySend, .degraded, .connectionFailed) }
+        if canDeliver { checking = .discord; try await publishFills(environment: environment, accountID: account.id) }
         updatedAt = Date(); message = "Account, orders and broker fills refreshed."
+        } catch {
+            let auth: Bool
+            if case AlpacaError.http(let status) = error { auth = [401,403].contains(status) } else { auth = false }
+            healthNote(observed, checking, auth ? .blocked : .degraded, auth ? .authenticationFailed : .connectionFailed)
+            throw error
+        }
     }
     func discover(symbol: String, expiration: String) async {
         await perform {

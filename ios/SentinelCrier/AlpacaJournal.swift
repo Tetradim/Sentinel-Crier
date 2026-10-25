@@ -141,31 +141,47 @@ final class OAuthEffectPermit: @unchecked Sendable {
 actor AlpacaDiscordDelivery {
     private let journal: AlpacaJournal
     private let session: URLSession
-    init(journal: AlpacaJournal, session: URLSession = CrierHTTPSession.shared) { self.journal = journal; self.session = session }
-    func deliver(environment: AlpacaEnvironment, accountID: String, permit: OAuthEffectPermit = OAuthEffectPermit()) async throws {
-        guard let webhook = StandaloneConfiguration.webhook() else { return }
+    private let webhook: () -> URL?
+    private let defaults: UserDefaults
+    init(journal: AlpacaJournal, session: URLSession = CrierHTTPSession.shared, webhook: @escaping () -> URL? = StandaloneConfiguration.webhook, defaults: UserDefaults = .standard) { self.journal = journal; self.session = session; self.webhook = webhook; self.defaults = defaults }
+    func deliver(environment: AlpacaEnvironment, accountID: String, permit: OAuthEffectPermit = OAuthEffectPermit(), observe: (@Sendable (HealthObservation, HealthReason) async -> Void)? = nil) async throws {
+        guard let webhook = webhook() else { return }
         var parts = URLComponents(url: webhook, resolvingAgainstBaseURL: false)!
         parts.queryItems = [URLQueryItem(name: "wait", value: "true")]
         guard let url = parts.url else { return }
-        guard let delivery = try await journal.claim(environment: environment, accountID: accountID) else { return }
-        let style = UserDefaults.standard.string(forKey: "discordFillStyle") ?? "homebrew"
-        let payload = UserDefaults.standard.data(forKey: "discordAlertSettings") == nil ? AlpacaAlertFormatter.payload(delivery, style: style) : DiscordAlertSettings.load().payload(delivery, style: style)
+        guard let delivery = try await journal.claim(environment: environment, accountID: accountID) else {
+            if let observe {
+                let snapshot = await journal.snapshot()
+                let remaining = snapshot.deliveries.filter { $0.environment == environment && $0.accountID == accountID && $0.state != "sent" && $0.state != "closed by user" }
+                if remaining.contains(where: { $0.state == "uncertain" }) { await observe(.blocked, .uncertain) }
+                else if remaining.contains(where: { $0.state.hasPrefix("rejected") }) { await observe(.blocked, .rejected) }
+                else if !remaining.isEmpty { await observe(.degraded, .waitingRetry) }
+                else { await observe(.idle, .noWork) }
+            }
+            return
+        }
+        do {
+        let style = defaults.string(forKey: "discordFillStyle") ?? "homebrew"
+        let payload = defaults.data(forKey: "discordAlertSettings") == nil ? AlpacaAlertFormatter.payload(delivery, style: style) : DiscordAlertSettings.load(defaults).payload(delivery, style: style)
         var request = URLRequest(url: url); request.httpMethod = "POST"; request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-        guard permit.isCurrent, !Task.isCancelled else { return } // Claimed journal evidence remains uncertain for manual recovery.
+        guard permit.isCurrent, !Task.isCancelled else { await observe?(.blocked, .uncertain); return } // Claimed journal evidence remains uncertain for manual recovery.
         let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { return }
+        guard let http = response as? HTTPURLResponse else { await observe?(.blocked, .uncertain); return }
         if http.statusCode == 429 {
             struct RateLimit: Decodable { let retry_after: Double }
             let seconds = (try? JSONDecoder().decode(RateLimit.self, from: data))?.retry_after ?? 60
             try await journal.rateLimited(delivery.id, retryAfter: seconds.isFinite && seconds >= 0 ? seconds : 60)
+            await observe?(.degraded, .rateLimited)
             return
         }
-        if [400, 401, 403, 404].contains(http.statusCode) { try await journal.refused(delivery.id, status: http.statusCode); return }
-        guard http.statusCode == 200 else { return } // Ambiguous failures remain uncertain, never automatically resent.
+        if [400, 401, 403, 404].contains(http.statusCode) { try await journal.refused(delivery.id, status: http.statusCode); await observe?(.blocked, .rejected); return }
+        guard http.statusCode == 200 else { await observe?(.blocked, .uncertain); return } // Ambiguous failures remain uncertain, never automatically resent.
         struct Message: Decodable { let id: String }
         let message = try JSONDecoder().decode(Message.self, from: data)
         try await journal.delivered(delivery.id, messageID: message.id)
+        await observe?(.healthy, .delivered)
+        } catch { await observe?(.blocked, .uncertain); throw error }
     }
 }

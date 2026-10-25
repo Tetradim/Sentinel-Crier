@@ -29,6 +29,8 @@ targets:
       - path: SentinelCrier/QuickConnection.swift
       - path: SentinelCrier/OAuthReturn.swift
       - path: SentinelCrier/ProviderConnections.swift
+      - path: SentinelCrier/NativeHealth.swift
+      - path: SentinelCrier/NativeHealthView.swift
       - path: ../crier/connection-service.json
         buildPhase: resources
       - path: SentinelCrier/SentinelCrierApp.swift
@@ -76,6 +78,8 @@ targets:
       - path: SentinelCrier/QuickConnectionTests.swift
       - path: SentinelCrier/OAuthReturnTests.swift
       - path: SentinelCrier/ProviderConnectionsTests.swift
+      - path: SentinelCrier/NativeHealthTests.swift
+      - path: SentinelCrier/NativeHealthFlowTests.swift
       - path: ../tests/fixtures/oauth-return.json
         buildPhase: resources
       - path: SentinelCrier/Phase2FlowTests.swift

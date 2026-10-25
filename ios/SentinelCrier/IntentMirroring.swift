@@ -195,6 +195,7 @@ struct IntentPairing: Codable {
 @MainActor final class IntentController: ObservableObject {
     @Published private(set) var state: IntentState
     @Published private(set) var message = "Intent mirroring disconnected."
+    var onHealth: NativeHealthObserver?
     private let file: URL
     private let now: () -> Date
     private let session: URLSession
@@ -255,6 +256,7 @@ struct IntentPairing: Codable {
         UserDefaults.standard.removeObject(forKey: "intent-pairing-metadata")
     }
     var hosting: Bool { pair?.role == "host" }
+    var connected: Bool { api != nil && pair != nil }
     func host(symbol: String, asset: String, quantity: Int, price: String, tradeID: String? = nil, action: String = "enter") throws -> String {
         guard let pair, hosting else { throw AlpacaError.invalid("Connect an intent host pairing first.") }
         let id = tradeID ?? UUID().uuidString.lowercased()
@@ -281,6 +283,8 @@ struct IntentPairing: Codable {
     }
     func publish() async {
         guard hosting, !publishing else { return }; publishing = true; defer { publishing = false }
+        let observed = onHealth
+        if state.outgoing.isEmpty { observed?(.relaySend, .idle, .noWork) }
         do {
             while !Task.isCancelled {
                 if !state.outgoing.isEmpty { try commit { $0.discardSupersededEntries() } }
@@ -289,6 +293,7 @@ struct IntentPairing: Codable {
                     _ = try await relay(body: JSONEncoder().encode(e))
                     diagnosticStep(e.event_id, "relay_accepted", "Relay durably accepted event")
                     try commit { $0.outgoing.removeAll { $0.event_id == e.event_id } }
+                    observed?(.relaySend, .healthy, .delivered)
                 } catch AlpacaError.http(let status) where [400, 409, 422].contains(status) {
                     let record = String(decoding: try JSONEncoder().encode(e), as: UTF8.self)
                     try commit {
@@ -301,27 +306,33 @@ struct IntentPairing: Codable {
                         _ = try host(symbol: e.symbol, asset: e.asset, quantity: e.quantity, price: e.limit_price, tradeID: e.trade_id, action: "cancel")
                     }
                     message = "Relay rejected a revision; inspect quarantine and reconcile the tracked trade."
+                    observed?(.relaySend, .blocked, .rejected)
                 }
             }
         }
-        catch { message = "Intent outbox pending: \(error.localizedDescription)" }
+        catch { observed?(.relaySend, .degraded, .connectionFailed); message = "Intent outbox pending: \(error.localizedDescription)" }
     }
     func receiveOnce() async throws {
+        let observed = onHealth; let previousQuarantine = state.quarantine?.count ?? 0
         let data = try await relay("?after=\(state.cursor)&wait=20")
         try Task.checkCancellation()
         guard let environment = pair?.environment else { return }
         var accepted: [IntentEvent] = []
         try commit { accepted = try $0.ingestPage(data, environment: environment) }
         for event in accepted { beginDiagnostic(event, stage: "receiver", observed: Date()) }
+        let invalid = (state.quarantine?.count ?? 0) > previousQuarantine
+        observed?(.relayReceive, invalid ? .degraded : .healthy, invalid ? .invalidEvents : .checked)
         message = "Receiver connected â€¢ cursor \(state.cursor) â€¢ \(state.quarantine?.count ?? 0) quarantined"
     }
     private func receiveLoop() async {
         while !Task.isCancelled {
+            let observed = onHealth
             do {
                 try await receiveOnce()
                 Task { await process() }
             } catch {
                 if Task.isCancelled { return }
+                observed?(.relayReceive, .degraded, .connectionFailed)
                 message = "Reconnect needed: " + error.localizedDescription
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
             }
@@ -329,8 +340,10 @@ struct IntentPairing: Codable {
     }
     func reconcileBeforeResume() async throws {
         guard let api else { return }
+        let observed = onHealth
         let account = try await api.account()
         guard account.id == state.accountID, account.status == "ACTIVE", !account.account_blocked, !account.trading_blocked else { throw AlpacaError.invalid("Reconnect account is changed or blocked.") }
+        observed?(.broker, .healthy, .verified)
         for id in state.trades.keys.sorted() {
             guard let trade = state.trades[id], let event = trade.desired else { continue }
             for index in trade.mutations.indices {
@@ -346,10 +359,13 @@ struct IntentPairing: Codable {
     }
     func process() async {
         guard !processing, let api else { return }; processing = true; defer { processing = false }
+        let observed = onHealth; var needsReconciliation = false
         for id in Array(state.trades.keys) {
-            do { try Task.checkCancellation(); try await execute(id, api: api) }
-            catch { if let event = state.trades[id]?.desired { diagnosticStep(event.event_id, "execution_pending", error.localizedDescription) }; message = "Trade \(id.prefix(8)): \(error.localizedDescription)" }
+            do { try Task.checkCancellation(); try await execute(id, api: api, observe: observed) }
+            catch { needsReconciliation = true; if let event = state.trades[id]?.desired { diagnosticStep(event.event_id, "execution_pending", error.localizedDescription) }; message = "Trade \(id.prefix(8)): \(error.localizedDescription)" }
         }
+        needsReconciliation = needsReconciliation || state.trades.values.contains { $0.mutations.contains { $0.order == nil || $0.cancelUnknown } }
+        observed?(.execution, needsReconciliation ? .blocked : .healthy, needsReconciliation ? .reconciliationRequired : .checked)
     }
     private func diagnosticStep(_ eventID: String, _ stage: String, _ detail: String, at: Date = Date()) {
         try? commit { state in
@@ -445,11 +461,12 @@ struct IntentPairing: Codable {
         }
     }
     private func terminal(_ order: AlpacaOrder) -> Bool { ["filled", "canceled", "expired", "rejected", "replaced"].contains(order.status) }
-    private func execute(_ id: String, api: AlpacaREST) async throws {
+    private func execute(_ id: String, api: AlpacaREST, observe: NativeHealthObserver? = nil) async throws {
         guard let initial = state.trades[id], let desired = initial.desired else { return }
         if initial.completed == desired.event_id && initial.mutations.allSatisfy({ $0.order.map(terminal) ?? false }) { return }
         let account = try await api.account()
         guard account.id == state.accountID, desired.environment == api.environment, account.status == "ACTIVE", !account.account_blocked, !account.trading_blocked else { throw AlpacaError.invalid("Account is changed or blocked.") }
+        observe?(.broker, .healthy, .verified)
         // Every unknown POST is reconciled; a 404 never permits another POST.
         for index in initial.mutations.indices {
             let m = state.trades[id]!.mutations[index]

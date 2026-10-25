@@ -160,7 +160,7 @@ class MainActivity:Activity() {
   panel.addView(TextView(this).apply { text="Keep Crier running for mirroring. Android may stop background data sync; reopen to resume. Unknown broker outcomes remain blocked until reconciled. Cancel stops the unfilled remainder; Exit closes only this trade's acquired holdings." })
  }
  private fun showHealth() {
-  HealthDialog.show(this,AppHealth.ledger(applicationContext),if(journey=="alerts") "alerts" else if(journey in setOf("trade","follow")) "intent" else "connection") { action ->
+  HealthDialog.show(this,AppHealth.ledger(applicationContext),if(journey=="alerts") "alerts" else if(journey in setOf("trade","follow")) "intent" else "connection",visible={foreground}) { action ->
    when(action) {
     0 -> { (panel.parent as? ScrollView)?.smoothScrollTo(0,0); status.text="Choose the intended journey and account setup. Reconnect explicitly; saved keys are not current verification." }
     1 -> android.app.AlertDialog.Builder(this).setTitle("Saved Trade / Follow order evidence").setMessage(journal.unresolved()+"\nInspect the brokerage and reconnect the original account for reconciliation. Do not clear journals to resolve an unknown order.").setPositiveButton("Close",null).show()
