@@ -1,0 +1,108 @@
+{
+  "phase": "H.1",
+  "status": "H.1 Windows scoped component health verified; remaining H slices open",
+  "collected_at_utc": "2026-10-25T14:38:43.502156+00:00",
+  "implementation_commit": "12778a4d766bddbed88e501881e6566ec91e6ef7",
+  "diagnostic_contention_fix_commit": "85800d27ea303e55b45aa199e4a8a516b2639ae0",
+  "benchmark_correction_commit": "cc3b4add7f3c39416e8f4706886555d2330f3e2f",
+  "local": {
+    "python_passed": 823,
+    "python_skipped": 1,
+    "focused_health_and_delivery_tests": 49,
+    "benchmark_tests": 8,
+    "minimum_window": "850x680 hidden Windows window",
+    "diagnostic_contention": "Held external SQLite write lock; health observation returned in less than 0.5 seconds and surfaced health_error"
+  },
+  "python_matrix": [
+    {
+      "platform": "provider-preparation-ubuntu-latest-3.11",
+      "tests": 824,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 23,
+      "passed": 801
+    },
+    {
+      "platform": "provider-preparation-ubuntu-latest-3.12",
+      "tests": 824,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 23,
+      "passed": 801
+    },
+    {
+      "platform": "provider-preparation-windows-latest-3.11",
+      "tests": 824,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "passed": 823
+    }
+  ],
+  "default_backend": {
+    "tests": 752,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 25,
+    "passed": 727
+  },
+  "ci_runs": [
+    {
+      "conclusion": "success",
+      "databaseId": 40202542767,
+      "headSha": "85800d27ea303e55b45aa199e4a8a516b2639ae0",
+      "name": "Windows release",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40202542767"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40202815202,
+      "headSha": "cc3b4add7f3c39416e8f4706886555d2330f3e2f",
+      "name": "Provider connection preparation",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40202815202"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40202401765,
+      "headSha": "12778a4d766bddbed88e501881e6566ec91e6ef7",
+      "name": "Crier live-trading safety checks",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40202401765"
+    }
+  ],
+  "initial_findings": [
+    {
+      "kind": "diagnostic_contention",
+      "result": "Initial test reproduced a 5.56-second lock wait; timeout is now zero for diagnostics only."
+    },
+    {
+      "kind": "benchmark_window_boundary",
+      "run": 40202398700,
+      "result": "Linux 3.12 gate probe crossed a fixed minute boundary; bounded first-rejection probe now tests up to 41 attempts. Production rate limits unchanged."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "windows-installer-acceptance.json",
+      "sha256": "b4087fcf0ee62f63da706a6330b1363d7b314cf218631669a4c4b72dc4a60bc8",
+      "source_commit": "85800d27ea303e55b45aa199e4a8a516b2639ae0"
+    }
+  ],
+  "remaining_phase_h": [
+    "Native Android/iOS health and recovery UI",
+    "Execution-clock/freshness and duplicate-preflight review",
+    "Opt-in Windows tray/startup",
+    "Deliberate sizing and entry/exit policy design"
+  ],
+  "deployed": false,
+  "physical_acceptance": false,
+  "real_broker_orders": 0,
+  "real_discord_messages": 0,
+  "unchanged_ios_regression": {
+    "tests": 107,
+    "failures": 0,
+    "run": 40202401765
+  }
+}

@@ -72,3 +72,10 @@ Activation remains external: register provider apps/callbacks, configure protect
 The next independent implementation phase is H: operational health/freshness and recovery presentation. OAuth activation need not block that source work. Existing execution-price/risk behavior must remain explicit; no automatic policy changes are implied by the connection work.
 
 G.6 scoped source verification is complete. Local checks passed **800 Python tests/one optional SDK skip**, **86 Android JUnit tests**, **17 Deno tests**, and six synthetic gateway/SQL scenarios. CI passed real PostgreSQL concurrency/permissions, the Python platform matrix, Android debug packaging, Windows installer lifecycle and corrected iOS simulator/unsigned archive plus **107 behavioral tests**. The initial iOS fixture/storage assumptions and their correction `2159e3b` remain recorded in the integration report. These results do not constitute deployment, provider consent or physical acceptance.
+
+
+## Phase H.1 — Windows health complete
+
+Windows **Health → Connections** now shows independent broker, fill-monitor, relay-send/receive, execution-worker and Discord evidence with last successful checks and recovery navigation. Saved successes survive restart without restoring readiness. Monotonic freshness and PC-clock discontinuity are visible; scoped records do not cross account/environment/pairing boundaries. A locked diagnostics database fails quickly and reports unavailable health rather than waiting in the worker loop. Health cannot resolve an unknown order or authorize a send.
+
+The [H implementation plan](superpowers/plans/2026-10-25-operational-health.md) and [evidence](acceptance/2026-10-25/operational-health/source-evidence.json) record **823 local tests**, the passing Windows/Linux matrix, actual Windows installer lifecycle checks and unchanged **107 iOS tests**. An observed minute-boundary benchmark flaw was corrected without altering production rate limits. H.2 native health/recovery presentation is next; execution-clock/preflight review, optional tray/startup and deliberate execution-policy design remain open.
