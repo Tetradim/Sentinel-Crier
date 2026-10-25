@@ -48,18 +48,32 @@ private final class HealthMockProtocol: URLProtocol {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
-        var calls = 0
-        let session = network { [self] request in calls += 1; return try response(request) }
+        var calls = 0; var accounts = 0
+        let session = network { [self] request in calls += 1; if request.url?.path == "/v2/account" { accounts += 1 }; return try response(request) }
         defer { session.invalidateAndCancel() }
         let h = NativeHealth(storage: Memory()); let model = try workspace(folder, session, h)
         model.selectPurpose(.alerts); await model.connect(key: "", secret: "")
+        XCTAssertEqual(accounts, 1, "Reuse only the account verified in this initial read-only connection attempt")
         XCTAssertEqual(h.snapshot()[0].state, "healthy"); XCTAssertEqual(h.snapshot()[1].state, "healthy")
         let count = calls; _ = h.snapshot(); _ = h.snapshot(); XCTAssertEqual(calls, count)
         XCTAssertFalse(model.readiness.deliveryEnabled)
         await model.sceneActive(false); XCTAssertTrue(h.snapshot().allSatisfy { $0.state == "stopped" })
         await model.sceneActive(true); XCTAssertEqual(h.snapshot()[0].state, "healthy"); XCTAssertEqual(h.snapshot()[1].state, "healthy")
+        XCTAssertEqual(accounts, 2, "Foreground refresh must verify again, with no cross-refresh cache")
         XCTAssertFalse(model.readiness.deliveryEnabled)
         model.disconnect(); XCTAssertTrue(h.snapshot().allSatisfy { $0.state == "stopped" })
+    }
+    func testFinalHTTPPredicateRefusalSendsNoRequest() async throws {
+        var requests = 0
+        let session = network { _ in requests += 1; throw URLError(.unsupportedURL) }
+        defer { session.invalidateAndCancel() }
+        let api = AlpacaREST(environment: .paper, credentials: AlpacaCredentials(key: "synthetic", secret: "synthetic"), session: session)
+        let operation = Task.detached {
+            try await api.submitIntent(symbol: "AAPL", quantity: 2, price: "10", sell: false, option: false, clientID: "known-not-sent", canSubmit: { false })
+        }
+        do { _ = try await operation.value; XCTFail("Final predicate refusal was ignored") }
+        catch is IntentDispatchRefused {} catch { XCTFail("Unexpected refusal type: \(error)") }
+        XCTAssertEqual(requests, 0)
     }
     func testLateAccountResponseAfterLogoutCannotRefreshHealth() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

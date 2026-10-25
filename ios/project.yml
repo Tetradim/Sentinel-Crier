@@ -30,6 +30,7 @@ targets:
       - path: SentinelCrier/OAuthReturn.swift
       - path: SentinelCrier/ProviderConnections.swift
       - path: SentinelCrier/NativeHealth.swift
+      - path: SentinelCrier/EntryClock.swift
       - path: SentinelCrier/NativeHealthView.swift
       - path: ../crier/connection-service.json
         buildPhase: resources
@@ -79,6 +80,7 @@ targets:
       - path: SentinelCrier/OAuthReturnTests.swift
       - path: SentinelCrier/ProviderConnectionsTests.swift
       - path: SentinelCrier/NativeHealthTests.swift
+      - path: SentinelCrier/EntryClockTests.swift
       - path: SentinelCrier/NativeHealthFlowTests.swift
       - path: ../tests/fixtures/oauth-return.json
         buildPhase: resources

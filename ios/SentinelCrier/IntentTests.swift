@@ -84,7 +84,11 @@ final class IntentTests: XCTestCase {
 
 @MainActor
 final class IntentRecoveryTests: XCTestCase {
-    private final class Clock { var date = Date(timeIntervalSince1970: 1_800_000_000) }
+    private final class Clock {
+        var date = Date(timeIntervalSince1970: 1_800_000_000)
+        var reads = 0; var jumpAt: Int?
+        func read() -> Date { reads += 1; if reads == jumpAt { date += 60 }; return date }
+    }
     private func event(_ clock: Clock, action: String = "cancel") -> IntentEvent {
         var event = IntentEvent.make(trade: UUID().uuidString.lowercased(), sequence: 2, action: action, environment: .paper, symbol: "AAPL", asset: "stock", quantity: 2, price: "10")
         event.created_at = IntentDiagnosticRecord.timestamp(clock.date)
@@ -106,9 +110,36 @@ final class IntentRecoveryTests: XCTestCase {
         RecoveryProtocol.register(script, key: key)
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [RecoveryProtocol.self]
         let api = AlpacaREST(environment: .paper, credentials: AlpacaCredentials(key: key, secret: "test"), session: URLSession(configuration: config))
-        let controller = try IntentController(file: path, now: { clock.date })
+        let controller = try IntentController(file: path, now: { clock.read() })
         try controller.connect(api: api, account: "account-a", pairing: pair, startWorkers: false)
         return (controller, path, api, pair, script)
+    }
+    func testClockChangeBeforeEntryDefersWithoutBlockingLaterValidWork() async throws {
+        let clock = Clock(); let desired = event(clock, action: "enter")
+        let (controller, file, _, _, script) = try setup(desired, clock: clock, withMutation: false)
+        defer { controller.disconnect(); try? FileManager.default.removeItem(at: file) }
+        clock.date += 60; await controller.process()
+        XCTAssertEqual(script.snapshot().posts, 0)
+        XCTAssertTrue(controller.state.trades[desired.trade_id]!.mutations.isEmpty)
+        XCTAssertTrue(controller.message.contains("clock"))
+        clock.date -= 60; await controller.process(); XCTAssertEqual(script.snapshot().posts, 1)
+    }
+    func testFinalClockRefusalPersistsNoPostWithoutAnUnknownBrokerLookupOnRestart() async throws {
+        let clock = Clock(); let desired = event(clock, action: "enter")
+        let (controller, file, api, pair, script) = try setup(desired, clock: clock, withMutation: false)
+        defer { controller.disconnect(); try? FileManager.default.removeItem(at: file) }
+        clock.jumpAt = clock.reads + 2 // Initial entry gate succeeds; the final HTTP gate sees the discontinuity.
+        await controller.process()
+        XCTAssertEqual(script.snapshot().posts, 0)
+        let mutation = try XCTUnwrap(controller.state.trades[desired.trade_id]?.mutations.first)
+        XCTAssertTrue(mutation.notSubmitted == true); XCTAssertNil(mutation.order)
+        XCTAssertTrue(controller.state.unresolved.isEmpty)
+        controller.disconnect()
+        let restored = try IntentController(file: file, now: { clock.date })
+        try restored.connect(api: api.freshClient(customer: nil), account: "account-a", pairing: pair, startWorkers: false)
+        defer { restored.disconnect() }
+        try await restored.reconcileBeforeResume(); await restored.process()
+        XCTAssertEqual(script.snapshot().posts, 0); XCTAssertFalse(script.snapshot().requests.contains("lookup"))
     }
     func testCancelFailureReconcilesBeforeRetryAndSurvivesRestart() async throws {
         let clock = Clock(), desired = event(Clock())

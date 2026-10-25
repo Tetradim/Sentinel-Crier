@@ -10,6 +10,7 @@ import time
 from .intent_protocol import IntentEvent
 from .trade_diagnostics import validate_quote, trade_report, export_trade_json, export_trade_csv
 from .lock import single_process, AlreadyRunningError
+from .entry_clock import EntryClock, ClockUncertain
 
 DEFAULTS = dict(enabled=False, mode='exact_limit', max_slippage_bps=100,
                 max_slippage_amount='0.02', max_age_seconds=10, max_quantity=1000)
@@ -20,9 +21,10 @@ BROKER_STATUSES = {'new', 'accepted', 'pending_new', 'accepted_for_bidding',
                    'stopped', 'rejected', 'suspended', 'calculated'}
 
 class IntentEngine:
-    def __init__(self, path, broker, clock=None):
+    def __init__(self, path, broker, clock=None, *, entry_clock=None):
         self.path, self.broker = str(path), broker
         self.clock = clock or time.time
+        self.entry_clock = entry_clock or EntryClock()
         self.worker = threading.Lock()
         with self._db() as db:
             db.executescript('''CREATE TABLE IF NOT EXISTS intent_events(id TEXT PRIMARY KEY, data TEXT NOT NULL);
@@ -212,13 +214,21 @@ class IntentEngine:
         if active: return {'trade_id':tid,'state':'working'}
         settings=self.load_settings(); action=e['action']; side='sell' if action=='exit' else 'buy'
         if action=='cancel' or (side=='buy' and (row['invalid'] or row['skipped'])): return self._settle(tid,e,'invalidated')
-        now=datetime.now(timezone.utc)
-        if side=='buy' and now<datetime.fromisoformat(e['created_at'].replace('Z','+00:00')):
+        try:
+            sample=self.entry_clock.read() if side=='buy' else None
+            now=datetime.fromtimestamp(sample.effective,timezone.utc) if sample else datetime.now(timezone.utc)
+            start_now=datetime.fromtimestamp(sample.wall,timezone.utc) if sample else now
+        except ClockUncertain:
+            self._trace(tid,'execution_deferred',e['event_id'],reason='clock_changed')
+            return {'trade_id':tid,'state':'waiting_for_clock'}
+        if side=='buy' and start_now<datetime.fromisoformat(e['created_at'].replace('Z','+00:00')):
             # A future-dated event is not permanently invalid: wait for its
             # validity window. Later revisions must remain eligible.
             self._trace(tid,'execution_deferred',e['event_id'],reason='future_created_at',sender_created_at=e['created_at'])
             return {'trade_id':tid,'state':'waiting_for_start'}
         if side=='buy' and (not settings['enabled'] or now>=datetime.fromisoformat(e['expires_at'].replace('Z','+00:00')) or (now-datetime.fromisoformat(e['created_at'].replace('Z','+00:00'))).total_seconds()>settings['max_age_seconds'] or e['quantity']>settings['max_quantity']):
+            reason='entries_paused' if not settings['enabled'] else 'expired' if now>=datetime.fromisoformat(e['expires_at'].replace('Z','+00:00')) else 'max_age' if (now-datetime.fromisoformat(e['created_at'].replace('Z','+00:00'))).total_seconds()>settings['max_age_seconds'] else 'max_quantity'
+            self._trace(tid,'entry_skipped',e['event_id'],reason=reason)
             with self._db() as db: db.execute('UPDATE intent_trades SET skipped=1 WHERE id=?',(tid,))
             return self._settle(tid,e,'skipped')
         bought=sum((Decimal(o['filled']) for o in orders if o['side']=='buy'),Decimal(0))
@@ -256,16 +266,30 @@ class IntentEngine:
             newest=db.execute('SELECT * FROM intent_trades WHERE id=?',(tid,)).fetchone()
             if newest['data']!=row['data'] or (side=='buy' and (newest['invalid'] or newest['skipped'])): return {'trade_id':tid,'state':'superseded'}
             db.execute('INSERT INTO intent_orders VALUES (?,?,?,?,?,?,?,?)',(cid,tid,e['sequence'],side,str(qty),'unknown',None,'0'))
+        refusal={'reason':'revision_changed'}
         def can_submit():
             with self._db() as db:
                 latest=db.execute('SELECT * FROM intent_trades WHERE id=?',(tid,)).fetchone()
             if latest['data']!=row['data']: return False
             if side=='buy':
                 current=self.load_settings()
-                current_time=datetime.now(timezone.utc)
+                try:
+                    sample=self.entry_clock.read()
+                    current_time=datetime.fromtimestamp(sample.effective,timezone.utc)
+                    start_time=datetime.fromtimestamp(sample.wall,timezone.utc)
+                except ClockUncertain:
+                    refusal['reason']='clock_changed'
+                    return False
                 created=datetime.fromisoformat(e['created_at'].replace('Z','+00:00'))
                 expires=datetime.fromisoformat(e['expires_at'].replace('Z','+00:00'))
-                return not latest['invalid'] and not latest['skipped'] and current['enabled'] and created<=current_time<expires and (current_time-created).total_seconds()<=current['max_age_seconds'] and e['quantity']<=current['max_quantity']
+                if latest['invalid'] or latest['skipped']: refusal['reason']='invalidated'
+                elif not current['enabled']: refusal['reason']='entries_paused'
+                elif start_time<created: refusal['reason']='future_created_at'
+                elif current_time>=expires: refusal['reason']='expired'
+                elif (current_time-created).total_seconds()>current['max_age_seconds']: refusal['reason']='max_age'
+                elif e['quantity']>current['max_quantity']: refusal['reason']='max_quantity'
+                else: return True
+                return False
             return True
         self._trace(tid,'broker_submit_started',e['event_id'],client_order_id=cid,side=side,quantity=str(qty),order_type=request['type'],limit_price=request.get('limit_price'))
         try:
@@ -275,7 +299,7 @@ class IntentEngine:
                 if not can_submit(): raise BrokerSuperseded('Instruction changed')
                 self.broker.submit(request)
         except BrokerSuperseded:
-            self._trace(tid,'broker_submit_superseded',e['event_id'],client_order_id=cid)
+            self._trace(tid,'broker_submit_superseded',e['event_id'],client_order_id=cid,reason=refusal['reason'])
             with self._db() as db: db.execute("UPDATE intent_orders SET status='skipped' WHERE cid=?",(cid,))
             return {'trade_id':tid,'state':'superseded'}
         except BrokerNotSubmitted:

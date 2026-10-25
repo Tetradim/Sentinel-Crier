@@ -48,9 +48,10 @@ def deliver_once(store: Store, webhook: str, client: httpx.Client, job_id=None, 
             state,reason='blocked','rejected'
         else:
             store.complete(job["id"], "uncertain", f"Discord response ambiguous: HTTP {response.status_code}")
-    except httpx.ConnectError:
+    except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
+        # No request body reached Discord: connection/pool acquisition did not finish.
         store.complete(job["id"], "pending" if job["attempts"] < 4 else "failed", "Connection failed", delay=30)
-        state,reason='degraded','connection_failed'
+        state,reason='degraded' if job['attempts'] < 4 else 'blocked','connection_failed'
     except httpx.HTTPError:
         # Discord webhooks have no general idempotency key. Never blindly retry a possibly successful send.
         store.complete(job["id"], "uncertain", "Delivery could not be confirmed; check Discord")

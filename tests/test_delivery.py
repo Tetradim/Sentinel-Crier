@@ -1,4 +1,5 @@
 import httpx
+import pytest
 from crier.store import Store
 from crier.models import Settings
 from crier.delivery import deliver_once
@@ -98,6 +99,32 @@ def test_connection_failure_retries_without_claiming_delivery(tmp_path):
         assert deliver_once(db, URL, client)
     assert db.history()[0]["status"] == "pending"
     assert db.claim() is None
+
+
+@pytest.mark.parametrize('failure',[httpx.ConnectError,httpx.ConnectTimeout,httpx.PoolTimeout])
+def test_pre_send_transport_failures_keep_the_existing_bounded_retry_budget(tmp_path,failure):
+    db=prepared(tmp_path); observations=[]; calls=[]
+    def fail(request): calls.append(request); raise failure('private transport detail')
+    with httpx.Client(transport=httpx.MockTransport(fail)) as client:
+        for attempt in range(5):
+            assert deliver_once(db,URL,client,observe=lambda *args:observations.append(args))
+            assert db.history()[0]['status']==('pending' if attempt<4 else 'failed')
+            with db.connect() as connection: connection.execute('UPDATE outbox SET due=0')
+        assert not deliver_once(db,URL,client)
+    assert len(calls)==5
+    assert observations[-1]==('discord','blocked','connection_failed')
+    assert 'private' not in repr(db.history())
+
+
+@pytest.mark.parametrize('failure',[httpx.ReadTimeout,httpx.WriteTimeout,httpx.RemoteProtocolError])
+def test_possible_post_transmission_failures_never_repost_automatically(tmp_path,failure):
+    db=prepared(tmp_path); calls=[]
+    def fail(request): calls.append(request); raise failure('private transport detail')
+    with httpx.Client(transport=httpx.MockTransport(fail)) as client:
+        assert deliver_once(db,URL,client)
+        assert not deliver_once(db,URL,client)
+    assert len(calls)==1 and db.history()[0]['status']=='uncertain'
+    assert 'private' not in repr(db.history())
 
 
 def test_server_error_is_uncertain_and_not_automatically_retried(tmp_path):

@@ -1,7 +1,8 @@
 package com.sentinel.crier
 import org.json.JSONObject
 import java.time.Instant
-class Engine(private val journal:IntentStore,private val config:JSONObject,private val broker:BrokerPort=Broker(config),private val clock:()->Instant={ Instant.now() },private val paused:()->Boolean) {
+class Engine(private val journal:IntentStore,private val config:JSONObject,private val broker:BrokerPort=Broker(config),private val clock:()->Instant={ Instant.now() },entryClock:EntryClock?=null,private val paused:()->Boolean) {
+ private val entryTime=entryClock ?: EntryClock(clock)
  var reconciliationHealthy=false; private set
 
  private val terminal=setOf("filled","canceled","expired","rejected","replaced","superseded")
@@ -40,10 +41,11 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
    return
   }
   if(!sell) {
-   val now=clock(); val created=Instant.parse(e.getString("created_at"))
-   if(now<created) return // A future-created entry remains pending until its lifetime begins.
+   val sample=entryTime.read() ?: run { journal.diagnostic(e.getString("event_id"),"entry_deferred","clock_changed"); journal.setMeta("status","New entries deferred: check device time and reconnect. Cancel/exit handling remains active."); return }
+   val now=sample.effective; val created=Instant.parse(e.getString("created_at"))
+   if(sample.wall<created) { journal.diagnostic(e.getString("event_id"),"entry_deferred","future_created_at"); return }
    val age=java.time.Duration.between(created,now).seconds
-   if(!Policy.canEnter(revision.second,paused(),seq,revision.first,age,config.optInt("age",10)) || now>created.plusSeconds(config.optInt("age",10).toLong()) || now>=Instant.parse(e.getString("expires_at")) || e.getInt("quantity")>config.optInt("maxQuantity",1000)) { journal.mark(e.getString("event_id"),false); return }
+   if(!Policy.canEnter(revision.second,paused(),seq,revision.first,age,config.optInt("age",10)) || now>created.plusSeconds(config.optInt("age",10).toLong()) || now>=Instant.parse(e.getString("expires_at")) || e.getInt("quantity")>config.optInt("maxQuantity",1000)) { journal.diagnostic(e.getString("event_id"),"entry_skipped",if(paused()) "entries_paused" else if(now>=Instant.parse(e.getString("expires_at"))) "expired" else if(e.getInt("quantity")>config.optInt("maxQuantity",1000)) "max_quantity" else "age_or_revision_limit"); journal.mark(e.getString("event_id"),false); return }
   }
   if(orders.any { it.state !in terminal }) return
   val remaining=e.getInt("quantity")-orders.filter { it.sequence==seq && it.side=="sell" }.sumOf { it.filled }
@@ -58,8 +60,17 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
    journal.setMeta("quantity:$client",qty.toString())
    journal.unknown(client,trade,seq,if(sell) "sell" else "buy")
   }
-  try { val result=broker.submit(e,client,qty,sell) { val current=journal.revision(trade); val now=clock(); current.first==seq && (sell || (!current.second && !paused() && now>=Instant.parse(e.getString("created_at")) && now<=Instant.parse(e.getString("created_at")).plusSeconds(config.optInt("age",10).toLong()) && now<Instant.parse(e.getString("expires_at")))) }; validate(result,client,e.getString("symbol"),if(sell) "sell" else "buy",qty,0); journal.update(client,result) }
-  catch(_:Superseded) { journal.state(client,"superseded") }
+  var refused="revision_changed"
+  try { val result=broker.submit(e,client,qty,sell) {
+   val current=journal.revision(trade)
+   if(current.first!=seq) false else if(sell) true else {
+    val sample=entryTime.read()
+    val created=Instant.parse(e.getString("created_at")); val expiry=Instant.parse(e.getString("expires_at"))
+    refused=when { sample==null->"clock_changed"; current.second->"invalidated"; paused()->"entries_paused"; sample.wall<created->"future_created_at"; sample.effective>=expiry->"expired"; sample.effective>created.plusSeconds(config.optInt("age",10).toLong())->"max_age"; e.getInt("quantity")>config.optInt("maxQuantity",1000)->"max_quantity"; else->"" }
+    refused.isEmpty()
+   }
+  }; validate(result,client,e.getString("symbol"),if(sell) "sell" else "buy",qty,0); journal.update(client,result) }
+  catch(_:Superseded) { journal.state(client,"superseded"); journal.diagnostic(e.getString("event_id"),"broker_not_submitted",refused); journal.setMeta("status","Not submitted before dispatch: $refused. Journal retained; use a new revision if needed.") }
   catch(error:HttpError) {
    if(error.status in setOf(400,401,403)) {
     journal.state(client,"rejected")

@@ -5,6 +5,8 @@ import org.junit.Assert.*
 import java.time.Instant
 class EngineTest {
  class Store:IntentStore {
+  val reasons=mutableListOf<String>()
+  override fun diagnostic(id:String,stage:String,detail:String) { reasons.add("$stage:$detail") }
   var rev=Pair(1,false); val os=mutableListOf<Journal.Order>(); var done=false
   val metadata=mutableMapOf("device" to "device")
   override fun meta(key:String)=metadata[key] ?: ""
@@ -29,6 +31,25 @@ class EngineTest {
   override fun submit(event:JSONObject,client:String,quantity:Int,sell:Boolean,canSubmit:()->Boolean):JSONObject { beforeSubmit?.invoke(); if(!canSubmit()) throw Superseded(); submissionError?.let { throw it }; posts++; this.quantity=quantity; val r=JSONObject().put("status","accepted").put("id","broker").put("filled_qty","0").put("client_order_id",client).put("symbol",event.getString("symbol")).put("side",if(sell) "sell" else "buy").put("qty",quantity.toString()); remote=r; return r }
  }
  private fun event(action:String="enter",seq:Int=1)=JSONObject().put("event_id","event").put("trade_id","trade").put("sequence",seq).put("action",action).put("symbol","SPY").put("asset","stock").put("quantity",5).put("limit_price","1.00").put("created_at",Instant.now().toString()).put("expires_at",Instant.now().plusSeconds(30).toString())
+ @Test fun changedClockDefersEntryAndDoesNotBlockCancellation() {
+  var wall=Instant.now(); val base=wall; var mono=1000L; val s=Store(); val b=Fake()
+  val e=event().put("created_at",base.minusSeconds(1).toString()).put("expires_at",base.plusSeconds(20).toString())
+  val engine=Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={wall},entryClock=EntryClock({wall},{mono})) { false }
+  wall=wall.plusSeconds(60); engine.step(e); assertEquals(0,b.posts); assertFalse(s.done)
+  assertTrue(s.reasons.any { it.contains("clock_changed") })
+  wall=base; engine.step(e); assertEquals(1,b.posts)
+  val (cancelStore,cancelBroker)=cancelSetup(); val cancelClock=EntryClock({wall},{mono}); wall=wall.plusSeconds(60)
+  Engine(cancelStore,JSONObject().put("account","account").put("role","follower"),cancelBroker,clock={wall},entryClock=cancelClock) { false }.step(event("cancel",2))
+  assertEquals(1,cancelBroker.canceled)
+ }
+ @Test fun clockChangedInsidePreflightIsRetainedAsKnownNotSubmitted() {
+  var wall=Instant.now(); val base=wall; val s=Store(); val b=Fake()
+  val e=event().put("created_at",base.minusSeconds(1).toString()).put("expires_at",base.plusSeconds(20).toString())
+  b.beforeSubmit={wall=wall.minusSeconds(60)}
+  Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={wall},entryClock=EntryClock({wall},{1000L})) { false }.step(e)
+  assertEquals(0,b.posts); assertEquals("superseded",s.os.single().state)
+  assertTrue(s.reasons.any { it.contains("clock_changed") })
+ }
  private fun engine(s:Store,b:Fake)=Engine(s,JSONObject().put("account","account").put("role","follower"),b) { false }
  @Test fun clientIdMatchesAcrossInstallations() { val first=Store(); val second=Store(); engine(first,Fake()).step(event()); engine(second,Fake()).step(event()); assertEquals("si-event-b",first.os.single().client); assertEquals(first.os.single().client,second.os.single().client) }
   @Test fun tombstonePreventsLateEntry() { val s=Store(); s.rev=Pair(2,true); val b=Fake(); engine(s,b).step(event()); assertEquals(0,b.posts) }
@@ -53,7 +74,7 @@ class EngineTest {
  }
  @Test fun cancelFailureRetriesAfterReconciliationAndRestartCooldown() {
   val (s,b)=cancelSetup(); var now=Instant.parse("2026-01-01T00:00:00Z")
-  fun fresh()=Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={now}) { false }
+  fun fresh()=Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={now},entryClock=EntryClock({now},{now.toEpochMilli()})) { false }
   b.cancelError=HttpError(503); try { fresh().step(event("cancel",2)); fail() } catch(_:HttpError) {}
   assertEquals(1,b.canceled); b.cancelError=null; now=now.plusMillis(4999); fresh().step(event("cancel",2)); assertEquals(1,b.canceled)
   now=now.plusMillis(1); fresh().step(event("cancel",2)); assertEquals(2,b.canceled); assertEquals(0,b.posts)
@@ -72,7 +93,7 @@ class EngineTest {
  @Test fun futureFractionalEntryRemainsPendingThenExecutes() {
   val s=Store(); val b=Fake(); var now=Instant.parse("2026-01-01T00:00:00.100Z")
   val e=event().put("created_at","2026-01-01T00:00:00.200Z").put("expires_at","2026-01-01T00:00:10.200Z")
-  val engine=Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={now}) { false }
+  val engine=Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={now},entryClock=EntryClock({now},{now.toEpochMilli()})) { false }
   engine.step(e); assertFalse(s.done); assertEquals(0,b.posts)
   now=now.plusMillis(100); engine.step(e); assertEquals(1,b.posts)
  }
@@ -80,14 +101,14 @@ class EngineTest {
  @Test fun crashBeforeDeleteUsesPersistedCooldownAndFreshSnapshot() {
   val (s,b)=cancelSetup(); var now=Instant.parse("2026-01-01T00:00:00Z")
   s.setMeta("cancel:client","requested"); s.setMeta("cancel_attempt_ms:client",now.toEpochMilli().toString()); s.state("client","cancel_unknown")
-  fun restarted()=Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={now}) { false }
+  fun restarted()=Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={now},entryClock=EntryClock({now},{now.toEpochMilli()})) { false }
   restarted().step(event("cancel",2)); assertEquals(0,b.canceled)
   now=now.plusSeconds(5); restarted().step(event("cancel",2)); assertEquals(1,b.canceled)
  }
  @Test fun futureWholeSecondDoesNotCompleteAndFractionalAgeLimitIsExact() {
   val s=Store(); val b=Fake(); var now=Instant.parse("2026-01-01T00:00:00.100Z")
   val e=event().put("created_at","2026-01-01T00:00:01.200Z").put("expires_at","2026-01-01T00:00:30Z")
-  val engine=Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={now}) { false }
+  val engine=Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={now},entryClock=EntryClock({now},{now.toEpochMilli()})) { false }
   engine.step(e); assertFalse(s.done); assertEquals(0,b.posts)
   now=Instant.parse("2026-01-01T00:00:11.201Z"); engine.step(e); assertTrue(s.done); assertEquals(0,b.posts)
  }
@@ -95,14 +116,14 @@ class EngineTest {
  @Test fun exactExpiryNeverSubmits() {
   val s=Store(); val b=Fake(); val now=Instant.parse("2026-01-01T00:00:05Z")
   val e=event().put("created_at","2026-01-01T00:00:00Z").put("expires_at",now.toString())
-  Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={now}) { false }.step(e)
+  Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={now},entryClock=EntryClock({now},{now.toEpochMilli()})) { false }.step(e)
   assertEquals(0,b.posts); assertTrue(s.done)
  }
  @Test fun expiryReachedDuringPreflightNeverSubmits() {
   val s=Store(); val b=Fake(); var now=Instant.parse("2026-01-01T00:00:04.999Z")
   val e=event().put("created_at","2026-01-01T00:00:00Z").put("expires_at","2026-01-01T00:00:05Z")
   b.beforeSubmit={ now=now.plusMillis(1) }
-  Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={now}) { false }.step(e)
+  Engine(s,JSONObject().put("account","account").put("role","follower"),b,clock={now},entryClock=EntryClock({now},{now.toEpochMilli()})) { false }.step(e)
   assertEquals(0,b.posts); assertEquals("superseded",s.os.single().state)
  }
  @Test fun definitiveSubmissionAndAuthenticationRejectionsDoNotRepostAfterRestart() {

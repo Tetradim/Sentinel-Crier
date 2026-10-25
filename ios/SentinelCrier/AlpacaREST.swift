@@ -135,13 +135,17 @@ final class AlpacaREST {
     init(environment: AlpacaEnvironment, credentials: AlpacaCredentials, session: URLSession = CrierHTTPSession.shared) {
         self.environment = environment; self.credentials = credentials; self.session = session
     }
-    private func request(_ path: String, query: [URLQueryItem] = [], method: String = "GET", body: Data? = nil, permit: OAuthEffectPermit? = nil) async throws -> Data {
+    @MainActor private func request(_ path: String, query: [URLQueryItem] = [], method: String = "GET", body: Data? = nil, permit: OAuthEffectPermit? = nil, canSubmit: (@MainActor () -> Bool)? = nil) async throws -> Data {
         var parts = URLComponents(url: environment.baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { parts.queryItems = query }
         var request = URLRequest(url: parts.url!); request.httpMethod = method; request.httpBody = body; request.timeoutInterval = 20
         try credentials.authorize(&request)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        guard (method == "GET" || lifetime.isCurrent), permit?.isCurrent != false, !Task.isCancelled else { throw AlpacaError.invalid("Broker operation stopped before dispatch.") }
+        guard (method == "GET" || lifetime.isCurrent), permit?.isCurrent != false, !Task.isCancelled else {
+            if canSubmit != nil { throw IntentDispatchRefused() }
+            throw AlpacaError.invalid("Broker operation stopped before dispatch.")
+        }
+        guard canSubmit?() != false else { throw IntentDispatchRefused() }
         // Never retry POST, including transport failures and throttling.
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw AlpacaError.invalid("Invalid broker response.") }
@@ -190,11 +194,11 @@ final class AlpacaREST {
         guard ticket.environment == environment else { throw AlpacaError.invalid("Environment changed. Review again.") }
         return try JSONDecoder().decode(AlpacaOrder.self, from: await request("v2/orders", method: "POST", body: ticket.body(), permit: permit))
     }
-    func submitIntent(symbol: String, quantity: Int, price: String?, sell: Bool, option: Bool, clientID: String) async throws -> AlpacaOrder {
+    func submitIntent(symbol: String, quantity: Int, price: String?, sell: Bool, option: Bool, clientID: String, canSubmit: (@MainActor () -> Bool)? = nil) async throws -> AlpacaOrder {
         var body: [String: Any] = ["symbol": symbol, "qty": String(quantity), "side": sell ? "sell" : "buy", "type": price == nil ? "market" : "limit", "time_in_force": "day", "client_order_id": clientID]
         if let price { body["limit_price"] = price }
         if option || sell { body["position_intent"] = sell ? "sell_to_close" : "buy_to_open" }
-        return try JSONDecoder().decode(AlpacaOrder.self, from: await request("v2/orders", method: "POST", body: JSONSerialization.data(withJSONObject: body)))
+        return try JSONDecoder().decode(AlpacaOrder.self, from: await request("v2/orders", method: "POST", body: JSONSerialization.data(withJSONObject: body), canSubmit: canSubmit))
     }
     func order(clientID: String) async throws -> AlpacaOrder {
         try JSONDecoder().decode(AlpacaOrder.self, from: await request("v2/orders:by_client_order_id", query: [URLQueryItem(name: "client_order_id", value: clientID)]))

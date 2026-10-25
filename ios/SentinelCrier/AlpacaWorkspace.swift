@@ -193,7 +193,7 @@ final class AlpacaWorkspace: ObservableObject {
         healthBaseScope = NativeHealth.scope([environment.rawValue, current.id, purpose?.rawValue ?? "", savedPairing?.fingerprint ?? "", legacy?.fingerprint ?? "", credentials.owner ?? "", credentials.serviceURL ?? ""])
         bindHealth(); healthNote(healthTicket, .broker, .healthy, .verified)
         if foreground {
-            try await refreshConnected()
+            try await refreshConnected(verifiedAccount: current)
             guard foreground, generation == scopeGeneration, !Task.isCancelled else { throw AlpacaError.invalid("Connection interrupted. Reconnect explicitly.") }
             try await activateIntent(api: client, account: current.id)
             guard foreground, generation == scopeGeneration, !Task.isCancelled else { throw AlpacaError.invalid("Connection interrupted. Reconnect explicitly.") }
@@ -396,12 +396,13 @@ final class AlpacaWorkspace: ObservableObject {
             }
         } catch { readiness.invalidate(); throw error }
     } }
-    private func refreshConnected() async throws {
+    private func refreshConnected(verifiedAccount: AlpacaAccount? = nil) async throws {
         guard foreground, let api, let account, let journal else { return }
         let observed = healthTicket; var checking: HealthComponent = .broker
         do {
         let generation = scopeGeneration; let permit = effectPermit; let selectedEnvironment = environment
-        let current = try await api.account()
+        let current: AlpacaAccount
+        if let verifiedAccount { current = verifiedAccount } else { current = try await api.account() }
         guard generation == scopeGeneration, selectedEnvironment == environment, foreground, current.id == account.id else { throw AlpacaError.invalid("Authenticated account changed. Disconnect and reconnect.") }
         healthNote(observed, .broker, .healthy, .verified)
         let currentPositions = try await api.positions()

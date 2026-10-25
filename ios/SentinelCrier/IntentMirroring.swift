@@ -88,6 +88,7 @@ struct IntentMutation: Codable {
     var clientID: String; var eventID: String; var sell: Bool; var quantity: Int
     var order: AlpacaOrder?; var cancelUnknown = false
     var cancelAttemptedAt: Date?
+    var notSubmitted: Bool?
     // Call only after validating a fresh broker lookup for this mutation.
     func mayRetryCancellation(now: Date) -> Bool {
         guard let order, !["filled", "canceled", "expired", "rejected", "replaced", "pending_cancel"].contains(order.status) else { return false }
@@ -134,7 +135,7 @@ struct IntentState: Codable {
     var quarantine: [Quarantine]?
     var unresolved: [String] {
         trades.compactMap { id, trade in
-            let working = trade.mutations.contains { $0.order.map { !["filled", "canceled", "expired", "rejected", "replaced"].contains($0.status) } ?? true }
+            let working = trade.mutations.contains { $0.notSubmitted != true && ($0.order.map { !["filled", "canceled", "expired", "rejected", "replaced"].contains($0.status) } ?? true) }
             return working || trade.owned > 0 || (trade.desired != nil && trade.completed != trade.desired?.event_id && !trade.invalidated) ? id : nil
         }.sorted()
     }
@@ -198,6 +199,8 @@ struct IntentPairing: Codable {
     var onHealth: NativeHealthObserver?
     private let file: URL
     private let now: () -> Date
+    private let monotonic: () -> TimeInterval
+    private var entryClock: EntryClock
     private let session: URLSession
     private var api: AlpacaREST?; private var pair: IntentPairing?
     private var receiver: Task<Void, Never>?; private var worker: Task<Void, Never>?; private var transmitter: Task<Void, Never>?
@@ -206,9 +209,10 @@ struct IntentPairing: Codable {
     private var diagnosticSession = UUID()
     private var quoteCaptures = Set<String>()
     private var processing = false; private var publishing = false
-    init(file: URL, now: @escaping () -> Date = Date.init, session: URLSession = CrierHTTPSession.shared) throws {
+    init(file: URL, now: @escaping () -> Date = Date.init, monotonic: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }, session: URLSession = CrierHTTPSession.shared) throws {
         self.file = file
         self.now = now
+        self.monotonic = monotonic; entryClock = EntryClock(wall: now, mono: monotonic)
         self.session = session
         state = FileManager.default.fileExists(atPath: file.path) ? try JSONDecoder().decode(IntentState.self, from: Data(contentsOf: file)) : IntentState()
     }
@@ -234,6 +238,7 @@ struct IntentPairing: Codable {
         try commit { $0.accountID = account; $0.pairingID = pair.fingerprint }
         if self.api !== api { self.api?.invalidate() }
         self.api = api; self.pair = pair
+        entryClock = EntryClock(wall: now, mono: monotonic)
         diagnosticClock = nil
         diagnosticSession = UUID()
         receiver?.cancel(); worker?.cancel(); transmitter?.cancel()
@@ -348,6 +353,7 @@ struct IntentPairing: Codable {
             guard let trade = state.trades[id], let event = trade.desired else { continue }
             for index in trade.mutations.indices {
                 let mutation = trade.mutations[index]
+                if mutation.notSubmitted == true { continue }
                 if let order = mutation.order, terminal(order) { continue }
                 let order = try await api.order(clientID: mutation.clientID)
                 try mutation.validate(order, symbol: event.symbol)
@@ -364,7 +370,7 @@ struct IntentPairing: Codable {
             do { try Task.checkCancellation(); try await execute(id, api: api, observe: observed) }
             catch { needsReconciliation = true; if let event = state.trades[id]?.desired { diagnosticStep(event.event_id, "execution_pending", error.localizedDescription) }; message = "Trade \(id.prefix(8)): \(error.localizedDescription)" }
         }
-        needsReconciliation = needsReconciliation || state.trades.values.contains { $0.mutations.contains { $0.order == nil || $0.cancelUnknown } }
+        needsReconciliation = needsReconciliation || state.trades.values.contains { $0.mutations.contains { $0.notSubmitted != true && ($0.order == nil || $0.cancelUnknown) } }
         observed?(.execution, needsReconciliation ? .blocked : .healthy, needsReconciliation ? .reconciliationRequired : .checked)
     }
     private func diagnosticStep(_ eventID: String, _ stage: String, _ detail: String, at: Date = Date()) {
@@ -463,13 +469,14 @@ struct IntentPairing: Codable {
     private func terminal(_ order: AlpacaOrder) -> Bool { ["filled", "canceled", "expired", "rejected", "replaced"].contains(order.status) }
     private func execute(_ id: String, api: AlpacaREST, observe: NativeHealthObserver? = nil) async throws {
         guard let initial = state.trades[id], let desired = initial.desired else { return }
-        if initial.completed == desired.event_id && initial.mutations.allSatisfy({ $0.order.map(terminal) ?? false }) { return }
+        if initial.completed == desired.event_id && initial.mutations.allSatisfy({ $0.notSubmitted == true || ($0.order.map(terminal) ?? false) }) { return }
         let account = try await api.account()
         guard account.id == state.accountID, desired.environment == api.environment, account.status == "ACTIVE", !account.account_blocked, !account.trading_blocked else { throw AlpacaError.invalid("Account is changed or blocked.") }
         observe?(.broker, .healthy, .verified)
         // Every unknown POST is reconciled; a 404 never permits another POST.
         for index in initial.mutations.indices {
             let m = state.trades[id]!.mutations[index]
+            if m.notSubmitted == true { continue }
             if let old = m.order, terminal(old) { continue }
             let order = try await api.order(clientID: m.clientID)
             try m.validate(order, symbol: desired.symbol)
@@ -510,8 +517,13 @@ struct IntentPairing: Codable {
         if !sell && !existing.isEmpty { return }
         if sell && existing.contains(where: { $0.order?.status != "filled" }) { message = "Exit is working or needs broker reconciliation; no duplicate sell submitted."; return }
         if !sell {
-            let currentTime = now()
-            if let created = IntentEvent.date(e.created_at), created > currentTime {
+            guard let sample = entryClock.read() else {
+                diagnosticStep(e.event_id, "entry_deferred", "clock_changed: check device time and reconnect; cancellation/exit handling remains active")
+                message = "New entry deferred: device clock changed. Check time and reconnect."
+                return
+            }
+            let currentTime = sample.effective
+            if let created = IntentEvent.date(e.created_at), created > sample.wall {
                 diagnosticStep(e.event_id, "entry_deferred", "Waiting for event creation time")
                 return
             }
@@ -544,12 +556,33 @@ struct IntentPairing: Codable {
         try commit { $0.trades[id]!.mutations.append(mutation) }
         let dispatched = Date()
         Task { diagnosticStep(e.event_id, "order_dispatch", "client=\(clientID) quantity=\(quantity) limit=\(price ?? "market")", at: dispatched) }
+        var refusal = "operation_stopped"
         do {
-            let order = try await api.submitIntent(symbol: e.symbol, quantity: quantity, price: price, sell: sell, option: e.asset == "option", clientID: clientID)
+            let order = try await api.submitIntent(symbol: e.symbol, quantity: quantity, price: price, sell: sell, option: e.asset == "option", clientID: clientID, canSubmit: { [self] in
+                guard !Task.isCancelled, self.api === api, pair != nil else { refusal = "operation_stopped"; return false }
+                guard state.trades[id]?.desired?.event_id == e.event_id else { refusal = "revision_changed"; return false }
+                if sell { return true }
+                guard let sample = entryClock.read() else { refusal = "clock_changed"; return false }
+                guard state.trades[id]?.invalidated == false, state.trades[id]?.entrySkipped != true else { refusal = "invalidated"; return false }
+                guard hosting || !state.preferences.paused else { refusal = "entries_paused"; return false }
+                guard let created = IntentEvent.date(e.created_at), let expiry = IntentEvent.date(e.expires_at), sample.wall >= created else { refusal = "future_created_at"; return false }
+                guard sample.effective < expiry else { refusal = "expired"; return false }
+                guard sample.effective.timeIntervalSince(created) <= Double(hosting ? 30 : state.preferences.maxAgeSeconds) else { refusal = "max_age"; return false }
+                guard e.quantity <= (hosting ? 1000 : state.preferences.maxQuantity) else { refusal = "max_quantity"; return false }
+                return true
+            })
             try mutation.validate(order, symbol: e.symbol)
             diagnosticStep(e.event_id, "broker_response", "client=\(clientID) broker=\(order.id) status=\(order.status) filled=\(order.filled_qty) average=\(order.filled_avg_price ?? "unavailable")")
             try commit { s in let index = s.trades[id]!.mutations.firstIndex { $0.clientID == clientID }!; s.trades[id]!.mutations[index].order = order }
             if order.status == "rejected", hosting { _ = try host(symbol: e.symbol, asset: e.asset, quantity: e.quantity, price: e.limit_price, tradeID: id, action: "cancel") }
+        } catch is IntentDispatchRefused {
+            try commit { s in
+                let index = s.trades[id]!.mutations.firstIndex { $0.clientID == clientID }!
+                s.trades[id]!.mutations[index].notSubmitted = true
+                s.trades[id]!.completed = e.event_id
+            }
+            diagnosticStep(e.event_id, "order_not_submitted", refusal)
+            message = "Not submitted before dispatch: \(refusal). Journal retained; use a new revision if needed."
         } catch AlpacaError.http(let code) where [400, 401, 403, 429].contains(code) {
             diagnosticStep(e.event_id, "broker_rejected", "HTTP \(code)")
             // Definitive rejection has no owned quantity; retain a terminal broker-shaped record.
