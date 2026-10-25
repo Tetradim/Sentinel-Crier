@@ -40,9 +40,13 @@ def test_changed_event_identity_is_rejected(setup):
     with pytest.raises(ValueError): mirror.receive(pair['token'], fill.model_copy(update={'quantity': 3}))
     assert len(broker.posts) == 1
 
-@pytest.mark.parametrize('changes', [dict(environment='live'), dict(occurred_at=datetime.now(timezone.utc)-timedelta(minutes=2)), dict(occurred_at=datetime.now(timezone.utc)+timedelta(minutes=2))])
-def test_invalid_context_cannot_trade(setup, changes):
+@pytest.mark.parametrize('case', ['wrong_environment', 'stale', 'future'])
+def test_invalid_context_cannot_trade(setup, case):
     mirror, broker, pair = setup
+    # Calculate relative times at execution, not collection: a larger/slower
+    # suite can otherwise turn a future event into a valid current event.
+    changes = (dict(environment='live') if case == 'wrong_environment' else
+               dict(occurred_at=datetime.now(timezone.utc)+timedelta(minutes=-2 if case == 'stale' else 2)))
     with pytest.raises(ValueError): mirror.receive(pair['token'], event(**changes))
     assert broker.posts == []
 
