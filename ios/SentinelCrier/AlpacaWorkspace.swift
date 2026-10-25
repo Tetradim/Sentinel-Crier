@@ -2,7 +2,72 @@ import SwiftUI
 
 @MainActor
 final class AlpacaWorkspace: ObservableObject {
-    @Published var environment: AlpacaEnvironment = .paper
+    @Published var environment: AlpacaEnvironment = .paper {
+        didSet {
+            guard oldValue != environment else { return }
+            if account != nil { environment = oldValue; message = "Disconnect before changing environment."; return }
+            readiness.invalidate(); scopeGeneration = UUID()
+        }
+    }
+    @Published private(set) var purpose: GuidedPurpose?
+    @Published private(set) var readiness = GuidedReadiness()
+    private let defaults: UserDefaults
+    private var scopeGeneration = UUID()
+    private var discordScope: String?
+    private let testDiscord: () async throws -> String
+    private let webhook: () -> URL?
+    private let loadIntentPairing: () throws -> IntentPairing?
+    private let deliverDiscord: ((AlpacaEnvironment, String) async throws -> Void)?
+    private func publishFills(environment: AlpacaEnvironment, accountID: String) async throws {
+        if let deliverDiscord { try await deliverDiscord(environment, accountID) }
+        else { try await publisher?.deliver(environment: environment, accountID: accountID) }
+    }
+
+    func selectPurpose(_ value: GuidedPurpose?) {
+        guard !busy, account == nil else { return }
+        purpose = value; defaults.set(value?.rawValue, forKey: "guidedPurpose")
+        readiness.invalidate(); scopeGeneration = UUID()
+    }
+    private var executionJourney: Bool { purpose == .trade || purpose == .follow }
+    private func destinationScope() -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let settings = (try? encoder.encode(DiscordAlertSettings.load(defaults))) ?? Data()
+        return (webhook()?.absoluteString ?? "") + "|" + (defaults.string(forKey: "discordFillStyle") ?? "homebrew") + "|" + String(decoding: settings, as: UTF8.self)
+    }
+    func discordConfigurationChanged() {
+        readiness.previewed = false; readiness.testResult = nil; readiness.deliveryEnabled = false
+        discordScope = nil; scopeGeneration = UUID()
+    }
+    func previewDiscord() {
+        guard readiness.verified, webhook() != nil else { message = "Connect and save a destination first."; return }
+        discordScope = destinationScope(); readiness.previewed = true
+        readiness.testResult = nil; readiness.deliveryEnabled = false
+    }
+    func sendDiscordTest() async {
+        guard !busy, foreground, readiness.verified, readiness.previewed, discordScope == destinationScope() else { message = "Connect and preview the current destination first."; return }
+        busy = true; readiness.testResult = nil
+        let generation = scopeGeneration; let scope = destinationScope()
+        defer { busy = false }
+        do {
+            let result = try await testDiscord()
+            guard foreground, generation == scopeGeneration, scope == destinationScope() else { return }
+            readiness.testResult = result; message = result
+        } catch {
+            guard generation == scopeGeneration, scope == destinationScope() else { return }
+            readiness.testResult = "Test not confirmed. Check Discord before retrying; it may have arrived."
+            message = readiness.testResult!
+        }
+    }
+    func enableDiscordDelivery(_ enabled: Bool) {
+        guard enabled else { readiness.deliveryEnabled = false; return }
+        guard foreground, readiness.verified, readiness.previewed, discordScope == destinationScope(), webhook() != nil else { message = "Connect and preview this destination before enabling delivery."; return }
+        readiness.deliveryEnabled = true
+        message = "Fill delivery enabled for this account and destination while Crier stays active."
+    }
+    private var canDeliver: Bool {
+        foreground && readiness.verified && readiness.deliveryEnabled && discordScope == destinationScope()
+    }
     @Published private(set) var account: AlpacaAccount?
     @Published private(set) var positions: [AlpacaPosition] = []
     @Published private(set) var contracts: [AlpacaContract] = []
@@ -25,9 +90,17 @@ final class AlpacaWorkspace: ObservableObject {
     private let loadCredentials: (AlpacaEnvironment) throws -> AlpacaCredentials
     private let saveCredentials: (AlpacaCredentials, AlpacaEnvironment) throws -> Void
     init(journal suppliedJournal: AlpacaJournal? = nil, intentController: IntentController? = nil,
+         defaults: UserDefaults = .standard,
+         testDiscord: @escaping () async throws -> String = { try await DiscordAlertSettings.test() },
+         webhook: @escaping () -> URL? = StandaloneConfiguration.webhook,
+         deliverDiscord: ((AlpacaEnvironment, String) async throws -> Void)? = nil,
+         loadIntentPairing: @escaping () throws -> IntentPairing? = IntentPairing.load,
          makeClient: @escaping (AlpacaEnvironment, AlpacaCredentials) -> AlpacaREST = { AlpacaREST(environment: $0, credentials: $1) },
          loadCredentials: @escaping (AlpacaEnvironment) throws -> AlpacaCredentials = AlpacaKeychain.load,
          saveCredentials: @escaping (AlpacaCredentials, AlpacaEnvironment) throws -> Void = { try AlpacaKeychain.save($0, environment: $1) }) {
+        self.loadIntentPairing = loadIntentPairing
+        self.defaults = defaults; self.testDiscord = testDiscord; self.webhook = webhook; self.deliverDiscord = deliverDiscord
+        purpose = defaults.string(forKey: "guidedPurpose").flatMap(GuidedPurpose.init(rawValue:))
         self.makeClient = makeClient; self.loadCredentials = loadCredentials; self.saveCredentials = saveCredentials
         do {
             let journal = try suppliedJournal ?? AlpacaJournal.local()
@@ -52,6 +125,9 @@ final class AlpacaWorkspace: ObservableObject {
         deliveries = snapshot.deliveries.filter { $0.environment == environment && $0.accountID == account.id }
     }
     private func connectSavedBroker(key: String = "", secret: String = "") async throws {
+        guard purpose != nil else { throw AlpacaError.invalid("Choose Alerts, Trade or Follow first.") }
+        readiness.invalidate(); scopeGeneration = UUID()
+        let generation = scopeGeneration; let selectedEnvironment = environment
         guard journal != nil else { throw AlpacaError.invalid("Journal unavailable. Trading is disabled.") }
         let supplied = !key.isEmpty || !secret.isEmpty
         let credentials: AlpacaCredentials
@@ -59,41 +135,54 @@ final class AlpacaWorkspace: ObservableObject {
         else { credentials = try loadCredentials(environment) }
         let client = makeClient(environment, credentials)
         let current = try await client.account()
+        guard foreground, generation == scopeGeneration, environment == selectedEnvironment, !Task.isCancelled else { throw AlpacaError.invalid("Connection interrupted. Reconnect explicitly.") }
         if let intent, !intent.state.accountID.isEmpty, intent.state.accountID != current.id {
             throw AlpacaError.invalid("Saved channel belongs to another account. Reconnect its original keys and resolve its journal before changing accounts.")
         }
-        try intent?.validateIdentity(account: current.id, environment: environment)
+        if let pairing = try loadIntentPairing() {
+            try intent?.validateIdentity(account: current.id, environment: environment, pairing: pairing)
+        }
         // Verify candidate credentials and journal identity before replacing working keys.
         intent?.disconnect()
         if supplied { try saveCredentials(credentials, environment) }
         review = nil; positions = []; contracts = []
-        account = current; api = client
+        account = current; api = client; readiness.verified = true
         if foreground {
             try await refreshConnected()
+            guard foreground, generation == scopeGeneration, !Task.isCancelled else { throw AlpacaError.invalid("Connection interrupted. Reconnect explicitly.") }
             try await activateIntent(api: client, account: current.id)
-            suspended = !foreground
+            guard foreground, generation == scopeGeneration, !Task.isCancelled else { throw AlpacaError.invalid("Connection interrupted. Reconnect explicitly.") }
+            suspended = false
         } else { suspended = true }
     }
     private func activateIntent(api: AlpacaREST, account: String) async throws {
-        guard foreground, let intent else { return }
+        guard executionJourney, foreground, let intent else { return }
+        let generation = scopeGeneration
         do {
-            try intent.connect(api: api, account: account, startWorkers: false)
+            guard let pairing = try loadIntentPairing() else { return }
+            try intent.connect(api: api, account: account, pairing: pairing, startWorkers: false)
             try await intent.reconcileBeforeResume()
-            guard foreground, !Task.isCancelled else { intent.disconnect(); return }
-            try intent.connect(api: api, account: account)
+            guard foreground, generation == scopeGeneration, !Task.isCancelled else {
+                throw AlpacaError.invalid("Intent resume interrupted. Reconcile again before restarting execution.")
+            }
+            try intent.connect(api: api, account: account, pairing: pairing)
         } catch { intent.disconnect(); suspended = true; throw error }
     }
     func connect(key: String, secret: String) async {
-        await perform { try await connectSavedBroker(key: key, secret: secret) }
+        await perform {
+            do { try await connectSavedBroker(key: key, secret: secret) }
+            catch { readiness.invalidate(); throw error }
+        }
     }
     // Hold the workspace lifecycle lock from provisioning through broker activation.
     // Persist the channel before any further network operation can fail.
     func quickConnect(host: Bool, service: String, invitation: String, newInvite: Bool = false) async throws -> String? {
+        guard executionJourney else { throw AlpacaError.invalid("Choose Trade or Follow before connecting a channel.") }
         guard !busy else { throw AlpacaError.invalid("Wait for the current connection operation to finish.") }
         busy = true
         defer { busy = false }
         let selectedEnvironment = environment
-        var saved = try IntentPairing.load()
+        var saved = try loadIntentPairing()
         let created = saved == nil
         if let existing = saved {
             guard existing.role == (host ? "host" : "follower"), existing.environment == selectedEnvironment else {
@@ -118,7 +207,7 @@ final class AlpacaWorkspace: ObservableObject {
         do {
             guard let intent else { throw AlpacaError.invalid("Intent journal unavailable.") }
             if let api, let account {
-                try intent.validateIdentity(account: account.id, environment: environment)
+                if let pairing = saved { try intent.validateIdentity(account: account.id, environment: environment, pairing: pairing) }
                 if foreground { try await refreshConnected(); try await activateIntent(api: api, account: account.id) }
                 else { suspended = true }
             } else { try await connectSavedBroker() }
@@ -132,6 +221,7 @@ final class AlpacaWorkspace: ObservableObject {
     }
     func disconnect(removeCredentials: Bool = false) {
         guard !busy else { return }
+        readiness.invalidate(); scopeGeneration = UUID()
         if removeCredentials { AlpacaKeychain.remove(environment) }
         intent?.disconnect()
         suspended = false
@@ -142,19 +232,19 @@ final class AlpacaWorkspace: ObservableObject {
         foreground = active
         if !active {
             suspended = account != nil
+            readiness.invalidate(); scopeGeneration = UUID()
             intent?.disconnect()
             review = nil
             lifecycle = "Background / suspended • automatic execution stopped; open Crier to reconcile"
             return
         }
         lifecycle = "Foreground • reconciling before new work"
-        if suspended, let api, let account {
-            await perform {
-                try await refreshConnected()
-                guard foreground, !Task.isCancelled else { return }
-                try await activateIntent(api: api, account: account.id)
-                suspended = false
+        if suspended {
+            guard !busy else {
+                lifecycle = "Foreground • reconciliation pending; refresh or reconnect when the current operation finishes"
+                return
             }
+            await refresh()
         }
         lifecycle = suspended ? "Reconnect required • reconciliation failed" : "Foreground • keep Crier open for delivery"
     }
@@ -172,6 +262,7 @@ final class AlpacaWorkspace: ObservableObject {
             guard previous == nil || !outstanding else {
                 throw AlpacaError.invalid("Deliver or close every pending, rejected and uncertain alert before changing destination. Old fills must not be sent to a different channel by accident.")
             }
+            discordConfigurationChanged()
             if let raw {
                 guard StandaloneConfiguration.saveWebhook(raw) else { throw AlpacaError.invalid("Invalid webhook or Keychain unavailable.") }
                 message = "Webhook saved securely."
@@ -183,19 +274,34 @@ final class AlpacaWorkspace: ObservableObject {
     }
     func retryDiscord(_ id: String, acknowledgeDuplicateRisk: Bool) async {
         await perform {
+            guard canDeliver else { throw AlpacaError.invalid("Explicitly enable delivery for the current destination first.") }
             guard let journal else { return }
             try await journal.retry(id, acknowledgeDuplicateRisk: acknowledgeDuplicateRisk)
-            if let account { try await publisher?.deliver(environment: environment, accountID: account.id) }
+            if let account { try await publishFills(environment: environment, accountID: account.id) }
         }
     }
-    func refresh() async { await perform { try await refreshConnected() } }
+    func refresh() async { await perform {
+        do {
+            let generation = scopeGeneration
+            try await refreshConnected()
+            guard foreground, generation == scopeGeneration, !Task.isCancelled else { return }
+            if suspended, let api, let account {
+                readiness.verified = true
+                try await activateIntent(api: api, account: account.id)
+                guard foreground, generation == scopeGeneration, !Task.isCancelled else { return }
+                suspended = false
+                lifecycle = "Foreground • keep Crier open for delivery"
+            }
+        } catch { readiness.invalidate(); throw error }
+    } }
     private func refreshConnected() async throws {
-        guard let api, let account, let journal else { return }
+        guard foreground, let api, let account, let journal else { return }
+        let generation = scopeGeneration; let selectedEnvironment = environment
         let current = try await api.account()
-        guard current.id == account.id else { throw AlpacaError.invalid("Authenticated account changed. Disconnect and reconnect.") }
+        guard generation == scopeGeneration, selectedEnvironment == environment, foreground, current.id == account.id else { throw AlpacaError.invalid("Authenticated account changed. Disconnect and reconnect.") }
         self.account = current; positions = try await api.positions()
         let snapshot = await journal.snapshot()
-        for submission in snapshot.submissions where submission.ticket.environment == environment && submission.ticket.accountID == account.id {
+        for submission in snapshot.submissions where executionJourney && submission.ticket.environment == environment && submission.ticket.accountID == account.id {
             do { let order = try await api.order(clientID: submission.id)
                 try await journal.record(order, ticket: submission.ticket) }
             catch AlpacaError.http(404) { continue } // Unknown remains durable. 404 does not authorize resubmission.
@@ -218,12 +324,13 @@ final class AlpacaWorkspace: ObservableObject {
             guard seen.count < 100 else { throw AlpacaError.invalid("Fill catch-up exceeded 10,000 events. Contact support before advancing the saved watermark.") }
             cursor = last.id
         } while true
+        guard foreground, generation == scopeGeneration, selectedEnvironment == environment, !Task.isCancelled else { throw AlpacaError.invalid("Refresh interrupted. Reconnect explicitly.") }
         for fill in collected.reversed() { try await journal.ingest(fill, environment: environment, accountID: account.id) }
-        if try IntentPairing.load() == nil { try await mirrorSender?.ingest(Array(collected.reversed()), environment: environment, account: account.id) }
+        if executionJourney, try loadIntentPairing() == nil { try await mirrorSender?.ingest(Array(collected.reversed()), environment: environment, account: account.id) }
         try await journal.setBaseline(newest ?? baseline ?? "__empty__", environment: environment, accountID: account.id)
-        do { if try IntentPairing.load() == nil { mirrorMessage = try await mirrorSender?.deliver(api: api, account: account.id) ?? "Mirror journal unavailable." } }
+        do { if executionJourney, try loadIntentPairing() == nil { mirrorMessage = try await mirrorSender?.deliver(api: api, account: account.id) ?? "Mirror journal unavailable." } }
         catch { mirrorMessage = error.localizedDescription }
-        try await publisher?.deliver(environment: environment, accountID: account.id)
+        if canDeliver { try await publishFills(environment: environment, accountID: account.id) }
         updatedAt = Date(); message = "Account, orders and broker fills refreshed."
     }
     func discover(symbol: String, expiration: String) async {
@@ -237,6 +344,7 @@ final class AlpacaWorkspace: ObservableObject {
     func prepare(symbol: String, quantity: Int, limit: String, sell: Bool, contract: AlpacaContract?) async {
         await perform {
             review = nil
+            guard executionJourney else { throw AlpacaError.invalid("Choose Trade before reviewing an order.") }
             guard let api, let account, let journal, let price = Decimal(string: limit, locale: Locale(identifier: "en_US_POSIX")), price > 0 else { throw AlpacaError.invalid("Connect and enter a positive limit price.") }
             guard await journal.baseline(environment: environment, accountID: account.id) != nil else { throw AlpacaError.invalid("Complete a successful refresh before trading to establish fill monitoring.") }
             let current = try await api.account()
@@ -258,7 +366,7 @@ final class AlpacaWorkspace: ObservableObject {
     }
     func confirm(_ ticket: AlpacaTicket) async {
         await perform {
-            guard review == ticket, let api, let account, let journal, account.id == ticket.accountID, environment == ticket.environment else { throw AlpacaError.invalid("Review changed. Review again.") }
+            guard executionJourney, foreground, review == ticket, let api, let account, let journal, account.id == ticket.accountID, environment == ticket.environment else { throw AlpacaError.invalid("Review changed. Review again.") }
             try ticket.validate()
             let current = try await api.account()
             guard current.id == ticket.accountID, current.status == "ACTIVE", !current.account_blocked, !current.trading_blocked else { throw AlpacaError.invalid("Account changed or cannot trade.") }
@@ -274,7 +382,7 @@ final class AlpacaWorkspace: ObservableObject {
                 review = nil; message = "Intent saved; broker and relay dispatch started concurrently."
                 return
             }
-            if try IntentPairing.load() != nil { throw AlpacaError.invalid("Follower pairing cannot originate trades. Use a host pairing to submit mirrored orders.") }
+            if try loadIntentPairing() != nil { throw AlpacaError.invalid("Follower pairing cannot originate trades. Use a host pairing to submit mirrored orders.") }
             try await journal.begin(ticket)
             review = nil // Consume before any network await.
             do {
@@ -289,7 +397,7 @@ final class AlpacaWorkspace: ObservableObject {
     }
     func cancel(_ submission: AlpacaJournal.Submission) async {
         await perform {
-            guard let api, let account, submission.ticket.environment == environment, submission.ticket.accountID == account.id, let order = submission.order else { throw AlpacaError.invalid("Reconcile the broker order before cancellation.") }
+            guard executionJourney, foreground, let api, let account, submission.ticket.environment == environment, submission.ticket.accountID == account.id, let order = submission.order else { throw AlpacaError.invalid("Reconcile the broker order before cancellation.") }
             let current = try await api.account()
             guard current.id == account.id else { throw AlpacaError.invalid("Account changed.") }
             try await api.cancel(orderID: order.id)
@@ -324,8 +432,10 @@ struct AlpacaConnectionForm: View {
             Text(model.message).font(.footnote)
             Text("Webull Connect approval pending. Tradier is not integrated. No brokerage password is requested.").font(.footnote).foregroundStyle(.secondary)
         }
-        IntentConnectionForm()
-        if (try? IntentPairing.load()) == nil { MirrorConnectionForm() }
+        if model.purpose == .trade || model.purpose == .follow {
+            IntentConnectionForm()
+            if (try? IntentPairing.load()) == nil { MirrorConnectionForm() }
+        }
     }
 }
 struct AlpacaTradingView: View {

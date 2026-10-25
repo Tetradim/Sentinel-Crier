@@ -7,12 +7,14 @@ struct CrierCommandCenter: View {
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
         TabView {
-            BrokerageOverview()
+            GuidedSetupView()
                 .tabItem { Label("Home", systemImage: "house") }
             CrierMarketsView()
                 .tabItem { Label("Markets", systemImage: "chart.xyaxis.line") }
-            AlpacaTradingView()
-                .tabItem { Label("Trade", systemImage: "arrow.left.arrow.right") }
+            if model.purpose == .trade || model.purpose == .follow {
+                AlpacaTradingView()
+                    .tabItem { Label(model.purpose == .follow ? "Follow" : "Trade", systemImage: "arrow.left.arrow.right") }
+            }
             CrierPositionsView()
                 .tabItem { Label("Positions", systemImage: "square.stack.3d.up") }
             CrierExecutionsView()
@@ -57,7 +59,6 @@ struct CrierExecutionsView: View {
     @AppStorage("discordFillStyle") private var style = "homebrew"
     @State private var settings = DiscordAlertSettings.load()
     @State private var feedback = ""
-    @State private var testing = false
     @State private var retryEntry: AlpacaJournal.Delivery?
     @State private var closeEntry: AlpacaJournal.Delivery?
     var body: some View {
@@ -73,18 +74,21 @@ struct CrierExecutionsView: View {
                     Text("Fields: {side}, {quantity}, {symbol}, {price}, {environment}").font(.caption)
                     Toggle("Include broker time", isOn: $settings.showTime)
                     Toggle("Include delivery reference", isOn: $settings.showReference)
+                    Text("Synthetic preview · sample data, no broker execution").font(.caption)
                     Text(settings.render(DiscordAlertSettings.preview)).font(.caption).textSelection(.enabled)
                     Button("Save template and fields") {
-                        do { try settings.save(); feedback = "Alert settings saved." } catch { feedback = error.localizedDescription }
+                        do { try settings.save(); model.discordConfigurationChanged(); feedback = "Alert settings saved. Preview again before enabling delivery." } catch { feedback = error.localizedDescription }
                     }
-                    Button("Send test message") {
-                        testing = true
-                        Task { @MainActor in
-                            defer { testing = false }
-                            do { try settings.save(); feedback = try await DiscordAlertSettings.test() }
-                            catch { feedback = error.localizedDescription }
-                        }
-                    }.disabled(testing)
+                    Button("Preview current destination") {
+                        do { try settings.save(); model.discordConfigurationChanged(); model.previewDiscord() }
+                        catch { feedback = error.localizedDescription }
+                    }.disabled(model.busy)
+                    Text(model.readiness.previewed ? "Preview reviewed for this account and destination" : "Preview not reviewed for the current connection").font(.caption)
+                    Button("Send synthetic test message") { Task { await model.sendDiscordTest() } }
+                        .disabled(model.busy || !model.readiness.previewed)
+                    Text(model.readiness.testResult ?? "No confirmed test this session. Test delivery is optional.").font(.caption)
+                    Toggle("Publish verified broker fills", isOn: Binding(get: { model.readiness.deliveryEnabled }, set: { model.enableDiscordDelivery($0) }))
+                        .disabled(model.busy || !model.readiness.previewed)
                     Text(feedback).font(.footnote)
                     Text("Only broker FILL activities are published. First connection sets a baseline; earlier history is not posted. Monitoring runs while this app is active. Uncertain deliveries need manual Discord verification and are never automatically resent.").font(.footnote)
                 }
@@ -107,7 +111,11 @@ struct CrierExecutionsView: View {
                     }
                 }
                 Text(model.message).font(.footnote)
-            }.navigationTitle("Alerts").refreshable { await model.refresh() }
+            }.onChange(of: style) { _ in model.discordConfigurationChanged() }
+            .onChange(of: settings.template) { _ in model.discordConfigurationChanged() }
+            .onChange(of: settings.showTime) { _ in model.discordConfigurationChanged() }
+            .onChange(of: settings.showReference) { _ in model.discordConfigurationChanged() }
+            .navigationTitle("Alerts").refreshable { await model.refresh() }
             .alert("Retry uncertain delivery?", isPresented: Binding(get: { retryEntry != nil }, set: { if !$0 { retryEntry = nil } })) {
                 Button("Verified Discord; retry", role: .destructive) {
                     if let entry = retryEntry { Task { await model.retryDiscord(entry.id, acknowledgeDuplicateRisk: true) } }

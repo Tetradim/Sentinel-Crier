@@ -1,31 +1,43 @@
-# Sentinel Crier iOS (work in progress)
+# Sentinel Crier iOS
 
-This folder contains native Swift sources, **not yet an installable iOS application**.
+The native SwiftUI application and test target are generated from `project.yml`
+with XcodeGen. Build and test using the repository's macOS iOS workflows. Signed
+installation and physical iPhone acceptance remain external requirements.
 
-## Build preparation
-1. On a Mac with Xcode, create an iOS SwiftUI app target named SentinelCrier.
-2. Add `SentinelCrierApp.swift` to the app target.
-3. Add a **Broadcast Upload Extension** target, with bundle identifier `com.tetradim.sentinelcrier.BroadcastUpload`, and add `BroadcastUpload/SampleHandler.swift` to that target.
-4. Match the app's `RPSystemBroadcastPickerView.preferredExtension` with the extension's actual bundle identifier.
-5. Configure signing and run on a physical iPhone. Simulator testing is not sufficient for cross-app broadcast capture.
-6. Obtain explicit customer consent before recording any brokerage screen.
+## Guided setup
 
-## Current functionality
-- SwiftUI setup screen and system broadcast picker.
-- Broadcast extension receives video frames and performs throttled on-device Vision text recognition.
-- **No recognized text is stored or transmitted. No automatic trade detection or Discord alert originates from screen capture yet.**
-- The backend URL field is configuration-only and does not authenticate or connect yet.
+Open **Home**, choose **Alerts only**, **Trade / share** or **Follow trades**, then
+connect the selected paper/live Alpaca account. Saved Keychain credentials can be
+reused by leaving the key fields empty. Restart never connects automatically.
+Changing purpose or environment requires an explicit disconnect and retains the
+account-scoped fill/order journal and pinned intent/channel recovery evidence.
 
-## Required before customer testing
-- Commit a reproducible Xcode project with deployment targets and extension configuration.
-- Implement broker-specific confirmed-fill recognition and structured local evidence.
-- Add authenticated, encrypted transport to the existing event intake.
-- Add order identity correlation, confidence thresholds, and duplicate prevention across capture/API sources.
-- Provide clear pause, disconnect, error, and capture-active indicators.
-- Verify iOS background, capture permission, app-switching, and screen-lock behavior on device.
-- Run security/privacy review and a documented end-to-end test using synthetic fills before live customer tests.
+Alerts only verifies read access and monitors native Alpaca FILL activities without
+requiring a mirroring channel or activating intent/legacy mirroring workers. A
+trading-blocked account can still verify read access. Existing pinned channel
+account/environment protections still apply when rotating shared credentials.
+Trade and Follow retain their existing reconciliation and explicit live-order
+confirmation requirements; paper practice and synthetic Discord tests are optional.
 
-Apple frameworks are part of iOS and the app bundle; customers do not separately install ReplayKit or Vision. Screen capture requires a user action and cannot guarantee observation of fills that aren't visible.
+Save a Discord webhook in Connections. In Alerts, save the desired format, select
+**Preview current destination**, optionally **Send synthetic test message**, and
+explicitly turn on **Publish verified broker fills**. The test is labeled sample
+data and its acknowledgement is separate from broker-fill evidence. Unconfirmed
+tests may have arrived: inspect Discord before retrying. A saved webhook or format
+is configuration, not proof of a network connection or permission to publish.
+Account verification, preview, test results and delivery permission are session
+state; disconnect, restart, suspension or relevant edits invalidate readiness.
+Keep the app open and unlocked. Returning from suspension reconciles the connected
+account, but requires a new preview and explicit delivery enable. Restart requires
+explicit reconnect. A rapid return while a request is still pending discards the
+old response; the next foreground refresh reconciles before restoring readiness. Earlier fills are not replayed on first connection; durable
+baselines/outboxes retain the existing uncertainty and duplicate protections.
+Deliver or close outstanding alerts before changing a saved destination.
+
+`GuidedSetupTests.swift` covers simulated read-only setup, trading-blocked read
+access, restart, readiness invalidation, failed/unconfirmed tests and stale async
+acknowledgements. These checks use synthetic credentials and injected URL sessions.
+No real broker orders or Discord messages are part of automated acceptance.
 
 ## Submission-time intent mirroring
 

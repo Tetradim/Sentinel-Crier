@@ -241,6 +241,7 @@ final class Phase2RecoveryTests: XCTestCase {
             makeClient: { environment, credentials in AlpacaREST(environment: environment, credentials: credentials, session: self.session()) },
             loadCredentials: { _ in AlpacaCredentials(key: "saved-key", secret: "saved-secret") },
             saveCredentials: { credentials, _ in written.append(credentials.key) })
+        model.selectPurpose(.trade)
         // Disconnected rotation is still identity checked before replacing saved keys.
         await model.connect(key: "wrong-account-key", secret: "candidate-secret")
         XCTAssertTrue(written.isEmpty); XCTAssertNil(model.account)

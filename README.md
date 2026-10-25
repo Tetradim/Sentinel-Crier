@@ -39,7 +39,7 @@ Build and installation instructions:
 - [Android](android/README.md) · [Android release packages](docs/android-release.md)
 - [Windows](desktop/README.md) · [Windows installer and updates](docs/windows-release.md)
 
-**Windows alerts only:** choose **Start here → Send my fills to Discord**, verify your Alpaca account, then open Discord setup to preview, test and enable delivery. This path needs no Host/Receive pairing or relay. Its read-only monitor and account-specific alert queue are separate from mirroring. See the [desktop alerts guide](desktop/README.md#alerts-only--no-mirroring-setup).
+**Alerts without mirroring:** choose **Alerts only** in iPhone setup, **Alerts** on Android, or **Start here → Send my fills to Discord** on Windows. Verify Alpaca read access, configure the Discord destination and format, inspect a preview, optionally request a labeled synthetic test, then explicitly enable publishing. These routes need no Host/Receive pairing or relay and do not activate trading workers. Saved settings are reusable; reconnect/restart requires fresh publishing permission. See the platform guides above for baseline, polling, destination-history and foreground limits. Real account and Discord acceptance remains deferred.
 
 For Host / Receive:
 
