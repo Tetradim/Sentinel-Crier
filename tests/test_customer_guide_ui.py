@@ -12,11 +12,8 @@ class Worker:
 
 
 @pytest.fixture(scope='module')
-def root():
-    try: window=tk.Tk()
-    except tk.TclError as exc: pytest.skip(f'Tk unavailable: {exc}')
-    window.withdraw(); yield window
-    window.destroy(); gc.collect()
+def root(desktop_tk_root):
+    return desktop_tk_root
 
 
 @pytest.fixture

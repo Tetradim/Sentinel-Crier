@@ -16,13 +16,8 @@ class Worker:
 
 
 @pytest.fixture(scope='module')
-def tk_root():
-    try: root=tk.Tk()
-    except tk.TclError as exc: pytest.skip(f'Tk unavailable: {exc}')
-    root.withdraw()
-    yield root
-    root.destroy()
-    gc.collect()
+def tk_root(desktop_tk_root):
+    return desktop_tk_root
 
 
 @pytest.fixture

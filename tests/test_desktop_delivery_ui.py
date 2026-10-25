@@ -19,17 +19,8 @@ class Worker:
 
 
 @pytest.fixture(scope='module')
-def tk_root():
-    try:
-        root = tk.Tk()
-    except tk.TclError as exc:
-        pytest.skip(f'Tk display unavailable: {exc}')
-    root.withdraw()
-    yield root
-    root.destroy()
-    # Collect widget/variable cycles on Tk's owning thread before later async
-    # tests can trigger their finalizers from an HTTP client worker thread.
-    gc.collect()
+def tk_root(desktop_tk_root):
+    return desktop_tk_root
 
 
 @pytest.fixture
