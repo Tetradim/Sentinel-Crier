@@ -39,6 +39,8 @@ access, restart, readiness invalidation, failed/unconfirmed tests and stale asyn
 acknowledgements. These checks use synthetic credentials and injected URL sessions.
 No real broker orders or Discord messages are part of automated acceptance.
 
+Phase F source `d1eb60d` passed [94 native tests](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40149692050), including 11 guided setup cases, and [simulator/unsigned hardware archive checks](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40149688984). These checks do not provide signing, an installable iPhone package or physical acceptance.
+
 ## Submission-time intent mirroring
 
 Paste the v1 HTTPS pairing JSON in Settings → Submission-time mirroring, then connect

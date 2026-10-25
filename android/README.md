@@ -17,6 +17,8 @@ Phase E verification on October 24, source `5fe75d0`: production and unit-test K
 
 ## Alerts guided setup
 
+Phase F verification: final source `032e2af` passed full Kotlin compilation and **68 offline JUnit tests** locally; [Android CI 40150273615](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40150273615) passed unit tests and packaged the debug APK. Physical lifecycle and real broker/Discord acceptance remain deferred.
+
 1. Choose **Alerts**. Enter paper/live Alpaca credentials, Discord webhook, format and template. **Save and verify Alerts account** checks read access and discovers the account identity. Read-only Alerts does not require trading permission or live-order authorization.
 2. **Preview synthetic Discord message** shows TEST provenance without sending. **Send one synthetic test** is optional; only a numeric Discord message ID proves delivery. Pending, blocked or uncertain acknowledgements remain visible as such. A successful test is never labelled as a broker fill or treated as permission to publish.
 3. **Enable real broker-fill alerts in foreground** explicitly permits monitoring and publication. Initial enable establishes the current time as the baseline; older fills are not replayed. Reconnect uses the retained cursor and may deliver fills accumulated since that baseline. Leaving the screen, changing inputs or restarting clears session verification, preview, test evidence and enable permission. Verify, preview and explicitly enable again to resume. Already dispatched requests may finish after leaving; their delivery evidence is retained.

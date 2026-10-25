@@ -4,7 +4,7 @@ October 24, 2026. Baseline: main `5c9726c`. This extends the completed offline s
 
 ## Product direction
 
-One application with guided Alerts, Trade and Follow journeys. Customers should not need environment variables, pairing JSON, internal IDs or deployment terminology for routine use. First setup still requires account authorization and deliberate live-account permission; repeat use should approach one-click reconnect. A testing relay and signed Android/Windows candidates already exist, so those are not new implementation tasks.
+One application with guided Alerts, Trade and Follow journeys. Customers should not need environment variables, pairing JSON, internal IDs or deployment terminology for routine use. First setup still requires account authorization and deliberate live-account permission; repeat use should approach one-click reconnect. A testing relay, signed Android candidates and unsigned Windows installer candidates already exist, so those are not new implementation tasks.
 
 ```mermaid
 flowchart LR
@@ -43,7 +43,11 @@ Phase E source `5fe75d0` passed local **552 Python tests**, including **10 hidde
 
 Phase F.1 is complete: Windows now offers an alerts-only account connection without mirroring-channel setup. It verifies Alpaca read access, separates encrypted credentials and each account/environment's delivery queue from mirroring, and routes verified users to existing Discord preview/test/enable controls. Source `70397e3` passed **576 local Python tests** and [Windows release CI](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40144737872), including **575 tests/one skip**, portable and unsigned installer packaging, and synthetic install/upgrade/downgrade/uninstall preservation checks. See the [implementation and evidence](superpowers/plans/2026-10-24-windows-alerts-journey.md).
 
-Phase F remains open for mobile purpose selection, a complete staged preview/test/enable journey and cross-platform restart/resume coverage. No physical test, external consent, real message send or broker order was performed for these changes.
+Phase F is complete for its automated implementation scope. All three clients offer purpose-driven setup, account verification, explicit Discord delivery permission and scoped preview/test evidence. Android now has an isolated read-only fill watcher without a relay; iOS Alerts never activates intent or legacy mirroring workers; Windows requires fresh publishing permission after reconnect. Saved accounts and recovery evidence remain reusable.
+
+Verification passed **594 local Python tests**, **68 Android JUnit tests** and **94 iOS tests**. CI passed [Windows packaging and installer lifecycle](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40149473582), [the final Android APK/tests](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40150273615), [iOS simulator/unsigned hardware archive](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40149688984), and [backend/iOS tests](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40149692050). Windows CI passed 593/one skip; Linux CI passed 574/20 platform skips. See the [implementation plan](superpowers/plans/2026-10-24-guided-setup.md) and [source-bound report](acceptance/2026-10-24/guided-setup/source-evidence.json).
+
+Phase G connection-flow preparation is next; H and I remain open. No physical test, external consent, real message send or broker order was performed for these changes. OAuth activation, Webull approval and signed iPhone distribution remain external requirements. The complete product is not declared finished.
 
 ## Phase F acceptance details
 

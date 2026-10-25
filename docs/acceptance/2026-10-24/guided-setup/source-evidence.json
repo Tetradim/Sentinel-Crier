@@ -1,0 +1,99 @@
+{
+  "phase": "F",
+  "scope": "Automated guided setup implementation; physical and real-account acceptance excluded",
+  "collected_at_utc": "2026-10-25T05:26:44.3415135Z",
+  "local_python_passed": 594,
+  "windows_ci_python_passed": 593,
+  "windows_ci_python_skipped": 1,
+  "linux_ci_python_passed": 574,
+  "linux_ci_python_skipped": 20,
+  "android_tests": [
+    {
+      "suite": "com.sentinel.crier.DiagnosticsTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sentinel.crier.EngineTest",
+      "tests": 20,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sentinel.crier.GuidedAlertsTest",
+      "tests": 21,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sentinel.crier.Phase2FlowTest",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sentinel.crier.PolicyTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sentinel.crier.SetupChoicesTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0
+    }
+  ],
+  "ios_tests_passed": 94,
+  "ios_guided_tests_added": 11,
+  "workflows": [
+    {
+      "run_id": 40149473582,
+      "source_commit": "4bd7810383864dd98bb27a1e41b8866e824b8c36",
+      "conclusion": "success",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40149473582",
+      "scope": "Windows tests, packaging and installer lifecycle"
+    },
+    {
+      "run_id": 40150273615,
+      "source_commit": "032e2af82e4e507763b777c4a34c13f9099714f6",
+      "conclusion": "success",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40150273615",
+      "scope": "Final Android unit tests and debug APK"
+    },
+    {
+      "run_id": 40149688984,
+      "source_commit": "d1eb60dd63167bcfafa340ba4e14b82a3ec14f6e",
+      "conclusion": "success",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40149688984",
+      "scope": "iOS simulator build and unsigned hardware archive"
+    },
+    {
+      "run_id": 40149692050,
+      "source_commit": "d1eb60dd63167bcfafa340ba4e14b82a3ec14f6e",
+      "conclusion": "success",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40149692050",
+      "scope": "Backend and native iOS tests"
+    }
+  ],
+  "reports": [
+    {
+      "path": "windows/installer-acceptance.json",
+      "sha256": "e3d82921dbd8e7b851f42424933591a4bb6781b15c81e78f5cb2820eb331d202"
+    },
+    {
+      "path": "ios/ios-unsigned-archive-validation.json",
+      "sha256": "201228a6073991ed5d9dad86995a976810f8ea453c17f24afc4658bde5e13a3d"
+    }
+  ],
+  "signing": {
+    "android_artifact": "debug APK",
+    "ios_installable_package": false,
+    "windows_publisher_signing": false
+  },
+  "physical_acceptance_performed": false,
+  "real_broker_orders_placed": false,
+  "real_discord_messages_sent": false,
+  "webull_approval_received": false
+}
