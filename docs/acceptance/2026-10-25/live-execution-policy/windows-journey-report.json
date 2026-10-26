@@ -1,0 +1,21 @@
+{
+  "status": "passed",
+  "passed": 6,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "missing_required": [],
+  "timing_scope": "offline_intercepted_http_test_cases",
+  "offline_case_seconds": {
+    "test_customer_alerts_first_receipt_exact_option_values_and_reconnect": 0.926,
+    "test_customer_uncertain_receipt_survives_reconnect_without_resend": 0.643,
+    "test_customer_live_read_consent_does_not_require_completing_paper_practice": 0.283
+  },
+  "real_customer_first_success": "not_measured",
+  "real_broker_requests": 0,
+  "real_discord_messages": 0,
+  "physical_acceptance": false,
+  "source_commit": "2f9e2387b8455b220cbd6cf643d75bb020b3e842",
+  "source_clean_at_start": true,
+  "offline_runner_seconds": 4.9529999999999745
+}
