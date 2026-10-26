@@ -1,0 +1,38 @@
+name: Webull iPhone host contracts
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'supabase/webull-host/**'
+      - 'supabase/tests/webull-host-ledger.test.mjs'
+      - 'tests/test_webull_host_receiver.py'
+      - '.github/workflows/webull-host.yml'
+  pull_request:
+    paths:
+      - 'supabase/webull-host/**'
+      - 'supabase/tests/webull-host-ledger.test.mjs'
+      - 'tests/test_webull_host_receiver.py'
+      - '.github/workflows/webull-host.yml'
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Webull gateway tests without broker connections
+        run: npm exec --yes --package deno@2.9.6 -- deno test supabase/webull-host
+      - name: Webull gateway lint
+        run: npm exec --yes --package deno@2.9.6 -- deno lint supabase/webull-host
+      - name: Candidate durable ledger SQL tests
+        run: npm ci --prefix supabase/tests && node --test supabase/tests/webull-host-ledger.test.mjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -e '.[test]'
+      - name: Alpaca-paper receiver compatibility without broker connections
+        run: python -m pytest tests/test_webull_host_receiver.py -q

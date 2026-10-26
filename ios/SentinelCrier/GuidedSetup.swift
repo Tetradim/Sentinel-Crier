@@ -29,6 +29,7 @@ struct GuidedSetupView: View {
                 Section("Account overview") {
                     NavigationLink("Connection health and recovery", destination: NativeHealthView())
                     NavigationLink("Provider connections and Crier sign-in", destination: ProviderConnectionsView())
+                    NavigationLink("Webull host → Alpaca PAPER", destination: WebullHostView())
                     NavigationLink("Account balances and saved positions", destination: BrokerageOverview())
                 }
                 Section("1 · Choose your purpose") {

@@ -4,7 +4,7 @@
 
 Crier is an open-source app for iPhone, Android and Windows. A host originates stock or option orders inside Crier; paired receivers follow through their own brokerage accounts. Discord publishing is a separate, optional workflow. Copying does not require another bot to parse Discord messages.
 
-The current native trading integration is **Alpaca**, with paper and live environments. Webull Connect remains pending approval and integration. Automated checks have passed; signed iPhone distribution and real-device/broker acceptance remain unfinished.
+The current active native trading integration is **Alpaca**, with paper and live environments. A candidate **Webull iPhone host → Alpaca-paper Windows receiver** screen and server gateway are now included; Webull approval, the approved resource adapter and activation remain unfinished. See the [route implementation and setup status](docs/webull-iphone-host.md). Signed iPhone distribution and real-device/broker acceptance also remain unfinished.
 
 ## Choose a workflow
 
@@ -79,7 +79,7 @@ The current iPhone target has no ReplayKit extension and does not continuously o
 | Alpaca | Implemented paper/live native trading and Python monitoring/execution paths. Real account/device acceptance is separately tracked. |
 | Tradier | Read-only Python polling adapter requiring account-specific validation; no native Tradier copy executor. |
 | Webull Trading API | Experimental Python SDK observer with separate access and verification requirements. |
-| Webull Connect | Candidate server authorization/token-custody components with offline evidence. Approval, deployed authorized integration, native login and order adapter remain unfinished. |
+| Webull Connect | Candidate iPhone Webull Host workflow, authenticated server gateway and durable source-order ledger, alongside authorization/token-custody groundwork. The approved Connect resource/token binding, deployment and sandbox acceptance remain unfinished; no real Webull trading is activated. |
 
 Multiple hosts, simultaneous broker-account routing and copying across different brokers remain [deferred D.1](docs/deferred/multi-host-cross-broker.md). A donor bot's adapter name does not establish working support in Crier.
 
