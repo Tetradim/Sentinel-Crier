@@ -95,3 +95,14 @@ from trading journals. No API key, webhook or pairing token is written into it.
 Recovery actions show existing order/delivery evidence, return to setup, or explicitly
 stop local workers. They never mark a broker order resolved or retry an uncertain
 message automatically. Broker orders remain at the brokerage when local workers stop.
+
+
+## Optional follower execution policies
+
+Follow setup exposes **Follower execution policy - new trades only**. Legacy remains selected until the user explicitly saves another choice. Choose source units, fixed units, a basis-point ratio, or a cumulative USD premium budget; select requested, proportional-intent, or close-tracked exits. Save requires stopped workers and always leaves entries paused. Hosts retain their entered quantities. Policy, source-cap, account, pairing fingerprint and instrument snapshots are persisted at first receipt, so edits affect new trade IDs only. Existing journals migrate each existing trade explicitly to legacy.
+
+Selected policies require fresh USD account and US equity/standard 100-share option metadata, checked again immediately before the broker POST. Entry revision plans freeze the source event, policy, final pricing basis, multiplier, cumulative purchase/cost baseline and total local target before any unknown reservation. Restarts reuse and validate that plan. Cumulative buy costs use authoritative per-order averages; missing or stale cost blocks budget/notional buys. Sales do not replenish entry budget. Close-tracked and proportional exits remain bounded by this trade's tracked units and broker availability. Proportional exits use cumulative distinct source exit instructions, divided by the latest entry/replace quantity; this describes source intent and may differ from source broker fills. Incomplete history blocks proportional sales after freshly reconciled working buys can still be canceled.
+
+An optional 1-86400 second entry timer starts after a fresh lookup observes a working order. Timed buys cancel on restart/reconnect after reconciliation; racing fills remain holdings. A formerly unknown submission first discovered after restart starts its timer at that observation. Timeouts close the trade's entry phase before cancellation, and replacements cannot reopen it. Network loss or process suspension can delay cancellation. Broker day lifetime remains the default for legacy trades and policies without a timer.
+
+Local policy verification uses `android/build/direct/verify-phase-e.ps1` to compile production and unit-test Kotlin against SDK 35, then run offline JUnit tests, including shared policy arithmetic fixtures and intercepted broker HTTP tests. `LivePolicyPersistenceTest` adds device SQLite/vault migration, receipt/edit, reopen and missing-cost regressions under `androidTest`; the direct helper does not execute instrumentation tests.

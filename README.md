@@ -63,7 +63,7 @@ Keep the receiving app running. iOS suspension can stop networking; Android back
 
 Windows offers optional tray mode and current-user sign-in startup in **Start here → Windows background options**. Both are off by default. Sign-in always starts disconnected; the tray can show Crier, pause new entries, or quit. See the [Windows guide](desktop/README.md#tray-and-windows-sign-in-options).
 
-The source quantity cap rejects larger instructions; it does not choose an order size. Entry age applies before submission, while day orders may keep working afterward. The [execution settings guide](docs/execution-policies.md) explains the current behavior and distinguishes H.5's proposed sizing policies from available live features.
+The source quantity cap rejects larger instructions; it does not choose an order size. Optional follower policies add fixed, ratio and budget sizing, local quantity/notional limits, proportional source-intent or close-tracked exits, and acknowledged-entry timeouts. Policies apply to new trades and save with entries paused. The [execution settings guide](docs/execution-policies.md) explains defaults, accounting, evidence requirements and cancellation behavior.
 
 An optional paper-practice guide is available in Windows Start here/F1, Android setup and iPhone Home. Reading it performs no account or trading action and never gates live use. See [customer setup, recovery and acceptance](docs/customer-acceptance.md) for installation artifacts, support and the real-device checks still deferred.
 

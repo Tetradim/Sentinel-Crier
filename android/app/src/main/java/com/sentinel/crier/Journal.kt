@@ -5,7 +5,7 @@ import android.database.sqlite.SQLiteOpenHelper
 import org.json.JSONObject
 import java.time.Instant
 import java.util.UUID
-class Journal(context: Context,name:String=Settings.journalName(Vault(context).read())): SQLiteOpenHelper(context,name,null,3), IntentStore, AlertStore {
+class Journal(private val contextForPolicy: Context,name:String=Settings.journalName(Vault(contextForPolicy).read())): SQLiteOpenHelper(contextForPolicy,name,null,4), IntentStore, AlertStore {
  override fun onCreate(db: SQLiteDatabase) {
   db.execSQL("CREATE TABLE events(id TEXT PRIMARY KEY, trade TEXT, seq INTEGER, payload TEXT, outgoing INTEGER, sent INTEGER DEFAULT 0, done INTEGER DEFAULT 0, UNIQUE(trade,seq))")
   db.execSQL("CREATE TABLE trades(id TEXT PRIMARY KEY, seq INTEGER, invalid INTEGER DEFAULT 0)")
@@ -13,13 +13,14 @@ class Journal(context: Context,name:String=Settings.journalName(Vault(context).r
   db.execSQL("CREATE TABLE meta(k TEXT PRIMARY KEY,v TEXT)")
   diagnosticsSchema(db)
   recoverySchema(db)
+  db.execSQL("INSERT INTO meta VALUES('policy_schema','1')")
  }
  private fun diagnosticsSchema(db:SQLiteDatabase) { runCatching { db.execSQL("CREATE TABLE IF NOT EXISTS diagnostics(event TEXT, at TEXT, stage TEXT, detail TEXT)") } }
  private fun recoverySchema(db:SQLiteDatabase) {
   db.execSQL("CREATE TABLE IF NOT EXISTS rejected(cursor INTEGER PRIMARY KEY,reason TEXT)")
   db.execSQL("CREATE TABLE IF NOT EXISTS alerts(id TEXT PRIMARY KEY,payload TEXT,state TEXT DEFAULT 'pending',attempts INTEGER DEFAULT 0,next INTEGER DEFAULT 0,detail TEXT DEFAULT '')")
  }
- override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) { if(old<2) diagnosticsSchema(db); if(old<3) recoverySchema(db) }
+ override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) { if(old<2) diagnosticsSchema(db); if(old<3) recoverySchema(db); if(old<4) { db.rawQuery("SELECT k FROM meta WHERE k LIKE 'policy:%' OR k LIKE 'plan:%' OR k='policy_schema' LIMIT 1",null).use { require(!it.moveToFirst()) { "Existing policy evidence requires manual schema recovery" } }; db.execSQL("INSERT OR REPLACE INTO meta(k,v) SELECT 'policy:' || id, '{\"legacy\":true}' FROM trades"); db.execSQL("INSERT OR REPLACE INTO meta VALUES('policy_schema','1')") } }
  @Synchronized fun reject(cursor:Long,reason:String) { val db=writableDatabase; db.beginTransaction(); try { db.execSQL("INSERT OR REPLACE INTO rejected VALUES(?,?)",arrayOf(cursor,reason.take(300))); setMeta("cursor",cursor.toString()); setMeta("protocolStatus","Rejected event at cursor $cursor: ${reason.take(200)}"); db.setTransactionSuccessful() } finally { db.endTransaction() } }
  @Synchronized override fun enqueueAlert(id:String,payload:JSONObject) { writableDatabase.execSQL("INSERT OR IGNORE INTO alerts(id,payload) VALUES(?,?)",arrayOf(id,payload.toString())) }
  @Synchronized fun alert(now:Long,id:String?=null):JSONObject? = readableDatabase.rawQuery("SELECT id,payload,attempts FROM alerts WHERE state='pending' AND next<=?"+(if(id!=null) " AND id=?" else "")+" ORDER BY rowid LIMIT 1",if(id!=null) arrayOf(now.toString(),id) else arrayOf(now.toString())).use { if(it.moveToFirst()) JSONObject().put("id",it.getString(0)).put("payload",JSONObject(it.getString(1))).put("attempts",it.getInt(2)) else null }
@@ -42,12 +43,20 @@ class Journal(context: Context,name:String=Settings.journalName(Vault(context).r
  private fun orderEvidence(client:String,stage:String,detail:String) { runCatching { readableDatabase.rawQuery("SELECT e.id FROM events e JOIN orders o ON e.trade=o.trade AND e.seq=o.seq WHERE o.client=?",arrayOf(client)).use { if(it.moveToFirst()) evidence(it.getString(0),stage,detail) } } }
  @Synchronized override fun meta(key: String): String = readableDatabase.rawQuery("SELECT v FROM meta WHERE k=?",arrayOf(key)).use { if(it.moveToFirst()) it.getString(0) else "" }
  @Synchronized override fun setMeta(key: String,value: String) { writableDatabase.execSQL("INSERT OR REPLACE INTO meta VALUES(?,?)",arrayOf(key,value)) }
+ @Synchronized override fun bindPolicyAccount(trade:String,account:String):JSONObject {
+  val db=writableDatabase; db.beginTransaction()
+  try { val snapshot=policy(trade); if(!snapshot.getBoolean("legacy") && snapshot.getString("account").isBlank()) { require(account.isNotBlank() && orders(trade).isEmpty()) { "Account can only bind once before any order" }; snapshot.put("account",account); setMeta("policy:$trade",snapshot.toString()) }; db.setTransactionSuccessful(); return snapshot }
+  finally { db.endTransaction() }
+ }
+ @Synchronized override fun policy(trade:String):JSONObject { require(meta("policy_schema")=="1") { "Policy schema missing" }; val snapshot=LivePolicy.validateSnapshot(JSONObject(meta("policy:$trade").ifBlank { throw IllegalArgumentException("Policy snapshot missing; retained for reconciliation") })); if(snapshot.getBoolean("legacy")) readableDatabase.rawQuery("SELECT k FROM meta WHERE k LIKE ? LIMIT 1",arrayOf("plan:$trade:%")).use { require(!it.moveToFirst()) { "Legacy marker contradicts policy plan evidence" } }; return snapshot }
+ @Synchronized override fun sourceEvents(trade:String):List<JSONObject> = readableDatabase.rawQuery("SELECT payload FROM events WHERE trade=? ORDER BY seq",arrayOf(trade)).use { c -> buildList { while(c.moveToNext()) add(JSONObject(c.getString(0))) } }
  @Synchronized fun accept(e: JSONObject, outgoing: Boolean = false, cursor: Long? = null, skipEntry: Boolean = false) {
   val db = writableDatabase; db.beginTransaction()
   try {
    val id=e.getString("event_id"); val trade=e.getString("trade_id"); val seq=e.getInt("sequence")
    db.rawQuery("SELECT payload FROM events WHERE id=? OR (trade=? AND seq=?)",arrayOf(id,trade,seq.toString())).use { if(it.moveToFirst()) { require(IncomingProtocol.sameEvent(JSONObject(it.getString(0)),e)) { "Event conflict" }; if(cursor!=null) setMeta("cursor",cursor.toString()); db.setTransactionSuccessful(); return } }
    db.rawQuery("SELECT payload FROM events WHERE trade=? LIMIT 1",arrayOf(trade)).use { if(it.moveToFirst()) { val original=JSONObject(it.getString(0)); for(k in listOf("symbol","asset","environment")) require(original.getString(k)==e.getString(k)) { "Trade identity changed" } } }
+   if(revision(trade).first==0) setMeta("policy:$trade",LivePolicy.snapshot(Vault(contextForPolicy).read(),e).toString()) else policy(trade)
    db.execSQL("INSERT INTO events(id,trade,seq,payload,outgoing) VALUES(?,?,?,?,?)",arrayOf(id,trade,seq,e.toString(),if(outgoing) 1 else 0))
    evidence(id,if(outgoing) "sender" else "receiver",at=Instant.now().toString())
    if(outgoing) enqueueAlert("intent:$id",Discord.record("intent",e))
@@ -71,10 +80,13 @@ class Journal(context: Context,name:String=Settings.journalName(Vault(context).r
  @Synchronized override fun orders(trade: String): List<Order> = readableDatabase.rawQuery("SELECT client,seq,side,state,broker,filled FROM orders WHERE trade=?",arrayOf(trade)).use { c -> buildList { while(c.moveToNext()) add(Order(c.getString(0),c.getInt(1),c.getString(2),c.getString(3),c.getString(4),c.getInt(5))) } }
  @Synchronized override fun unknown(client:String,trade:String,seq:Int,side:String) { writableDatabase.execSQL("INSERT INTO orders(client,trade,seq,side,state) VALUES(?,?,?,?,'unknown')",arrayOf<Any>(client,trade,seq,side)); orderEvidence(client,"submit_attempt",side) }
  @Synchronized override fun state(client:String,state:String) { writableDatabase.execSQL("UPDATE orders SET state=? WHERE client=?",arrayOf(state,client)); orderEvidence(client,"order_state",state) }
+ @Synchronized override fun updateObserved(client:String,o:JSONObject,timer:String?) { val db=writableDatabase; db.beginTransaction(); try { update(client,o); if(timer!=null) setMeta("timer:$client",timer); db.setTransactionSuccessful() } finally { db.endTransaction() } }
  @Synchronized override fun update(client:String,o:JSONObject) {
   val db=writableDatabase; db.beginTransaction()
   try {
    db.execSQL("UPDATE orders SET state=?,broker=?,filled=? WHERE client=?",arrayOf(o.getString("status"),o.getString("id"),o.optString("filled_qty","0").toBigDecimal().toInt(),client))
+   val fill=o.optString("filled_qty","0").toBigDecimal().toInt()
+   if(fill>0 && !o.isNull("filled_avg_price") && o.has("filled_avg_price")) setMeta("fill:$client",JSONObject().put("filled",fill).put("average",o.getString("filled_avg_price")).toString()) else if(fill>0) setMeta("fill:$client", "")
    val detail=JSONObject().put("client_order_id",client).put("id",o.getString("id")).put("status",o.getString("status")).put("filled_qty",o.optString("filled_qty","0")).put("filled_avg_price",o.opt("filled_avg_price") ?: JSONObject.NULL).put("created_at",o.opt("created_at") ?: JSONObject.NULL).put("filled_at",o.opt("filled_at") ?: JSONObject.NULL).toString()
    if(meta("lastEvidence:$client")!=detail) { orderEvidence(client,"broker_reconciled",detail); setMeta("lastEvidence:$client",detail) }
    val filled=o.optString("filled_qty","0").toBigDecimal()

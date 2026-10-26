@@ -102,7 +102,7 @@ final class IntentRecoveryTests: XCTestCase {
         let path = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
         let pair = IntentPairing(url: URL(string: "https://relay.test")!, token: String(repeating: "x", count: 32), environment: .paper, role: "follower")
         var state = IntentState(); state.accountID = "account-a"; state.pairingID = pair.fingerprint; state.preferences.paused = false
-        var trade = IntentTrade(); try trade.accept(event)
+        var trade = IntentTrade(); try trade.accept(event); trade.policySnapshot = .legacy(event)
         if withMutation { trade.mutations = [IntentMutation(clientID: "original-buy", eventID: UUID().uuidString.lowercased(), sell: false, quantity: 2, order: order("original-buy"), cancelUnknown: legacy)] }
         state.trades[event.trade_id] = trade
         try JSONEncoder().encode(state).write(to: path)

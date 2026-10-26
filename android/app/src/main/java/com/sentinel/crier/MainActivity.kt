@@ -98,6 +98,33 @@ class MainActivity:Activity() {
    SyncService.stopRequests(); stopService(Intent(this,SyncService::class.java))
    background { val deadline=System.currentTimeMillis()+45000; while(SyncService.active && System.currentTimeMillis()<deadline) Thread.sleep(100); requireStopped(); "Workers stopped. Credentials and connections can be changed; all journals retained." }
   }
+  if(journey=="follow") advanced("Follower execution policy - new trades only") {
+   val savedPolicy=old.optJSONObject("execution_policy")
+   panel.addView(TextView(this).apply { text="Legacy is the default. Selected policies apply to newly received trade IDs only. USD US stocks and standard 100-share options require verified metadata. Caps reject excess targets. Budget is cumulative buy premiums, excludes fees, and is not buying-power approval; sales never replenish it.\nProportional exits use distinct source exit instructions divided by the latest source entry quantity; source broker fills may differ. Close tracked closes only this trade's local units.\nTimed buys cancel on restart/reconnect after reconciliation; racing fills remain holdings. Suspension or network loss can delay cancellation. Saving leaves entries paused." })
+   val sizing=ChoicePicker("Follower sizing",SetupChoiceSet(listOf(SetupOption("legacy","Legacy - source units, requested exits, no timer"),SetupOption("source","Source units - selected policy"),SetupOption("fixed","Fixed local units"),SetupOption("ratio","Ratio - basis points of source units"),SetupOption("budget","Budget - cumulative buy premiums"))),savedPolicy?.optString("mode") ?: "legacy")
+   fun saved(k:String,default:String="")=savedPolicy?.optString(k,default)?.takeUnless { it=="null" } ?: default
+   val fixed=field("Fixed local units (1-1000)",saved("fixed_quantity"))
+   val ratio=field("Ratio basis points (1-10000)",saved("ratio_bps"))
+   val budget=field("Budget USD",saved("budget"))
+   val sourceCap=field("Policy source quantity cap (1-1000)",saved("max_source_quantity","1000"))
+   val localCap=field("Local target quantity cap (1-1000)",saved("max_local_quantity","1000"))
+   val notional=field("Optional maximum cumulative entry notional USD",saved("max_entry_notional"))
+   val exitMode=ChoicePicker("Follower exit intent",SetupChoiceSet(listOf(SetupOption("requested","Requested source instruction units"),SetupOption("proportional","Proportional - cumulative source exit intent"),SetupOption("close_tracked","Close all tracked local units"))),saved("exit_mode","requested"))
+   val timeout=field("Optional entry timeout seconds (1-86400; blank = broker day)",saved("entry_timeout_seconds"))
+   button("Save follower policy and pause entries") {
+    requireStopped(); val c=Vault(this).read(); require(c.optString("role")=="follower" && c.has("account")) { "Save and verify a Receive connection first" }
+    val selected=sizing.value()
+    if(selected=="legacy") c.put("execution_policy",JSONObject.NULL) else {
+     val p=JSONObject().put("mode",selected).put("max_source_quantity",sourceCap.text.toString().toInt()).put("max_local_quantity",localCap.text.toString().toInt()).put("exit_mode",exitMode.value())
+     when(selected) { "fixed"->p.put("fixed_quantity",fixed.text.toString().toInt()); "ratio"->p.put("ratio_bps",ratio.text.toString().toInt()); "budget"->p.put("budget",budget.text.toString()) }
+     if(notional.text.isNotBlank()) p.put("max_entry_notional",notional.text.toString())
+     if(timeout.text.isNotBlank()) p.put("entry_timeout_seconds",timeout.text.toString().toInt())
+     c.put("execution_policy",LivePolicy.validate(p)); LivePolicy.selected(c)
+    }
+    getSharedPreferences("controls",MODE_PRIVATE).edit().putBoolean("paused",true).putBoolean("enabled",false).commit()
+    Vault(this).save(c); status.text="Follower policy saved for new trade IDs. Entries remain paused; enable explicitly when ready."
+   }
+  }
   button("Host · create a new connection") {
    requireStopped(); val env=environment.value(); require(env in setOf("paper","live")); require(env!="live" || live.isChecked) { "Explicit live authorization required" }; val url=service.text.toString()
    background { candidate=QuickConnection.host(url,env); oauthConnection=JSONObject(candidate.toString()); newConnection=true; "Host connection created. Save and verify account, then create a receiver invitation." }

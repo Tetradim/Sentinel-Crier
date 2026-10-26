@@ -37,27 +37,46 @@ class AlpacaIntentBroker:
         response.raise_for_status()
         return response.json() if response.content else None
     def verify(self, environment):
+        self._account(environment)
+        return self.account
+    def _account(self, environment):
         if environment!=self.environment: raise ValueError('Broker environment mismatch')
         account=self._request('GET','/v2/account')
         if account.get('id')!=self.account: raise ValueError('Broker account mismatch')
         if account.get('status')!='ACTIVE' or account.get('trading_blocked') or account.get('account_blocked'): raise ValueError('Account cannot trade')
-        return self.account
+        return account
     def _asset(self, symbol, asset):
         if asset=='option':
             contract=self._request('GET','/v2/options/contracts/'+quote(symbol,safe=''))
             if contract.get('symbol')!=symbol or not contract.get('tradable') or contract.get('status')!='active' or Decimal(str(contract.get('size','0')))!=100: raise ValueError('Unsupported option contract')
+            return contract
         else:
             info=self._request('GET','/v2/assets/'+quote(symbol,safe=''))
             if info.get('symbol')!=symbol or info.get('class')!='us_equity' or not info.get('tradable') or info.get('status')!='active': raise ValueError('Asset is not tradable')
+            return info
+    def metadata(self, event):
+        account=self._account(event['environment'])
+        instrument=self._asset(event['symbol'],event['asset'])
+        if account.get('currency')!='USD' or instrument.get('currency','USD')!='USD':
+            raise ValueError('Execution policy requires verified USD metadata')
+        return dict(account=self.account,environment=self.environment,symbol=event['symbol'],
+                    asset=event['asset'],currency='USD',multiplier=100 if event['asset']=='option' else 1)
     def submit(self, order):
         return self.submit_checked(order, lambda: True)
     def submit_checked(self, order, can_submit):
         try:
-            self.verify(self.environment)
-            self._asset(order['symbol'],order['asset'])
+            if '_policy_metadata' in order:
+                fresh=self.metadata(dict(order,environment=self.environment))
+                if fresh!=order['_policy_metadata']:
+                    raise BrokerSuperseded('Policy metadata changed during preflight')
+            else:
+                self.verify(self.environment)
+                self._asset(order['symbol'],order['asset'])
+        except BrokerSuperseded:
+            raise
         except Exception as exc:
             raise BrokerNotSubmitted('Account or instrument preflight failed') from exc
-        body={k:v for k,v in order.items() if k!='asset'}
+        body={k:v for k,v in order.items() if k not in ('asset','_policy_metadata')}
         body['time_in_force']='day'
         # position_intent also makes Alpaca reject a close that could create a short.
         body['position_intent']='buy_to_open' if order['side']=='buy' else 'sell_to_close'

@@ -1,5 +1,7 @@
 # H.5 sizing and entry/exit policy contract
 
+Historical design checkpoint. The subsequent [Phase J runtime contract](2026-10-25-live-execution-policy-contract.md) and [current settings guide](../../execution-policies.md) describe the implemented follower controls and their verification. The design-only statements below describe the original H.5 milestone.
+
 Status: design and non-executing reference calculations. These proposed modes are **not connected to order execution or customer settings**. The active source-quantity behavior, saved quantity caps, pricing and reconciliation remain unchanged. This closes the design scope of H.5, not implementation of new live sizing modes.
 
 ## Current behavior and migration boundary

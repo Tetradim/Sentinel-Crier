@@ -56,11 +56,125 @@ struct IntentEvent: Codable, Equatable {
               (!["enter", "replace"].contains(action) || expiry.timeIntervalSince(created) <= 30) else { throw AlpacaError.invalid("Invalid intent event.") }
     }
 }
+// Local follower policies are never part of the source wire envelope.
+struct IntentExecutionPolicy: Codable, Equatable {
+    var version = 1; var mode = "source"
+    var fixed_quantity: Int?; var ratio_bps: Int?; var budget: String?
+    var max_source_quantity = 1000; var max_local_quantity = 1000
+    var max_entry_notional: String?; var exit_mode = "requested"; var entry_timeout_seconds: Int?
+    init() {}
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case version, mode, fixed_quantity, ratio_bps, budget, max_source_quantity, max_local_quantity, max_entry_notional, exit_mode, entry_timeout_seconds
+    }
+    private struct Key: CodingKey { var stringValue: String; var intValue: Int? { nil }; init?(stringValue: String) { self.stringValue = stringValue }; init?(intValue: Int) { return nil } }
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.container(keyedBy: Key.self)
+        guard Set(raw.allKeys.map(\.stringValue)).isSubset(of: Set(CodingKeys.allCases.map(\.rawValue))) else { throw AlpacaError.invalid("Unknown execution policy field.") }
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func defaulted<T: Decodable>(_ type: T.Type, _ key: CodingKeys, _ fallback: T) throws -> T {
+            // Only omission chooses a default. An explicit null is malformed for a required policy value.
+            if c.contains(key) { return try c.decode(type, forKey: key) }
+            return fallback
+        }
+        version = try defaulted(Int.self, .version, 1)
+        mode = try defaulted(String.self, .mode, "source")
+        fixed_quantity = try c.decodeIfPresent(Int.self, forKey: .fixed_quantity)
+        ratio_bps = try c.decodeIfPresent(Int.self, forKey: .ratio_bps)
+        budget = try c.decodeIfPresent(String.self, forKey: .budget)
+        max_source_quantity = try defaulted(Int.self, .max_source_quantity, 1000)
+        max_local_quantity = try defaulted(Int.self, .max_local_quantity, 1000)
+        max_entry_notional = try c.decodeIfPresent(String.self, forKey: .max_entry_notional)
+        exit_mode = try defaulted(String.self, .exit_mode, "requested")
+        entry_timeout_seconds = try c.decodeIfPresent(Int.self, forKey: .entry_timeout_seconds)
+        try validate()
+    }
+    static func money(_ text: String) throws -> Decimal {
+        guard text.range(of: "^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,8})?$", options: .regularExpression) != nil,
+              text.filter({ $0 != "." }).count <= 20, let amount = Decimal(string: text), amount > 0 else { throw AlpacaError.invalid("Invalid policy dollar amount.") }
+        return amount
+    }
+    func validate(market: Bool = false) throws {
+        guard version == 1, ["source", "fixed", "ratio", "budget"].contains(mode), ["requested", "proportional", "close_tracked"].contains(exit_mode),
+              (1...1000).contains(max_source_quantity), (1...1000).contains(max_local_quantity),
+              entry_timeout_seconds.map({ (1...86400).contains($0) }) ?? true else { throw AlpacaError.invalid("Invalid execution policy.") }
+        guard mode == "fixed" ? fixed_quantity.map({ (1...1000).contains($0) }) == true : fixed_quantity == nil,
+              mode == "ratio" ? ratio_bps.map({ (1...10000).contains($0) }) == true : ratio_bps == nil,
+              mode == "budget" ? budget != nil : budget == nil else { throw AlpacaError.invalid("Missing or unused sizing field.") }
+        if let budget { _ = try Self.money(budget) }
+        if let max_entry_notional { _ = try Self.money(max_entry_notional) }
+        guard !market || (mode != "budget" && max_entry_notional == nil) else { throw AlpacaError.invalid("Budget and dollar caps require limit pricing.") }
+    }
+    func target(source: Int, price: String?, multiplier: Int, bought: Int, spent: Decimal) throws -> Int {
+        try validate(market: price == nil)
+        guard (1...max_source_quantity).contains(source), multiplier == 1 || multiplier == 100 else { throw AlpacaError.invalid("Source cap or multiplier rejected.") }
+        let unit = try price.map { try Self.money($0) * Decimal(multiplier) }
+        var target = source
+        if mode == "fixed" { target = fixed_quantity! }
+        if mode == "ratio" { target = source * ratio_bps! / 10000 }
+        if mode == "budget" {
+            let remaining = max(0, try Self.money(budget!) - spent)
+            let quotient = remaining / unit!
+            // Compare before converting to Int, including very large valid dollar amounts.
+            guard quotient < Decimal(max_local_quantity + 1) else { throw AlpacaError.invalid("Local target cap exceeded.") }
+            target = bought + NSDecimalNumber(decimal: quotient).intValue
+        }
+        guard target <= max_local_quantity else { throw AlpacaError.invalid("Local target cap exceeded.") }
+        if let cap = max_entry_notional, let unit,
+           spent + Decimal(max(0, target - bought)) * unit > (try Self.money(cap)) { throw AlpacaError.invalid("Entry notional cap exceeded.") }
+        return target
+    }
+}
+struct IntentPolicySnapshot: Codable, Equatable {
+    var legacy: Bool; var policy: IntentExecutionPolicy?
+    var pairing: String; var role: String; var accountID: String
+    var environment: AlpacaEnvironment; var symbol: String; var asset: String
+    static func legacy(_ event: IntentEvent) -> Self { Self(legacy: true, policy: nil, pairing: "", role: "", accountID: "", environment: event.environment, symbol: event.symbol, asset: event.asset) }
+    func validate(event: IntentEvent) throws {
+        guard environment == event.environment, symbol == event.symbol, asset == event.asset,
+              legacy ? policy == nil : (policy != nil && role == "follower" && !pairing.isEmpty) else { throw AlpacaError.invalid("Missing or contradictory policy snapshot; preserve journal for recovery.") }
+        try policy?.validate()
+    }
+}
+struct IntentPolicyBinding: Codable, Equatable {
+    var accountID: String; var environment: AlpacaEnvironment; var symbol: String; var asset: String
+    var instrumentID: String; var multiplier: Int; var currency: String
+}
+struct IntentPricingBasis: Codable, Equatable {
+    var mode: String; var maxSlippageBps: Int; var maxSlippageAmount: String
+    init(_ preferences: IntentPreferences) {
+        mode = preferences.mode; maxSlippageBps = preferences.maxSlippageBps; maxSlippageAmount = preferences.maxSlippageAmount
+    }
+    func finalBuyPrice(_ source: String) throws -> String? {
+        var preferences = IntentPreferences()
+        preferences.mode = mode; preferences.maxSlippageBps = maxSlippageBps; preferences.maxSlippageAmount = maxSlippageAmount
+        return try preferences.price(source, sell: false)
+    }
+}
+struct IntentEntryPlan: Codable, Equatable {
+    var event: IntentEvent; var snapshot: IntentPolicySnapshot; var target: Int; var price: String?; var binding: IntentPolicyBinding
+    var baselineBought: Int; var baselineSpent: String; var pricingBasis: IntentPricingBasis
+    func validate() throws {
+        try event.validate(); try snapshot.validate(event: event)
+        guard let policy = snapshot.policy, !snapshot.legacy, ["enter", "replace"].contains(event.action),
+              (0...1000).contains(baselineBought), let spent = Decimal(string: baselineSpent), spent >= 0,
+              baselineSpent == NSDecimalNumber(decimal: spent).stringValue,
+              target >= 0, target <= policy.max_local_quantity,
+              binding.environment == snapshot.environment, binding.symbol == snapshot.symbol, binding.asset == snapshot.asset,
+              !binding.accountID.isEmpty, !binding.instrumentID.isEmpty, binding.currency == "USD",
+              binding.multiplier == (snapshot.asset == "option" ? 100 : 1),
+              snapshot.accountID.isEmpty || snapshot.accountID == binding.accountID else { throw AlpacaError.invalid("Contradictory frozen plan baseline or broker identity.") }
+        guard price == (try pricingBasis.finalBuyPrice(event.limit_price)) else { throw AlpacaError.invalid("Frozen final price differs from its source and pricing basis.") }
+        let calculated = try policy.target(source: event.quantity, price: price, multiplier: binding.multiplier, bought: baselineBought, spent: spent)
+        guard target == calculated else { throw AlpacaError.invalid("Frozen target differs from its policy and cost baseline.") }
+    }
+}
+
 struct IntentPreferences: Codable {
     var mode = "exact_limit"; var maxSlippageBps = 100; var maxSlippageAmount = "0.02"
     var maxAgeSeconds = 10; var maxQuantity = 1000; var paused = true
+    var execution_policy: IntentExecutionPolicy?
     init() {}
-    enum CodingKeys: String, CodingKey { case mode, maxSlippageBps, maxSlippageAmount, maxAgeSeconds, maxQuantity, paused }
+    enum CodingKeys: String, CodingKey { case mode, maxSlippageBps, maxSlippageAmount, maxAgeSeconds, maxQuantity, paused, execution_policy }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         mode = try c.decodeIfPresent(String.self, forKey: .mode) ?? "exact_limit"
@@ -69,6 +183,8 @@ struct IntentPreferences: Codable {
         maxAgeSeconds = try c.decodeIfPresent(Int.self, forKey: .maxAgeSeconds) ?? 10
         maxQuantity = try c.decodeIfPresent(Int.self, forKey: .maxQuantity) ?? 1000
         paused = try c.decodeIfPresent(Bool.self, forKey: .paused) ?? true
+        execution_policy = try c.decodeIfPresent(IntentExecutionPolicy.self, forKey: .execution_policy)
+        try execution_policy?.validate(market: mode == "market")
         _ = try price("1", sell: false)
     }
     func samePricing(as other: IntentPreferences) -> Bool {
@@ -92,7 +208,12 @@ struct IntentMutation: Codable {
     var order: AlpacaOrder?; var cancelUnknown = false
     var cancelAttemptedAt: Date?
     var notSubmitted: Bool?
+    var acknowledgedSession: String?; var acknowledgedUptime: TimeInterval?
+    var brokerResponseSession: String?
     func validateLocalDisposition() throws {
+        guard (acknowledgedSession == nil) == (acknowledgedUptime == nil),
+              acknowledgedUptime.map({ $0.isFinite && $0 >= 0 }) ?? true,
+              acknowledgedSession.map({ !$0.isEmpty && !sell && order != nil && notSubmitted != true }) ?? true else { throw AlpacaError.invalid("Contradictory timed-order acknowledgement.") }
         guard notSubmitted != true || (order == nil && !cancelUnknown && cancelAttemptedAt == nil) else {
             throw AlpacaError.invalid("Contradictory not-submitted order record. Preserve the journal for recovery.")
         }
@@ -114,6 +235,9 @@ struct IntentMutation: Codable {
 }
 struct IntentTrade: Codable {
     var desired: IntentEvent?; var invalidated = false; var completed: String?
+    var policySnapshot: IntentPolicySnapshot?; var policyBinding: IntentPolicyBinding?
+    var entryPlans: [String: IntentEntryPlan]?; var entryClosed: Bool?; var sourceHistoryInvalid: Bool?
+    var policyRefusals: [String: String]?
     var entrySkipped: Bool?
     var mutations: [IntentMutation] = []
     mutating func accept(_ e: IntentEvent, paused: Bool = false) throws {
@@ -126,6 +250,43 @@ struct IntentTrade: Codable {
         if paused && ["enter", "replace"].contains(e.action) { entrySkipped = true }
         if e.sequence > (desired?.sequence ?? 0) { desired = e }
     }
+    var bought: Int { mutations.filter { !$0.sell }.reduce(0) { $0 + NSDecimalNumber(decimal: Decimal(string: $1.order?.filled_qty ?? "0") ?? 0).intValue } }
+    var totalSold: Int { mutations.filter { $0.sell }.reduce(0) { $0 + NSDecimalNumber(decimal: Decimal(string: $1.order?.filled_qty ?? "0") ?? 0).intValue } }
+    func validateBuyPlans(tradeID: String, history: [String: IntentEvent]) throws {
+        guard let snapshot = policySnapshot, !snapshot.legacy else { return }
+        for mutation in mutations where !mutation.sell {
+            guard let plan = entryPlans?[mutation.eventID] else { throw AlpacaError.invalid("Prior advanced buy has no frozen plan; new entries blocked. Cancels and quantity-proven exits remain available.") }
+            try plan.validate()
+            guard plan.event.event_id == mutation.eventID, plan.event.trade_id == tradeID,
+                  history[mutation.eventID] == plan.event, plan.snapshot == snapshot, plan.binding == policyBinding,
+                  mutation.quantity > 0, mutation.quantity == max(0, plan.target - plan.baselineBought) else { throw AlpacaError.invalid("Prior advanced buy plan, source event, or reserved quantity is contradictory.") }
+        }
+    }
+    func premiumSpent(multiplier: Int) throws -> Decimal {
+        try mutations.filter { !$0.sell }.reduce(Decimal(0)) { sum, mutation in
+            let filled = Decimal(string: mutation.order?.filled_qty ?? "0") ?? 0
+            guard filled > 0 else { return sum }
+            guard let text = mutation.order?.filled_avg_price else { throw AlpacaError.invalid("Cumulative buy fill cost unavailable.") }
+            return sum + filled * (try IntentExecutionPolicy.money(text)) * Decimal(multiplier)
+        }
+    }
+    func proportionalDue(event: IntentEvent, history: [String: IntentEvent]) throws -> Int {
+        let events = history.values.filter { $0.trade_id == event.trade_id && $0.sequence <= event.sequence }.sorted { $0.sequence < $1.sequence }
+        guard sourceHistoryInvalid != true, events.count == event.sequence, events.first?.action == "enter" else { throw AlpacaError.invalid("Complete source intent history required.") }
+        var denominator = 0; var numerator = 0; var closed = false
+        for (offset, item) in events.enumerated() {
+            guard item.sequence == offset + 1, item.symbol == event.symbol, item.asset == event.asset, item.environment == event.environment else { throw AlpacaError.invalid("Conflicting source intent history.") }
+            if ["enter", "replace"].contains(item.action) {
+                guard !closed, offset == 0 || item.action == "replace" else { throw AlpacaError.invalid("Entry after source invalidation.") }
+                denominator = item.quantity
+            } else {
+                closed = true
+                if item.action == "exit" { numerator = min(denominator, numerator + item.quantity) }
+            }
+        }
+        guard denominator > 0 else { throw AlpacaError.invalid("Source denominator unavailable.") }
+        return max(0, bought * numerator / denominator - totalSold)
+    }
     var owned: Int {
         max(0, mutations.reduce(0) { $0 + ($1.sell ? -1 : 1) * (Int(Decimal(string: $1.order?.filled_qty ?? "0").map { NSDecimalNumber(decimal: $0).intValue } ?? 0)) })
     }
@@ -136,6 +297,7 @@ struct IntentTrade: Codable {
     }
 }
 struct IntentState: Codable {
+    var policySchema: Int? = 1; var pairingRole: String?
     var cursor = 0; var accountID = ""; var pairingID = ""; var trades: [String: IntentTrade] = [:]
     var outgoing: [IntentEvent] = []; var received: [String: IntentEvent] = [:]
     var diagnostics: [String: IntentDiagnosticRecord]?
@@ -144,7 +306,7 @@ struct IntentState: Codable {
     var unresolved: [String] {
         trades.compactMap { id, trade in
             let working = trade.mutations.contains { $0.notSubmitted != true && ($0.order.map { !["filled", "canceled", "expired", "rejected", "replaced"].contains($0.status) } ?? true) }
-            return working || trade.owned > 0 || (trade.desired != nil && trade.completed != trade.desired?.event_id && !trade.invalidated) ? id : nil
+            return working || trade.owned > 0 || (trade.desired != nil && trade.completed != trade.desired?.event_id && !trade.invalidated && trade.entryClosed != true) ? id : nil
         }.sorted()
     }
     // Validate one envelope at a time. Quarantine and cursor are committed with
@@ -162,8 +324,19 @@ struct IntentState: Codable {
                 let event = try JSONDecoder().decode(IntentEvent.self, from: JSONSerialization.data(withJSONObject: object, options: [.fragmentsAllowed]))
                 try event.validate()
                 guard event.environment == environment else { throw AlpacaError.invalid("Relay environment mismatch.") }
-                if let previous = received[event.event_id], previous != event { throw AlpacaError.invalid("Event identity conflict.") }
+                if let previous = received[event.event_id], previous != event { trades[previous.trade_id]?.sourceHistoryInvalid = true; trades[event.trade_id]?.sourceHistoryInvalid = true; throw AlpacaError.invalid("Event identity conflict.") }
                 var trade = trades[event.trade_id] ?? IntentTrade()
+                if trades[event.trade_id] == nil {
+                    if let policy = preferences.execution_policy, pairingRole != "host" {
+                        guard pairingRole == "follower", !pairingID.isEmpty else { throw AlpacaError.invalid("Advanced follower policy requires a pinned pairing scope.") }
+                        try policy.validate(market: preferences.mode == "market")
+                        var pinned = policy; pinned.max_source_quantity = min(policy.max_source_quantity, preferences.maxQuantity)
+                        trade.policySnapshot = IntentPolicySnapshot(legacy: false, policy: pinned, pairing: pairingID, role: "follower", accountID: accountID, environment: event.environment, symbol: event.symbol, asset: event.asset)
+                    } else { trade.policySnapshot = .legacy(event) }
+                }
+                guard let snapshot = trade.policySnapshot else { throw AlpacaError.invalid("Policy snapshot missing; preserve journal.") }
+                try snapshot.validate(event: event)
+                if received.values.contains(where: { $0.trade_id == event.trade_id && $0.sequence == event.sequence && $0 != event }) { trades[event.trade_id]?.sourceHistoryInvalid = true; throw AlpacaError.invalid("Conflicting historical source sequence.") }
                 try trade.accept(event, paused: preferences.paused)
                 trades[event.trade_id] = trade; received[event.event_id] = event; accepted.append(event)
             } catch {
@@ -217,13 +390,42 @@ struct IntentPairing: Codable {
     private var diagnosticSession = UUID()
     private var quoteCaptures = Set<String>()
     private var processing = false; private var publishing = false
+    private var timerSession = UUID().uuidString
     init(file: URL, now: @escaping () -> Date = Date.init, monotonic: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }, session: URLSession = CrierHTTPSession.shared) throws {
         self.file = file
         self.now = now
         self.monotonic = monotonic; entryClock = EntryClock(wall: now, mono: monotonic)
         self.session = session
         state = FileManager.default.fileExists(atPath: file.path) ? try JSONDecoder().decode(IntentState.self, from: Data(contentsOf: file)) : IntentState()
-        for trade in state.trades.values { for mutation in trade.mutations { try mutation.validateLocalDisposition() } }
+        if state.policySchema == nil {
+            guard state.trades.values.allSatisfy({ $0.policySnapshot == nil && $0.policyBinding == nil && $0.entryPlans == nil && $0.entryClosed == nil }) else { throw AlpacaError.invalid("Policy evidence without migration marker; preserve journal.") }
+            // Only pre-schema journals are migrated. Current missing records fail closed.
+            for id in state.trades.keys {
+                if let event = state.trades[id]?.desired { state.trades[id]?.policySnapshot = .legacy(event) }
+            }
+            state.policySchema = 1
+            try JSONEncoder().encode(state).write(to: file, options: [.atomic, .completeFileProtection])
+        }
+        guard state.policySchema == 1 else { throw AlpacaError.invalid("Unsupported policy journal schema.") }
+        for trade in state.trades.values {
+            if let event = trade.desired {
+                guard let snapshot = trade.policySnapshot else { throw AlpacaError.invalid("Policy snapshot missing; preserve journal for recovery.") }
+                try snapshot.validate(event: event)
+                if snapshot.legacy {
+                    guard trade.policyBinding == nil, trade.entryPlans == nil, trade.entryClosed == nil else { throw AlpacaError.invalid("Legacy trade contains advanced policy evidence.") }
+                }
+                for (revision, plan) in (trade.entryPlans ?? [:]) {
+                    try plan.validate()
+                    guard revision == plan.event.event_id, plan.snapshot == snapshot, plan.binding == trade.policyBinding, plan.event.trade_id == event.trade_id,
+                          plan.binding.environment == snapshot.environment, plan.binding.symbol == snapshot.symbol, plan.binding.asset == snapshot.asset,
+                          !plan.binding.accountID.isEmpty, !plan.binding.instrumentID.isEmpty, plan.binding.currency == "USD",
+                          plan.binding.multiplier == (snapshot.asset == "option" ? 100 : 1),
+                          snapshot.accountID.isEmpty || snapshot.accountID == plan.binding.accountID,
+                          plan.target >= 0, plan.target <= (snapshot.policy?.max_local_quantity ?? 1000) else { throw AlpacaError.invalid("Contradictory frozen entry plan.") }
+                }
+            }
+            for mutation in trade.mutations { try mutation.validateLocalDisposition() }
+        }
     }
     static func local() throws -> IntentController {
         let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("SentinelCrier")
@@ -235,7 +437,11 @@ struct IntentPairing: Codable {
         try JSONEncoder().encode(next).write(to: file, options: [.atomic, .completeFileProtection])
         state = next
     }
-    func settings(_ p: IntentPreferences) throws { _ = try p.price("1", sell: false); try commit { $0.preferences = p } }
+    func settings(_ p: IntentPreferences) throws {
+        _ = try p.price("1", sell: false); try p.execution_policy?.validate(market: p.mode == "market")
+        guard p.execution_policy == state.preferences.execution_policy || p.paused else { throw AlpacaError.invalid("Policy changes must leave follower entries paused. Save paused, then explicitly resume.") }
+        try commit { $0.preferences = p }
+    }
     func validateIdentity(account: String, environment: AlpacaEnvironment, pairing: IntentPairing? = nil) throws {
         guard let pair = try pairing ?? IntentPairing.load() else { return }
         guard pair.environment == environment else { throw AlpacaError.invalid("Pairing environment differs from broker.") }
@@ -244,7 +450,8 @@ struct IntentPairing: Codable {
     func connect(api: AlpacaREST, account: String, pairing: IntentPairing? = nil, startWorkers: Bool = true) throws {
         guard let pair = try pairing ?? IntentPairing.load() else { return }
         try validateIdentity(account: account, environment: api.environment, pairing: pair)
-        try commit { $0.accountID = account; $0.pairingID = pair.fingerprint }
+        try commit { $0.accountID = account; $0.pairingID = pair.fingerprint; $0.pairingRole = pair.role }
+        timerSession = UUID().uuidString
         if self.api !== api { self.api?.invalidate() }
         self.api = api; self.pair = pair
         entryClock = EntryClock(wall: now, mono: monotonic)
@@ -275,7 +482,7 @@ struct IntentPairing: Codable {
         guard let pair, hosting else { throw AlpacaError.invalid("Connect an intent host pairing first.") }
         let id = tradeID ?? UUID().uuidString.lowercased()
         let e = IntentEvent.make(trade: id, sequence: (state.trades[id]?.desired?.sequence ?? 0) + 1, action: action, environment: pair.environment, symbol: symbol, asset: asset, quantity: quantity, price: price)
-        try commit { s in var t = s.trades[id] ?? IntentTrade(); try t.accept(e); s.trades[id] = t; s.outgoing.append(e) }
+        try commit { s in var t = s.trades[id] ?? IntentTrade(); if t.policySnapshot == nil { t.policySnapshot = .legacy(e) }; try t.accept(e); s.trades[id] = t; s.outgoing.append(e) }
         beginDiagnostic(e, stage: "sender", observed: IntentEvent.date(e.created_at) ?? Date())
         Task { await publish() }; Task { await process() }
         return id
@@ -368,7 +575,7 @@ struct IntentPairing: Codable {
                 try mutation.validate(order, symbol: event.symbol)
                 try Task.checkCancellation()
                 guard self.api === api, pair != nil else { throw AlpacaError.invalid("Reconnect interrupted.") }
-                try commit { $0.trades[id]!.mutations[index].order = order }
+                try recordReconciliation(id: id, index: index, order: order)
             }
         }
     }
@@ -377,7 +584,12 @@ struct IntentPairing: Codable {
         let observed = onHealth; var needsReconciliation = false
         for id in Array(state.trades.keys) {
             do { try Task.checkCancellation(); try await execute(id, api: api, observe: observed) }
-            catch { needsReconciliation = true; if let event = state.trades[id]?.desired { diagnosticStep(event.event_id, "execution_pending", error.localizedDescription) }; message = "Trade \(id.prefix(8)): \(error.localizedDescription)" }
+            catch { needsReconciliation = true; if let event = state.trades[id]?.desired {
+                diagnosticStep(event.event_id, "execution_pending", error.localizedDescription)
+                if state.trades[id]?.policySnapshot?.policy != nil {
+                    try? commit { if $0.trades[id]!.policyRefusals == nil { $0.trades[id]!.policyRefusals = [:] }; $0.trades[id]!.policyRefusals![event.event_id] = error.localizedDescription }
+                }
+            }; message = "Trade \(id.prefix(8)): \(error.localizedDescription)" }
         }
         needsReconciliation = needsReconciliation || state.trades.values.contains { $0.mutations.contains { $0.notSubmitted != true && ($0.order == nil || $0.cancelUnknown) } }
         observed?(.execution, needsReconciliation ? .blocked : .healthy, needsReconciliation ? .reconciliationRequired : .checked)
@@ -475,6 +687,28 @@ struct IntentPairing: Codable {
             }
         }
     }
+    private func recordReconciliation(id: String, index: Int, order: AlpacaOrder) throws {
+        let uptime = monotonic(); let session = timerSession
+        try commit { state in
+            let prior = state.trades[id]!.mutations[index]
+            state.trades[id]!.mutations[index].order = order
+            guard !state.trades[id]!.mutations[index].sell, !terminal(order),
+                  let seconds = state.trades[id]!.policySnapshot?.policy?.entry_timeout_seconds else { return }
+            let mutation = state.trades[id]!.mutations[index]
+            if let acknowledged = mutation.acknowledgedSession {
+                if acknowledged != session || mutation.acknowledgedUptime.map({ uptime < $0 || uptime - $0 >= Double(seconds) }) != false {
+                    state.trades[id]!.entryClosed = true
+                }
+            } else if prior.order != nil && prior.brokerResponseSession != session {
+                // A previously known live order with absent acknowledgement evidence cannot get a renewed timer.
+                state.trades[id]!.entryClosed = true
+            } else {
+                // Unknown POSTs first observed after restart start here, never at local reservation/POST.
+                state.trades[id]!.mutations[index].acknowledgedSession = session
+                state.trades[id]!.mutations[index].acknowledgedUptime = uptime
+            }
+        }
+    }
     private func terminal(_ order: AlpacaOrder) -> Bool { ["filled", "canceled", "expired", "rejected", "replaced"].contains(order.status) }
     private func execute(_ id: String, api: AlpacaREST, observe: NativeHealthObserver? = nil) async throws {
         guard let initial = state.trades[id], let desired = initial.desired else { return }
@@ -489,18 +723,20 @@ struct IntentPairing: Codable {
             if let old = m.order, terminal(old) { continue }
             let order = try await api.order(clientID: m.clientID)
             try m.validate(order, symbol: desired.symbol)
+            try Task.checkCancellation()
+            guard self.api === api, pair != nil else { return }
             diagnosticStep(m.eventID, "reconciled", "client=\(m.clientID) broker=\(order.id) status=\(order.status) filled=\(order.filled_qty) average=\(order.filled_avg_price ?? "unavailable")")
-            try commit { $0.trades[id]!.mutations[index].order = order }
+            try recordReconciliation(id: id, index: index, order: order)
             if order.status == "rejected", hosting, state.trades[id]?.desired?.action != "cancel" {
                 _ = try host(symbol: desired.symbol, asset: desired.asset, quantity: desired.quantity, price: desired.limit_price, tradeID: id, action: "cancel")
             }
         }
         guard let trade = state.trades[id], let e = trade.desired else { return }
-        let revise = e.action != "enter" || trade.invalidated
+        let revise = e.action != "enter" || trade.invalidated || trade.entryClosed == true
         if revise {
             for index in trade.mutations.indices {
                 let m = state.trades[id]!.mutations[index]
-                if let order = m.order, !terminal(order), m.eventID != e.event_id || e.action == "cancel" || e.action == "exit" && !m.sell {
+                if let order = m.order, !terminal(order), m.eventID != e.event_id || e.action == "cancel" || (e.action == "exit" || trade.entryClosed == true) && !m.sell {
                     try Task.checkCancellation()
                     guard self.api === api, pair != nil else { return }
                     let attemptTime = now()
@@ -516,10 +752,11 @@ struct IntentPairing: Codable {
                 }
             }
         }
-        if e.action == "cancel" || (trade.invalidated && e.action != "exit") {
+        if e.action == "cancel" || ((trade.invalidated || trade.entryClosed == true) && e.action != "exit") {
             diagnosticStep(e.event_id, "entry_invalidated", "Entry remainder canceled or superseded; tracked fills retained")
             return
         }
+        if trade.mutations.contains(where: { $0.notSubmitted != true && ($0.order.map { !terminal($0) } ?? true) }) { return }
         if trade.completed == e.event_id { return }
         let sell = e.action == "exit"
         let existing = trade.mutations.filter { $0.eventID == e.event_id }
@@ -544,8 +781,57 @@ struct IntentPairing: Codable {
                 try commit { $0.trades[id]!.completed = e.event_id }; return
             }
         }
+        guard let snapshot = trade.policySnapshot else { throw AlpacaError.invalid("Missing policy snapshot; preserve journal.") }
+        try snapshot.validate(event: e)
+        let policy = hosting ? nil : snapshot.policy
+        if policy != nil {
+            guard pair?.role == snapshot.role, pair?.fingerprint == snapshot.pairing,
+                  snapshot.accountID.isEmpty || snapshot.accountID == account.id else { throw AlpacaError.invalid("Pinned policy pairing/account changed.") }
+        }
+        if !sell && policy != nil { try trade.validateBuyPlans(tradeID: id, history: state.received) }
+        let preference = hosting ? IntentPreferences() : state.preferences
+        var price = try preference.price(e.limit_price, sell: sell)
+        var checkedBinding: IntentPolicyBinding?
+        if policy != nil {
+            let fresh = try await api.policyBinding(symbol: e.symbol, option: e.asset == "option", accountID: account.id)
+            guard self.api === api, pair?.fingerprint == snapshot.pairing else { return }
+            if let pinned = trade.policyBinding, pinned != fresh { throw AlpacaError.invalid("Pinned broker instrument/account binding changed.") }
+            if trade.policyBinding == nil {
+                try commit { $0.trades[id]!.policyBinding = fresh }
+            }
+            checkedBinding = fresh
+        }
         let soldForRevision = trade.sold(for: e.event_id)
         var quantity = sell ? min(max(0, e.quantity - soldForRevision), trade.owned) : max(0, e.quantity - trade.owned)
+        if let policy, let binding = checkedBinding {
+            if sell {
+                if policy.exit_mode == "close_tracked" { quantity = trade.owned }
+                if policy.exit_mode == "proportional" { quantity = min(trade.owned, try trade.proportionalDue(event: e, history: state.received)) }
+            } else {
+                let plan: IntentEntryPlan
+                if let frozen = trade.entryPlans?[e.event_id] {
+                    try frozen.validate()
+                    guard frozen.event == e, frozen.snapshot == snapshot, frozen.binding == binding else { throw AlpacaError.invalid("Frozen plan identity changed.") }
+                    plan = frozen
+                } else {
+                    let needsCost = policy.mode == "budget" || policy.max_entry_notional != nil
+                    let spent = needsCost ? try trade.premiumSpent(multiplier: binding.multiplier) : 0
+                    let target = try policy.target(source: e.quantity, price: price, multiplier: binding.multiplier, bought: trade.bought, spent: spent)
+                    plan = IntentEntryPlan(event: e, snapshot: snapshot, target: target, price: price, binding: binding, baselineBought: trade.bought, baselineSpent: NSDecimalNumber(decimal: spent).stringValue, pricingBasis: IntentPricingBasis(preference))
+                    try plan.validate()
+                    try commit { if $0.trades[id]!.entryPlans == nil { $0.trades[id]!.entryPlans = [:] }; $0.trades[id]!.entryPlans![e.event_id] = plan }
+                }
+                price = plan.price
+                quantity = max(0, plan.target - trade.bought)
+                if policy.mode == "budget" || policy.max_entry_notional != nil {
+                    let spent = try trade.premiumSpent(multiplier: binding.multiplier)
+                    guard let price else { throw AlpacaError.invalid("Final valuation unavailable.") }
+                    let total = spent + Decimal(quantity) * (try IntentExecutionPolicy.money(price)) * Decimal(binding.multiplier)
+                    if let budget = policy.budget, total > (try IntentExecutionPolicy.money(budget)) { throw AlpacaError.invalid("Entry budget exhausted.") }
+                    if let cap = policy.max_entry_notional, total > (try IntentExecutionPolicy.money(cap)) { throw AlpacaError.invalid("Entry notional cap exceeded.") }
+                }
+            }
+        }
         let desiredQuantity = quantity
         if sell {
             let positions = try await api.positions()
@@ -554,8 +840,6 @@ struct IntentPairing: Codable {
         }
         if sell && desiredQuantity > 0 && quantity == 0 { message = "Waiting for tracked holdings to become available."; return }
         guard quantity > 0 else { try commit { $0.trades[id]!.completed = e.event_id }; return }
-        let preference = hosting ? IntentPreferences() : state.preferences
-        let price = try preference.price(e.limit_price, sell: sell)
         // There must be no await between this revision check, durable unknown, and dispatch.
         guard state.trades[id]?.desired?.event_id == e.event_id, sell || state.trades[id]?.invalidated == false else { return }
         try Task.checkCancellation()
@@ -565,25 +849,34 @@ struct IntentPairing: Codable {
         try commit { $0.trades[id]!.mutations.append(mutation) }
         let dispatched = Date()
         Task { diagnosticStep(e.event_id, "order_dispatch", "client=\(clientID) quantity=\(quantity) limit=\(price ?? "market")", at: dispatched) }
-        var refusal = "operation_stopped"
+        var refusal = checkedBinding == nil ? "operation_stopped" : "metadata_or_operation_stopped"
         do {
-            let order = try await api.submitIntent(symbol: e.symbol, quantity: quantity, price: price, sell: sell, option: e.asset == "option", clientID: clientID, canSubmit: { [self] in
+            let order = try await api.submitIntent(symbol: e.symbol, quantity: quantity, price: price, sell: sell, option: e.asset == "option", clientID: clientID, policyBinding: checkedBinding, canSubmit: { [self] in
                 guard !Task.isCancelled, self.api === api, pair != nil else { refusal = "operation_stopped"; return false }
                 guard state.trades[id]?.desired?.event_id == e.event_id else { refusal = "revision_changed"; return false }
                 guard hosting || state.preferences.samePricing(as: preference) else { refusal = "pricing_changed"; return false }
+                if policy != nil {
+                    guard pair?.fingerprint == snapshot.pairing, pair?.role == snapshot.role,
+                          state.trades[id]?.policySnapshot == snapshot, state.trades[id]?.policyBinding == checkedBinding else { refusal = "policy_binding_changed"; return false }
+                }
                 if sell { return true }
                 guard let sample = entryClock.read() else { refusal = "clock_changed"; return false }
-                guard state.trades[id]?.invalidated == false, state.trades[id]?.entrySkipped != true else { refusal = "invalidated"; return false }
+                guard state.trades[id]?.invalidated == false, state.trades[id]?.entrySkipped != true, state.trades[id]?.entryClosed != true else { refusal = "invalidated"; return false }
                 guard hosting || !state.preferences.paused else { refusal = "entries_paused"; return false }
                 guard let created = IntentEvent.date(e.created_at), let expiry = IntentEvent.date(e.expires_at), sample.wall >= created else { refusal = "future_created_at"; return false }
                 guard sample.effective < expiry else { refusal = "expired"; return false }
                 guard sample.effective.timeIntervalSince(created) <= Double(hosting ? 30 : state.preferences.maxAgeSeconds) else { refusal = "max_age"; return false }
                 guard e.quantity <= (hosting ? 1000 : state.preferences.maxQuantity) else { refusal = "max_quantity"; return false }
+                if let policy {
+                    guard pair?.fingerprint == snapshot.pairing, pair?.role == snapshot.role,
+                          e.quantity <= policy.max_source_quantity,
+                          state.trades[id]?.policySnapshot == snapshot, state.trades[id]?.policyBinding == checkedBinding else { refusal = "policy_binding_changed"; return false }
+                }
                 return true
             })
             try mutation.validate(order, symbol: e.symbol)
             diagnosticStep(e.event_id, "broker_response", "client=\(clientID) broker=\(order.id) status=\(order.status) filled=\(order.filled_qty) average=\(order.filled_avg_price ?? "unavailable")")
-            try commit { s in let index = s.trades[id]!.mutations.firstIndex { $0.clientID == clientID }!; s.trades[id]!.mutations[index].order = order }
+            try commit { s in let index = s.trades[id]!.mutations.firstIndex { $0.clientID == clientID }!; s.trades[id]!.mutations[index].order = order; s.trades[id]!.mutations[index].brokerResponseSession = timerSession }
             if order.status == "rejected", hosting { _ = try host(symbol: e.symbol, asset: e.asset, quantity: e.quantity, price: e.limit_price, tradeID: id, action: "cancel") }
         } catch is IntentDispatchRefused {
             try commit { s in

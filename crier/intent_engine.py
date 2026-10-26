@@ -7,22 +7,30 @@ import json
 import sqlite3
 import threading
 import time
+from uuid import uuid4
+from dataclasses import asdict
+from .execution_policy import ExecutionPolicy
+from .policy_journal import PolicyJournal
 from .intent_protocol import IntentEvent
 from .trade_diagnostics import validate_quote, trade_report, export_trade_json, export_trade_csv
 from .lock import single_process, AlreadyRunningError
 from .entry_clock import EntryClock, ClockUncertain
 
 DEFAULTS = dict(enabled=False, mode='exact_limit', max_slippage_bps=100,
-                max_slippage_amount='0.02', max_age_seconds=10, max_quantity=1000)
+                max_slippage_amount='0.02', max_age_seconds=10, max_quantity=1000, execution_policy=None)
 TERMINAL = {'filled', 'canceled', 'expired', 'rejected', 'replaced', 'skipped'}
 BROKER_STATUSES = {'new', 'accepted', 'pending_new', 'accepted_for_bidding',
                    'partially_filled', 'filled', 'done_for_day', 'canceled',
                    'expired', 'replaced', 'pending_cancel', 'pending_replace',
                    'stopped', 'rejected', 'suspended', 'calculated'}
 
-class IntentEngine:
-    def __init__(self, path, broker, clock=None, *, entry_clock=None):
+class IntentEngine(PolicyJournal):
+    policy_terminal = TERMINAL
+    def __init__(self, path, broker, clock=None, *, entry_clock=None, pairing_id=None, role=None, monotonic=None):
         self.path, self.broker = str(path), broker
+        self.pairing_id,self.role=pairing_id,role
+        self.monotonic=monotonic or time.monotonic
+        self.policy_session=str(uuid4())
         self.clock = clock or time.time
         self.entry_clock = entry_clock or EntryClock()
         self.worker = threading.Lock()
@@ -37,6 +45,8 @@ class IntentEngine:
             CREATE TABLE IF NOT EXISTS intent_trace(id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, monotonic_ns INTEGER NOT NULL, trade_id TEXT NOT NULL, event_id TEXT, stage TEXT NOT NULL, details TEXT NOT NULL);''')
             if 'attempted_at' not in {r[1] for r in db.execute('PRAGMA table_info(intent_cancel_requested)')}:
                 db.execute('ALTER TABLE intent_cancel_requested ADD COLUMN attempted_at REAL')
+            db.commit()
+            self.migrate_policies(db)
     @contextmanager
     def _db(self):
         db=sqlite3.connect(self.path, timeout=30)
@@ -95,21 +105,37 @@ class IntentEngine:
         with self._db() as db: row=db.execute('SELECT data FROM intent_settings WHERE id=1').fetchone()
         return dict(DEFAULTS, **(json.loads(row[0]) if row else {}))
     def save_settings(self, settings):
-        s=dict(self.load_settings(), **settings)
+        with self._db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row=db.execute('SELECT data FROM intent_settings WHERE id=1').fetchone()
+            old=dict(DEFAULTS,**(json.loads(row[0]) if row else {}))
+            s=self._validate_settings(old,settings)
+            db.execute('INSERT OR REPLACE INTO intent_settings VALUES (1,?)',(json.dumps(s),))
+        return s
+    def _validate_settings(self, old, settings):
+        s=dict(old, **settings)
         if set(s)!=set(DEFAULTS) or type(s['enabled']) is not bool or s['mode'] not in {'exact_limit','market','bounded_limit'}: raise ValueError('Invalid intent settings')
         for key,lo,hi in [('max_age_seconds',1,30),('max_quantity',1,1000),('max_slippage_bps',0,10000)]:
             if type(s[key]) is not int or not lo<=s[key]<=hi: raise ValueError('Invalid '+key)
         amount=Decimal(str(s['max_slippage_amount']))
         if not amount.is_finite() or amount<0: raise ValueError('Invalid slippage')
         s['max_slippage_amount']=str(amount)
-        with self._db() as db: db.execute('INSERT OR REPLACE INTO intent_settings VALUES (1,?)',(json.dumps(s),))
+        if s['execution_policy'] is not None:
+            if self.role!='follower' or not self.pairing_id: raise ValueError('Follower pairing required')
+            s['execution_policy']=asdict(ExecutionPolicy.parse(s['execution_policy']))
+            if s['mode']=='market' and (s['execution_policy']['mode']=='budget' or s['execution_policy']['max_entry_notional'] is not None):
+                raise ValueError('Budget and notional policies require limit pricing')
+        if s['execution_policy']!=old['execution_policy'] and s['enabled']:
+            raise ValueError('Save policy with entries paused')
         return s
     def accept(self, event):
         e=IntentEvent.model_validate(event).to_dict() if isinstance(event,dict) else IntentEvent.model_validate(event.to_dict()).to_dict()
         encoded=json.dumps(e,sort_keys=True,default=lambda x:x.isoformat())
-        e=json.loads(encoded); settings=self.load_settings()
+        e=json.loads(encoded)
         with self._db() as db:
             db.execute('BEGIN IMMEDIATE')
+            saved=db.execute('SELECT data FROM intent_settings WHERE id=1').fetchone()
+            settings=dict(DEFAULTS,**(json.loads(saved[0]) if saved else {}))
             old=db.execute('SELECT data FROM intent_events WHERE id=?',(e['event_id'],)).fetchone()
             if old:
                 if old[0]!=encoded: raise ValueError('Event identity changed')
@@ -121,6 +147,8 @@ class IntentEngine:
             invalid=bool(row and row['invalid']) or e['action'] in ('cancel','exit')
             skipped=bool(row and row['skipped']) or (e['action'] in ('enter','replace') and not settings['enabled'])
             db.execute('INSERT INTO intent_events VALUES (?,?)',(e['event_id'],encoded))
+            db.execute('INSERT INTO intent_event_index VALUES (?,?,?)',(e['event_id'],e['trade_id'],e['sequence']))
+            if row is None: self.snapshot_policy(db,e,settings)
             desired=encoded if not prior or e['sequence']>prior['sequence'] else row['data']
             db.execute('INSERT OR REPLACE INTO intent_trades VALUES (?,?,?,?)',(e['trade_id'],desired,invalid,skipped))
         self._trace(e['trade_id'],'instruction_stored',e['event_id'],action=e['action'],sequence=e['sequence'],symbol=e['symbol'],asset=e['asset'],quantity=e['quantity'],limit_price=e['limit_price'],sender_created_at=e['created_at'],expires_at=e['expires_at'])
@@ -130,7 +158,9 @@ class IntentEngine:
             trades=[dict(id=r['id'], event=json.loads(r['data']), invalid=bool(r['invalid']), skipped=bool(r['skipped'])) for r in db.execute('SELECT * FROM intent_trades')]
             orders=[dict(r) for r in db.execute('SELECT * FROM intent_orders')]
             pin=db.execute('SELECT environment,account FROM intent_pin WHERE id=1').fetchone()
-        return {'settings':self.load_settings(),'trades':trades,'orders':orders,'pin':dict(pin) if pin else None}
+            policies={r[0]:json.loads(r[1]) for r in db.execute('SELECT id,data FROM intent_policy_trade')}
+            plans={r[0]:json.loads(r[1]) for r in db.execute('SELECT event_id,data FROM intent_policy_plan')}
+        return {'settings':self.load_settings(),'trades':trades,'orders':orders,'pin':dict(pin) if pin else None,'policies':policies,'plans':plans}
     def _orders(self, tid):
         with self._db() as db: return [dict(r) for r in db.execute('SELECT * FROM intent_orders WHERE trade_id=?',(tid,))]
     def _reconcile(self, order):
@@ -154,6 +184,7 @@ class IntentEngine:
             if not average.is_finite() or average<=0: raise ValueError('Invalid broker fill price')
         with self._db() as db:
             db.execute('UPDATE intent_orders SET status=?, broker_id=?, filled=? WHERE cid=?',(snap['status'],snap['id'],str(filled),order['cid']))
+            self.reconcile_policy_evidence(db,order,snap)
         self._trace(order['trade_id'],'broker_reconciled',client_order_id=order['cid'],status=snap['status'],filled_qty=str(filled),avg_fill_price=str(snap.get('filled_avg_price')) if snap.get('filled_avg_price') is not None else None,broker_created_at=snap.get('created_at'),broker_filled_at=snap.get('filled_at'))
         return True
     def tick(self):
@@ -189,9 +220,11 @@ class IntentEngine:
             pin=db.execute('SELECT environment,account FROM intent_pin WHERE id=1').fetchone()
             if pin and tuple(pin)!=(e['environment'],account): raise ValueError('Persisted account/environment mismatch')
             if not pin: db.execute('INSERT INTO intent_pin VALUES (1,?,?)',(e['environment'],account))
+        snapshot=self.policy_for(tid,e,account)
         reconciled={order['cid'] for order in self._orders(tid) if self._reconcile(order)}
         orders=self._orders(tid); active=[o for o in orders if o['status'] not in TERMINAL]
-        cancel=[o for o in active if o['side']=='buy' and (row['invalid'] or row['skipped'] or o['sequence']!=e['sequence'])]
+        timed_out=self.timed_entry_closed(tid,snapshot,orders)
+        cancel=[o for o in active if o['side']=='buy' and (row['invalid'] or row['skipped'] or timed_out or o['sequence']!=e['sequence'])]
         if cancel:
             for order in cancel:
                 with self._db() as db:
@@ -213,7 +246,7 @@ class IntentEngine:
             return {'trade_id':tid,'state':'cancel_pending'}
         if active: return {'trade_id':tid,'state':'working'}
         settings=self.load_settings(); action=e['action']; side='sell' if action=='exit' else 'buy'
-        if action=='cancel' or (side=='buy' and (row['invalid'] or row['skipped'])): return self._settle(tid,e,'invalidated')
+        if action=='cancel' or (side=='buy' and (row['invalid'] or row['skipped'] or timed_out)): return self._settle(tid,e,'invalidated')
         try:
             sample=self.entry_clock.read() if side=='buy' else None
             now=datetime.fromtimestamp(sample.effective,timezone.utc) if sample else datetime.now(timezone.utc)
@@ -239,6 +272,10 @@ class IntentEngine:
             if any(o['status']!='filled' for o in revision_exits):
                 return self._settle(tid,e,'manual_reconcile')
             remaining=min(Decimal(e['quantity'])-revision_sold,bought-sold)
+            if snapshot:
+                exit_mode=snapshot['policy']['exit_mode']
+                if exit_mode=='close_tracked': remaining=bought-sold
+                elif exit_mode=='proportional': remaining=self.proportional_due(tid,e,bought,sold)
             if remaining<=0: return self._settle(tid,e,'settled')
             available=Decimal(str(self.broker.position(e['symbol'])))
             if not available.is_finite(): raise ValueError('Invalid available holdings')
@@ -249,7 +286,7 @@ class IntentEngine:
         cid='si-'+e['event_id']+('-s'+str(len(revision_exits)) if side=='sell' else '-b')
         if side=='sell' and qty<=0: return {'trade_id':tid,'state':'waiting_for_availability'}
         if any(o['cid']==cid and o['status']=='rejected' for o in orders): return self._settle(tid,e,'rejected')
-        if qty<=0 or any(o['cid']==cid for o in orders): return self._settle(tid,e,'settled')
+        if (qty<=0 and not snapshot) or any(o['cid']==cid for o in orders): return self._settle(tid,e,'settled')
         request=dict(symbol=e['symbol'],asset=e['asset'],qty=str(qty),side=side,type='market' if settings['mode']=='market' else 'limit',client_order_id=cid)
         if request['type']=='limit':
             price=Decimal(e['limit_price'])
@@ -260,6 +297,17 @@ class IntentEngine:
             price=price.quantize(tick,rounding=ROUND_DOWN if side=='buy' else ROUND_UP)
             if price<=0: raise ValueError('Nonpositive bounded price')
             request['limit_price']=str(price)
+        plan=None
+        if snapshot:
+            if side=='buy':
+                qty,plan=self.policy_plan(tid,e,snapshot,request,bought,orders,account,settings)
+                if qty<=0: return self._settle(tid,e,'settled')
+                request['qty']=str(qty)
+            else:
+                from .execution_policy import validate_metadata
+                if not hasattr(self.broker,'metadata') or not hasattr(self.broker,'submit_checked'):
+                    raise ValueError('Checked policy broker unavailable')
+                request['_policy_metadata']=validate_metadata(self.broker.metadata(e),e,account)
         # Atomic reservation against the newest desired state. Release DB before network.
         with self._db() as db:
             db.execute('BEGIN IMMEDIATE')
@@ -272,6 +320,15 @@ class IntentEngine:
                 latest=db.execute('SELECT * FROM intent_trades WHERE id=?',(tid,)).fetchone()
             if latest['data']!=row['data']: return False
             current=self.load_settings()
+            if snapshot:
+                try:
+                    pinned=self.policy_for(tid,e,account)
+                    if pinned!=snapshot or (side=='buy' and pinned['entry_closed']): return False
+                    if plan:
+                        with self._db() as db:
+                            saved=db.execute('SELECT data FROM intent_policy_plan WHERE event_id=?',(e['event_id'],)).fetchone()
+                        if not saved or json.loads(saved[0])!=plan: return False
+                except (ValueError,KeyError,TypeError): return False
             if any(current[key]!=settings[key] for key in ('mode','max_slippage_bps','max_slippage_amount')):
                 refusal['reason']='pricing_changed'
                 return False
@@ -298,9 +355,10 @@ class IntentEngine:
         try:
             if hasattr(self.broker,'submit_checked'):
                 self.broker.submit_checked(request, can_submit)
-            else:
+            elif not snapshot:
                 if not can_submit(): raise BrokerSuperseded('Instruction changed')
                 self.broker.submit(request)
+            else: raise BrokerNotSubmitted('Checked policy submission unavailable')
         except BrokerSuperseded:
             self._trace(tid,'broker_submit_superseded',e['event_id'],client_order_id=cid,reason=refusal['reason'])
             with self._db() as db: db.execute("UPDATE intent_orders SET status='skipped' WHERE cid=?",(cid,))

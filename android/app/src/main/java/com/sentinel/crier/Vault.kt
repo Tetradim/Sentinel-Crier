@@ -9,7 +9,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import java.security.KeyStore
 import org.json.JSONObject
-class Vault(context: Context, private val namespace:String="vault") {
+class Vault(private val context: Context, private val namespace:String="vault") {
  private val prefs = context.getSharedPreferences(namespace, Context.MODE_PRIVATE)
  private fun alias()=if(namespace=="vault") "crier" else "crier-$namespace"
  private fun key(): SecretKey {
@@ -30,7 +30,7 @@ class Vault(context: Context, private val namespace:String="vault") {
  @Synchronized fun writeDocument(value:JSONObject)=writeRoot(value)
  private fun root()=Settings.migrate(readDocument())
  @Synchronized fun read():JSONObject = Settings.active(root())
- @Synchronized fun save(value:JSONObject,newProfile:Boolean=false) { val r=root(); Settings.save(r,value,newProfile); writeRoot(r) }
+ @Synchronized fun save(value:JSONObject,newProfile:Boolean=false) { val r=root(); val previous=Settings.active(r); LivePolicy.selected(value); if(LivePolicy.selection(previous)!=LivePolicy.selection(value)) { require(!SyncService.active) { "Stop workers before changing follower policy" }; check(context.getSharedPreferences("controls",Context.MODE_PRIVATE).edit().putBoolean("paused",true).putBoolean("enabled",false).commit()) }; Settings.save(r,value,newProfile); writeRoot(r) }
  @Synchronized fun profiles():List<JSONObject> { val p=root().getJSONArray("profiles"); return (0 until p.length()).map { p.getJSONObject(it) } }
  @Synchronized fun forgetOAuthCredentials() { val r=root(); val profiles=r.getJSONArray("profiles"); for(i in 0 until profiles.length()) OAuthInstall.forget(profiles.getJSONObject(i).getJSONObject("config")); writeRoot(r) }
  @Synchronized fun select(id:String) { val r=root(); require(profiles().any { it.getString("id")==id }); r.put("active",id); writeRoot(r) }

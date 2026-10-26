@@ -14,8 +14,8 @@ The approved customer-ease phases E–I have automated source verification. This
 
 These items have not been silently marked passed, and no new mandatory paper-completion gate has been introduced.
 
-## Designed features requiring further source implementation
+## Live follower policies under verification
 
-H.5 produced a [tested design and non-executing reference](superpowers/specs/2026-10-25-execution-policy-design.md). Live fixed/ratio/budget sizing, separate local notional enforcement, proportional/full-tracked exit selection and timed entry cancellation are not implemented execution features. Activating them requires immutable local trade plans, migration, verified contract/currency data, partial-fill cost/reservation accounting, complete cumulative source-exit history and native conformance. Automatic exit repricing is not an implemented fallback.
+Phase J implements H.5's optional fixed/ratio/budget sizing, separate local quantity/notional enforcement, proportional source-intent/full-tracked exits and acknowledged entry timeouts on Python/Windows, Android and iOS. Durable receipt snapshots, frozen revision plans, verified metadata/costs and complete proportional history preserve legacy defaults and prevent settings edits from changing old trades. The [implementation plan](superpowers/plans/2026-10-25-live-execution-policy.md) records verification progress. Automatic exit repricing remains outside this scope.
 
 The [current settings guide](execution-policies.md) describes available behavior. The [customer acceptance guide](customer-acceptance.md) identifies installable testing routes, recovery, support, automated checks and the deferred real trials.

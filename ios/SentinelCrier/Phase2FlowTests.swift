@@ -140,7 +140,7 @@ final class Phase2RecoveryTests: XCTestCase {
         for status in [400, 401, 403, 429] {
             let event = IntentEvent.make(trade: UUID().uuidString.lowercased(), sequence: 1, action: "enter", environment: .paper, symbol: "SPY261218C00750000", asset: "option", quantity: 2, price: "0.20")
             var saved = IntentState(); saved.preferences.paused = false
-            var trade = IntentTrade(); try trade.accept(event); saved.trades[event.trade_id] = trade
+            var trade = IntentTrade(); try trade.accept(event); trade.policySnapshot = .legacy(event); saved.trades[event.trade_id] = trade
             let (controller, file) = try makeController(saved)
             defer { controller.disconnect(); try? FileManager.default.removeItem(at: file) }
             var posts = 0
@@ -162,7 +162,7 @@ final class Phase2RecoveryTests: XCTestCase {
     func testDuplicate422SubmissionAfterRestartOnlyLooksUpNeverReposts() async throws {
         let event = IntentEvent.make(trade: UUID().uuidString.lowercased(), sequence: 1, action: "enter", environment: .paper, symbol: "AAPL", asset: "stock", quantity: 2, price: "10")
         var saved = IntentState(); saved.preferences.paused = false
-        var trade = IntentTrade(); try trade.accept(event); saved.trades[event.trade_id] = trade
+        var trade = IntentTrade(); try trade.accept(event); trade.policySnapshot = .legacy(event); saved.trades[event.trade_id] = trade
         let (controller, file) = try makeController(saved)
         defer { controller.disconnect(); try? FileManager.default.removeItem(at: file) }
         var posts = 0; var lookups = 0
@@ -187,7 +187,7 @@ final class Phase2RecoveryTests: XCTestCase {
         let symbol = "SPY261218C00750000"
         let event = IntentEvent.make(trade: UUID().uuidString.lowercased(), sequence: 2, action: "exit", environment: .paper, symbol: symbol, asset: "option", quantity: 2, price: "0.20")
         var saved = IntentState(); saved.preferences.paused = false
-        var trade = IntentTrade(); try trade.accept(event)
+        var trade = IntentTrade(); try trade.accept(event); trade.policySnapshot = .legacy(event)
         trade.mutations = [IntentMutation(clientID: "entry", eventID: "original", sell: false, quantity: 2,
             order: AlpacaOrder(id: "entry-broker", client_order_id: "entry", symbol: symbol, status: "canceled", qty: "2", limit_price: "0.20", filled_qty: "1.0", filled_avg_price: "0.20", side: "buy"))]
         saved.trades[event.trade_id] = trade

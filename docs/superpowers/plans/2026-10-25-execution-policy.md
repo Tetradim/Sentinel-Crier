@@ -1,5 +1,7 @@
 # H.5 execution-policy design implementation plan
 
+Historical design milestone; subsequent runtime implementation is tracked in [Phase J](2026-10-25-live-execution-policy.md).
+
 Execute the approved design scope directly on main. Preserve saved execution behavior and all broker reconciliation gates.
 
 - [x] Audit existing source/follower quantity, price, age, exit and contract-size semantics; record active versus proposed behavior and migration requirements.

@@ -551,6 +551,58 @@ class DesktopApp:
                   'Pausing new entries leaves cancel and exit instructions active; existing broker orders remain.',
                   wraplength=700).pack(anchor='w', pady=6)
         ttk.Button(frame, text='Save pricing settings', command=self.save_settings).pack(anchor='w', pady=6)
+        self.policy_button=ttk.Button(frame,text='Follower sizing, exits & timeout…',command=self.edit_execution_policy,state='disabled')
+        self.policy_button.pack(anchor='w',pady=6)
+        ttk.Label(frame,text='Optional follower policies apply to new trades only. Saving a policy pauses new entries.\n'
+                  'Existing trades retain their recorded policy. Host order quantities are never scaled.',wraplength=700).pack(anchor='w')
+
+    def edit_execution_policy(self):
+        state=self.latest
+        if not state.get('connected') or (state.get('pair') or {}).get('role')!='follower':
+            self.notice.set('Connect as a receiver to configure a follower policy.'); return
+        selected=(state.get('execution') or {}).get('settings',{}).get('execution_policy')
+        current=selected or {}
+        dialog=tk.Toplevel(self.root); dialog.title('Follower execution policy')
+        dialog.transient(self.root)
+        ttk.Label(dialog,text='New trades only • saving leaves entries paused',font=('Segoe UI',11,'bold')).pack(anchor='w',padx=12,pady=8)
+        form=ttk.Frame(dialog,padding=12); form.pack(fill='both',expand=True)
+        mode=tk.StringVar(value=current.get('mode','source') if selected is not None else 'legacy')
+        exits=tk.StringVar(value=current.get('exit_mode','requested'))
+        def choice(label,variable,values):
+            row=ttk.Frame(form); row.pack(fill='x',pady=3)
+            ttk.Label(row,text=label,width=29).pack(side='left')
+            ttk.Combobox(row,textvariable=variable,values=values,state='readonly',width=25).pack(side='left')
+        choice('Entry sizing',mode,('legacy','source','fixed','ratio','budget'))
+        fixed=self._entry(form,'Fixed whole units',str(current.get('fixed_quantity') or 1))
+        ratio=self._entry(form,'Source ratio (basis points)',str(current.get('ratio_bps') or 10000))
+        budget=self._entry(form,'Entry budget USD',current.get('budget') or '')
+        source=self._entry(form,'Policy source quantity cap',str(current.get('max_source_quantity',1000)))
+        local=self._entry(form,'Local target quantity cap',str(current.get('max_local_quantity',1000)))
+        notional=self._entry(form,'Entry notional cap USD (optional)',current.get('max_entry_notional') or '')
+        choice('Exit sizing',exits,('requested','proportional','close_tracked'))
+        timeout=self._entry(form,'Entry timeout seconds (optional)',str(current.get('entry_timeout_seconds') or ''))
+        ttk.Label(form,text='Ratio: 10000 = 100%, 5000 = 50%. Budget/cap exclude fees and require limit pricing.\n'
+                  'Proportional source intents requires complete history; it does not match host fills.\n'
+                  'Close tracked sells all locally tracked holdings when an exit arrives.\n'
+                  'Timed buys cancel on restart/reconnect after reconciliation; racing fills remain holdings.\n'
+                  'Suspension or loss of network can delay cancellation.',wraplength=560).pack(anchor='w',pady=8)
+        error=tk.StringVar(); ttk.Label(form,textvariable=error,wraplength=560).pack(anchor='w')
+        def save():
+            try:
+                policy=None
+                if mode.get()!='legacy':
+                    from dataclasses import asdict
+                    from .execution_policy import ExecutionPolicy
+                    value=dict(mode=mode.get(),exit_mode=exits.get(),max_source_quantity=int(source.get()),max_local_quantity=int(local.get()),
+                               max_entry_notional=notional.get().strip() or None,
+                               entry_timeout_seconds=int(timeout.get()) if timeout.get().strip() else None)
+                    if mode.get()=='fixed': value['fixed_quantity']=int(fixed.get())
+                    elif mode.get()=='ratio': value['ratio_bps']=int(ratio.get())
+                    elif mode.get()=='budget': value['budget']=budget.get().strip()
+                    policy=asdict(ExecutionPolicy.parse(value))
+                self.submit('settings',{'enabled':False,'execution_policy':policy},callback=lambda _:dialog.destroy())
+            except ValueError as exc: error.set(str(exc))
+        ttk.Button(form,text='Save policy and pause new entries',command=save).pack(anchor='w',pady=6)
 
     def copy_invitation(self):
         if self.share.get():
@@ -797,6 +849,7 @@ class DesktopApp:
             self.alerts_result.set('Account not verified. Connect to check read access.')
             self.summary.set('Disconnected • ' + ('Saved connection available' if state['saved'] or state.get('saved_alerts') else 'Set up a connection to begin'))
         host = self.connected and not self.connection_jobs and pair.get('role') == 'host'
+        self.policy_button.configure(state='normal' if self.connected and not self.connection_jobs and pair.get('role')=='follower' else 'disabled')
         for button in self.execution_buttons:
             button.configure(state='normal' if self.connected and not alerts_mode and not self.connection_jobs else 'disabled')
         for button in self.host_buttons:
@@ -808,6 +861,8 @@ class DesktopApp:
             e = row['event']; ids.add(row['id'])
             values = (e['symbol'],e['action'],e['quantity'],e['limit_price'],e['sequence'],
                       'Skipped' if row['skipped'] else 'Invalidated' if row['invalid'] else 'Tracked')
+            plan=execution.get('plans',{}).get(e['event_id'])
+            if plan: values=values[:-1]+(values[-1]+f" • local target {plan['target']}",)
             if self.trades.exists(row['id']): self.trades.item(row['id'], values=values)
             else: self.trades.insert('', 'end', iid=row['id'], values=values)
         for iid in self.trades.get_children():

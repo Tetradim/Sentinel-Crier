@@ -63,6 +63,7 @@ struct AlpacaAccount: Codable {
     let id: String; let status: String; let buying_power: String; let equity: String
     let trading_blocked: Bool; let account_blocked: Bool
     let options_trading_level: Int?
+    var currency: String? = nil
 }
 struct AlpacaPosition: Codable, Identifiable {
     var id: String { symbol }
@@ -194,7 +195,28 @@ final class AlpacaREST {
         guard ticket.environment == environment else { throw AlpacaError.invalid("Environment changed. Review again.") }
         return try JSONDecoder().decode(AlpacaOrder.self, from: await request("v2/orders", method: "POST", body: ticket.body(), permit: permit))
     }
-    func submitIntent(symbol: String, quantity: Int, price: String?, sell: Bool, option: Bool, clientID: String, canSubmit: (@MainActor () -> Bool)? = nil) async throws -> AlpacaOrder {
+    func policyBinding(symbol: String, option: Bool, accountID: String) async throws -> IntentPolicyBinding {
+        let verified = try await account()
+        guard verified.id == accountID, verified.currency == "USD", verified.status == "ACTIVE", !verified.trading_blocked, !verified.account_blocked else { throw AlpacaError.invalid("Advanced follower policies require a verified active USD account.") }
+        struct Instrument: Decodable {
+            var id: String; var symbol: String; var status: String; var tradable: Bool
+            var assetClass: String?; var size: String?; var currency: String?
+            enum CodingKeys: String, CodingKey { case id, symbol, status, tradable, size, currency; case assetClass = "class" }
+        }
+        let path = option ? "v2/options/contracts/" : "v2/assets/"
+        let instrument = try JSONDecoder().decode(Instrument.self, from: await request(path + symbol))
+        guard !instrument.id.isEmpty, instrument.symbol == symbol, instrument.status == "active", instrument.tradable,
+              instrument.currency == nil || instrument.currency == "USD",
+              option ? (instrument.size == "100" && (instrument.assetClass == nil || instrument.assetClass == "us_option")) : instrument.assetClass == "us_equity" else { throw AlpacaError.invalid("USD instrument identity or standard multiplier could not be verified.") }
+        return IntentPolicyBinding(accountID: accountID, environment: environment, symbol: symbol, asset: option ? "option" : "stock", instrumentID: instrument.id, multiplier: option ? 100 : 1, currency: "USD")
+    }
+    func submitIntent(symbol: String, quantity: Int, price: String?, sell: Bool, option: Bool, clientID: String, policyBinding binding: IntentPolicyBinding? = nil, canSubmit: (@MainActor () -> Bool)? = nil) async throws -> AlpacaOrder {
+        if let binding {
+            do {
+                let fresh = try await policyBinding(symbol: symbol, option: option, accountID: binding.accountID)
+                guard fresh == binding, binding.environment == environment, binding.symbol == symbol, binding.asset == (option ? "option" : "stock") else { throw IntentDispatchRefused() }
+            } catch { throw IntentDispatchRefused() }
+        }
         var body: [String: Any] = ["symbol": symbol, "qty": String(quantity), "side": sell ? "sell" : "buy", "type": price == nil ? "market" : "limit", "time_in_force": "day", "client_order_id": clientID]
         if let price { body["limit_price"] = price }
         if option || sell { body["position_intent"] = sell ? "sell_to_close" : "buy_to_open" }

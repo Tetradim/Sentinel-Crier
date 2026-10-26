@@ -68,7 +68,14 @@ class SyncService: Service() {
   val diagnostics=Diagnostics(journal,config)
   worker { diagnostics.tick(); Thread.sleep(250) }
   val rawBroker=Broker(config)
+  fun dispatchAllowed(event:org.json.JSONObject,sell:Boolean):Boolean = running && runCatching {
+   val saved=Vault(this).read(); require(Settings.sameIdentity(config,saved)); require(listOf("mode","bps","amount").all { config.optString(it)==saved.optString(it) }); if(!sell) require(event.getInt("quantity")<=saved.optInt("maxQuantity",1000))
+   if(config.optString("authMode")=="oauth") { val session=EncryptedCustomerSessions(this).read(); require(OAuthProvenance.matches(saved,session.optString("owner"),customerService) && saved.optString("bearer")==config.optString("bearer")) }; true
+  }.getOrDefault(false)
   val observedBroker=object:BrokerPort by rawBroker {
+   override fun submit(event:org.json.JSONObject,client:String,quantity:Int,sell:Boolean,canSubmit:()->Boolean)=rawBroker.submit(event,client,quantity,sell) { dispatchAllowed(event,sell) && canSubmit() }
+   override fun submitPlanned(event:org.json.JSONObject,client:String,quantity:Int,sell:Boolean,plan:org.json.JSONObject,canSubmit:()->Boolean)=rawBroker.submitPlanned(event,client,quantity,sell,plan) { dispatchAllowed(event,sell) && canSubmit() }
+
    override fun account():String {
     try { val id=rawBroker.account(); require(id==config.getString("account")) { "Account changed" }; note("broker","healthy","verified"); return id }
     catch(error:Exception) { note("broker","blocked",if(error is HttpError && error.status in setOf(401,403)) "authentication_failed" else "reconciliation_required"); throw error }
@@ -83,7 +90,7 @@ class SyncService: Service() {
     for(e in journal.events(false)) if(!engine.reconcile(e)) needsReconciliation=true
     reconciled=true; journal.setMeta("service","Running Â· resume reconciliation completed")
    }
-   for(e in journal.events(false)) { try { engine.step(e); if(!engine.reconciliationHealthy) needsReconciliation=true } catch(error:Exception) { needsReconciliation=true; journal.diagnostic(e.getString("event_id"),"reconciliation_error",if(error is HttpError) "HTTP ${error.status}" else "Broker reconciliation needs attention"); journal.setMeta("status","Reconciliation needed: ${error.message}") } }
+   for(e in journal.events(false)) { try { engine.step(e); if(!engine.reconciliationHealthy) needsReconciliation=true } catch(error:Exception) { engine.reconnect(); needsReconciliation=true; journal.diagnostic(e.getString("event_id"),"reconciliation_error",if(error is HttpError) "HTTP ${error.status}" else "Broker reconciliation needs attention"); journal.setMeta("status","Reconciliation needed: ${error.message}") } }
    note("execution",if(needsReconciliation) "blocked" else "healthy",if(needsReconciliation) "reconciliation_required" else "checked")
    Thread.sleep(300)
   }

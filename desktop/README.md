@@ -167,4 +167,4 @@ never resolves an order or grants trading/publishing permission. If health stora
 unavailable, the panel reports that separately; existing trading journals are retained.
 
 Native mobile health and H.3 dispatch safeguards are also implemented. Optional Windows
-tray/startup controls are described above; deliberate execution-policy design remains H.5.
+tray/startup controls are described above. Optional follower sizing, exit and timeout controls are described in the [execution settings guide](../docs/execution-policies.md); they apply to new trades and save with entries paused.

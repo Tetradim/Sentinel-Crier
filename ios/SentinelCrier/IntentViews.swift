@@ -86,6 +86,11 @@ struct IntentConnectionForm: View {
 struct IntentSettingsView: View {
     @ObservedObject var controller: IntentController
     @State private var preferences = IntentPreferences()
+    @State private var selectedPolicy = false
+    @State private var policy = IntentExecutionPolicy()
+    @State private var fixed = 1; @State private var ratio = 5000
+    @State private var budget = "100"; @State private var notional = ""
+    @State private var timed = false; @State private var timeout = 60
     @State private var message = ""
     var body: some View {
         VStack(alignment: .leading) {
@@ -99,9 +104,43 @@ struct IntentSettingsView: View {
             TextField("Maximum absolute slippage", text: $preferences.maxSlippageAmount).keyboardType(.decimalPad)
             Stepper("Entry submit age: \(preferences.maxAgeSeconds)s", value: $preferences.maxAgeSeconds, in: 1...30)
             Stepper("Source quantity cap: \(preferences.maxQuantity)", value: $preferences.maxQuantity, in: 1...1000)
-            Text("The cap rejects larger source instructions; it does not set each order size. Following uses source units.").font(.footnote)
+            Toggle("Select an advanced follower policy", isOn: $selectedPolicy)
+            if selectedPolicy {
+                Picker("Entry sizing", selection: $policy.mode) {
+                    Text("Source quantity").tag("source"); Text("Fixed quantity").tag("fixed")
+                    Text("Source ratio").tag("ratio"); Text("USD premium budget").tag("budget")
+                }
+                if policy.mode == "fixed" { Stepper("Fixed units: \(fixed)", value: $fixed, in: 1...1000) }
+                if policy.mode == "ratio" { Stepper("Ratio: \(ratio) bps", value: $ratio, in: 1...10000) }
+                if policy.mode == "budget" { TextField("USD entry budget", text: $budget).keyboardType(.decimalPad) }
+                Stepper("Pinned source cap: \(policy.max_source_quantity)", value: $policy.max_source_quantity, in: 1...1000)
+                Stepper("Local target cap: \(policy.max_local_quantity)", value: $policy.max_local_quantity, in: 1...1000)
+                TextField("Optional maximum entry premium (USD)", text: $notional).keyboardType(.decimalPad)
+                Picker("Exit sizing", selection: $policy.exit_mode) {
+                    Text("Requested source units").tag("requested")
+                    Text("Proportional source intent").tag("proportional")
+                    Text("Close tracked local units").tag("close_tracked")
+                }
+                Text("Proportional exits use the sum of distinct source exit instructions against the last source entry target. They do not establish source fills and can differ when brokers fill or reject differently. Close tracked explicitly closes all tracked local units.").font(.caption)
+                Toggle("Cancel timed entry remainder", isOn: $timed)
+                if timed { Stepper("Entry timer: \(timeout)s", value: $timeout, in: 1...86400) }
+                Text("Timed buys cancel on restart/reconnect after reconciliation; racing fills remain holdings. Suspension or network loss can delay cancellation. Policies require a verified USD account and standard US instruments.").font(.caption)
+            }
+            Text("The source cap rejects larger instructions. Selected policies affect new follower trade IDs only; existing trades keep their saved policy. Host quantities are unchanged. Policy edits must be saved with entries paused, then resumed separately.").font(.footnote)
             Text("Entry age is checked before submission. Day orders may remain working afterward. Pausing new entries leaves cancel and exit instructions active.").font(.footnote)
-            Button("Apply follower settings") { do { try controller.settings(preferences); message = "Saved." } catch { message = error.localizedDescription } }
+            Button("Apply follower settings") {
+                do {
+                    var next = preferences
+                    var chosen = policy
+                    chosen.fixed_quantity = chosen.mode == "fixed" ? fixed : nil
+                    chosen.ratio_bps = chosen.mode == "ratio" ? ratio : nil
+                    chosen.budget = chosen.mode == "budget" ? budget : nil
+                    chosen.max_entry_notional = notional.isEmpty ? nil : notional
+                    chosen.entry_timeout_seconds = timed ? timeout : nil
+                    next.execution_policy = selectedPolicy ? chosen : nil
+                    try controller.settings(next); preferences = next; message = "Saved."
+                } catch { message = error.localizedDescription }
+            }
             Text(controller.message).font(.footnote)
             Text("Unresolved tracked trades: \(controller.state.unresolved.count) • queued relay events: \(controller.state.outgoing.count)").font(.caption)
             ForEach(controller.state.unresolved, id: \.self) { id in Text(id).font(.caption).textSelection(.enabled) }
@@ -113,7 +152,14 @@ struct IntentSettingsView: View {
                 }
             }
             Text(message).font(.footnote)
-        }.onAppear { preferences = controller.state.preferences }
+        }.onAppear {
+            preferences = controller.state.preferences
+            selectedPolicy = preferences.execution_policy != nil
+            policy = preferences.execution_policy ?? IntentExecutionPolicy()
+            fixed = policy.fixed_quantity ?? 1; ratio = policy.ratio_bps ?? 5000
+            budget = policy.budget ?? "100"; notional = policy.max_entry_notional ?? ""
+            timed = policy.entry_timeout_seconds != nil; timeout = policy.entry_timeout_seconds ?? 60
+        }
     }
 }
 struct IntentTradesView: View {
@@ -142,6 +188,11 @@ struct IntentTradeRow: View {
         VStack(alignment: .leading) {
             Text("\(event.symbol) • \(event.action) • owned \(owned)")
             Text(tradeID).font(.caption).textSelection(.enabled)
+            if let trade = controller.state.trades[tradeID], let plan = trade.entryPlans?[event.event_id] {
+                Text("Saved local target: \(plan.target) • cumulative bought: \(trade.bought) • limit: \(plan.price ?? "market") USD").font(.caption)
+            }
+            if let refusal = controller.state.trades[tradeID]?.policyRefusals?[event.event_id] { Text(refusal).font(.caption) }
+            if controller.state.trades[tradeID]?.entryClosed == true { Text("Entry phase closed by timer; tracked fills retained.").font(.caption) }
             NavigationLink("Execution diagnostics") { IntentDiagnosticsView(controller: controller, tradeID: tradeID) }
             if controller.hosting {
                 Stepper("Target / exit quantity: \(quantity)", value: $quantity, in: 1...1000)
