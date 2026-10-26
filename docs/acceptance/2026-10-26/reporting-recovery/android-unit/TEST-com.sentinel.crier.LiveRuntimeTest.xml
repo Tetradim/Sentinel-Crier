@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.sentinel.crier.LiveRuntimeTest" tests="23" skipped="0" failures="0" errors="0" timestamp="2026-10-26T19:52:07" hostname="runnervmr9t6g" time="0.081">
+  <properties/>
+  <testcase name="mutatedFrozenTargetIsRejectedBeforeAnyReservation" classname="com.sentinel.crier.LiveRuntimeTest" time="0.012"/>
+  <testcase name="missingAndContradictoryPolicyRecordsAreNotLegacyDefaults" classname="com.sentinel.crier.LiveRuntimeTest" time="0.002"/>
+  <testcase name="freshTerminalMissingAverageBlocksBudgetButPreservesQuantityProvenExit" classname="com.sentinel.crier.LiveRuntimeTest" time="0.004"/>
+  <testcase name="finalPauseRevisionAccountAndMetadataChangesRefuseKnownSubmission" classname="com.sentinel.crier.LiveRuntimeTest" time="0.007"/>
+  <testcase name="terminalRefreshDoesNotBypassAdvancedMetadataCheck" classname="com.sentinel.crier.LiveRuntimeTest" time="0.001"/>
+  <testcase name="freezeBeforeUnknownSubmissionSurvivesRestartAndSettingsChanges" classname="com.sentinel.crier.LiveRuntimeTest" time="0.002"/>
+  <testcase name="immediateFilledPostPersistsCostForBudgetReplaceWithoutStartingTimer" classname="com.sentinel.crier.LiveRuntimeTest" time="0.004"/>
+  <testcase name="advancedTerminalUnavailableBlocksExitAndReplaceUntilFreshRecovery" classname="com.sentinel.crier.LiveRuntimeTest" time="0.003"/>
+  <testcase name="acknowledgedMonotonicTimerCancelsPartialBuyAndCannotBeReopened" classname="com.sentinel.crier.LiveRuntimeTest" time="0.002"/>
+  <testcase name="receiptPinsPolicyWhileLegacyAndHostTradesStayUnscaled" classname="com.sentinel.crier.LiveRuntimeTest" time="0.005"/>
+  <testcase name="uncertainTimerCancellationRetainsClosedEntryAndRacingFillOwnership" classname="com.sentinel.crier.LiveRuntimeTest" time="0.003"/>
+  <testcase name="missingPriorBuyPlanBlocksReplacementButNotQuantityProvenExit" classname="com.sentinel.crier.LiveRuntimeTest" time="0.002"/>
+  <testcase name="fixedReplaceSubtractsPurchasesRatherThanNetHoldings" classname="com.sentinel.crier.LiveRuntimeTest" time="0.002"/>
+  <testcase name="restartCancelsOnlyPreviouslyAcknowledgedWorkingBuyAfterFreshLookup" classname="com.sentinel.crier.LiveRuntimeTest" time="0.004"/>
+  <testcase name="proportionalExitRoundedToZeroCompletesInsteadOfPollingSettledHistory" classname="com.sentinel.crier.LiveRuntimeTest" time="0.001"/>
+  <testcase name="historyGapAllowsFreshWorkingBuyCancellationBeforeBlockingSale" classname="com.sentinel.crier.LiveRuntimeTest" time="0.002"/>
+  <testcase name="missingAcknowledgementEvidenceCannotRestartAnAcknowledgedTimer" classname="com.sentinel.crier.LiveRuntimeTest" time="0.002"/>
+  <testcase name="sourceScopeAndUnsupportedCheckedAdapterNeverDispatch" classname="com.sentinel.crier.LiveRuntimeTest" time="0.002"/>
+  <testcase name="sharedEntryFixturesMatchTargetArithmetic" classname="com.sentinel.crier.LiveRuntimeTest" time="0.005"/>
+  <testcase name="freshTerminalEvidenceRepairsStaleOrNegativeCachedCost" classname="com.sentinel.crier.LiveRuntimeTest" time="0.007"/>
+  <testcase name="replaceBudgetUsesAllPurchaseCostsAndSalesNeverReplenishIt" classname="com.sentinel.crier.LiveRuntimeTest" time="0.003"/>
+  <testcase name="freshTerminalBuyQuantityAndAverageControlBudgetReplacement" classname="com.sentinel.crier.LiveRuntimeTest" time="0.002"/>
+  <testcase name="proportionalUsesCompleteCumulativeIntentAndFullCloseBoundsTrackedUnits" classname="com.sentinel.crier.LiveRuntimeTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.sentinel.crier.PracticeGuideTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-26T19:52:07" hostname="runnervmr9t6g" time="0.005">
+  <properties/>
+  <testcase name="badVersionAndDuplicatePurposeAreRejected" classname="com.sentinel.crier.PracticeGuideTest" time="0.002"/>
+  <testcase name="permissionAndActionFieldsAreRejected" classname="com.sentinel.crier.PracticeGuideTest" time="0.001"/>
+  <testcase name="bundledGuideHasThreeReadonlyPurposes" classname="com.sentinel.crier.PracticeGuideTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

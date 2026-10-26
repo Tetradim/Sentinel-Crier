@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.sentinel.crier.EngineTest" tests="25" skipped="0" failures="0" errors="0" timestamp="2026-10-26T19:52:07" hostname="runnervmr9t6g" time="0.054">
+  <properties/>
+  <testcase name="preflightInvalidationPreventsPost" classname="com.sentinel.crier.EngineTest" time="0.013"/>
+  <testcase name="definitiveSubmissionAndAuthenticationRejectionsDoNotRepostAfterRestart" classname="com.sentinel.crier.EngineTest" time="0.006"/>
+  <testcase name="replacementDoesNotCancelItsOwnNewOrder" classname="com.sentinel.crier.EngineTest" time="0.001"/>
+  <testcase name="clockChangedInsidePreflightIsRetainedAsKnownNotSubmitted" classname="com.sentinel.crier.EngineTest" time="0.003"/>
+  <testcase name="replacementOnlyBuysOutstandingTarget" classname="com.sentinel.crier.EngineTest" time="0.002"/>
+  <testcase name="partialExitContinuesOnlyAfterFill" classname="com.sentinel.crier.EngineTest" time="0.001"/>
+  <testcase name="exitWaitsForTerminalThenCapsOwnedShares" classname="com.sentinel.crier.EngineTest" time="0.0"/>
+  <testcase name="resumeUnknownOrderAndDecliningFillEvidenceCannotAuthorizeSubmission" classname="com.sentinel.crier.EngineTest" time="0.001"/>
+  <testcase name="optionDecimalPremiumPartialFillAndUnrelatedHoldingsStayBoundedAfterResume" classname="com.sentinel.crier.EngineTest" time="0.0"/>
+  <testcase name="clientIdMatchesAcrossInstallations" classname="com.sentinel.crier.EngineTest" time="0.002"/>
+  <testcase name="exactExpiryNeverSubmits" classname="com.sentinel.crier.EngineTest" time="0.001"/>
+  <testcase name="expiryReachedDuringPreflightNeverSubmits" classname="com.sentinel.crier.EngineTest" time="0.003"/>
+  <testcase name="backwardSlewCannotOpenAFutureEntryCreationGate" classname="com.sentinel.crier.EngineTest" time="0.001"/>
+  <testcase name="changedClockDefersEntryAndDoesNotBlockCancellation" classname="com.sentinel.crier.EngineTest" time="0.003"/>
+  <testcase name="duplicateClient422StaysUnknown" classname="com.sentinel.crier.EngineTest" time="0.001"/>
+  <testcase name="unknown404NeverResubmits" classname="com.sentinel.crier.EngineTest" time="0.0"/>
+  <testcase name="futureFractionalEntryRemainsPendingThenExecutes" classname="com.sentinel.crier.EngineTest" time="0.002"/>
+  <testcase name="cancelFailureRetriesAfterReconciliationAndRestartCooldown" classname="com.sentinel.crier.EngineTest" time="0.001"/>
+  <testcase name="pendingCancelAndTerminalFillSuppressDeleteAndExitCapsHoldings" classname="com.sentinel.crier.EngineTest" time="0.003"/>
+  <testcase name="tombstonePreventsLateEntry" classname="com.sentinel.crier.EngineTest" time="0.001"/>
+  <testcase name="tightenedQuantityCapDuringPreflightPreventsPost" classname="com.sentinel.crier.EngineTest" time="0.001"/>
+  <testcase name="futureWholeSecondDoesNotCompleteAndFractionalAgeLimitIsExact" classname="com.sentinel.crier.EngineTest" time="0.001"/>
+  <testcase name="legacyCancelMarkerRetriesAndBrokerIdentityRemainsPinned" classname="com.sentinel.crier.EngineTest" time="0.0"/>
+  <testcase name="pricingChangedDuringPreflightNeverPostsTheOldOrder" classname="com.sentinel.crier.EngineTest" time="0.001"/>
+  <testcase name="crashBeforeDeleteUsesPersistedCooldownAndFreshSnapshot" classname="com.sentinel.crier.EngineTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

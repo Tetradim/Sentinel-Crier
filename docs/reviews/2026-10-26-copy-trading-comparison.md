@@ -2,6 +2,8 @@
 
 Date: October 26, 2026. Reviewed Crier `main` at `9626e4d`.
 
+Follow-up: R.1–R.3 were repaired at `a7b332b`; see [accepted reporting-recovery evidence](../acceptance/2026-10-26/reporting-recovery/source-evidence.json). The findings below preserve the original audit and reproductions. The later owner-requested [Sentinel inventory](../sentinel-feature-inventory.md) separately evaluates optional independent trading policies; none is activated by that inventory.
+
 Scope: research comparable products, inspect Crier's execution/reporting paths and selected native lifecycle/UI code, reproduce actionable issues, and recommend controls. This is a review, not implementation approval or an activation of [deferred D.1](../deferred/multi-host-cross-broker.md). Competitor behavior below comes from primary vendor documentation; their proprietary implementations were not audited or benchmarked. Forex/MT-platform capabilities do not establish US equity-options support.
 
 ## Findings first

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.sentinel.crier.PushDashboardTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-26T19:52:07" hostname="runnervmr9t6g" time="0.055">
+  <properties/>
+  <testcase name="metadataFailureRecoversAfterBackoffAndSuccessStaysComplete" classname="com.sentinel.crier.PushDashboardTest" time="0.001"/>
+  <testcase name="sharedDashboardFixtures" classname="com.sentinel.crier.PushDashboardTest" time="0.003"/>
+  <testcase name="pendingSignalSurvivesBusyConsumerAndCoalesces" classname="com.sentinel.crier.PushDashboardTest" time="0.001"/>
+  <testcase name="duplicateCursorUsesExistingDurableProtocol" classname="com.sentinel.crier.PushDashboardTest" time="0.0"/>
+  <testcase name="metadataScopeLossNeverCachesAndInflightLookupCannotRepeat" classname="com.sentinel.crier.PushDashboardTest" time="0.002"/>
+  <testcase name="unknownFramesIgnoredButStillBounded" classname="com.sentinel.crier.PushDashboardTest" time="0.043"/>
+  <testcase name="boundedDecimalAndRoundedAverage" classname="com.sentinel.crier.PushDashboardTest" time="0.001"/>
+  <testcase name="moneyNeverGuessesFeesOrPartialLots" classname="com.sentinel.crier.PushDashboardTest" time="0.001"/>
+  <testcase name="staleDashboardFetchCannotOverwriteNewerStreamSnapshot" classname="com.sentinel.crier.PushDashboardTest" time="0.001"/>
+  <testcase name="utf8AndMultipleFrames" classname="com.sentinel.crier.PushDashboardTest" time="0.001"/>
+  <testcase name="malformedKnownAndTruncatedFramesFail" classname="com.sentinel.crier.PushDashboardTest" time="0.001"/>
+  <testcase name="metadataRetriesDoubleToFiveMinuteCapAndRemainPerTrade" classname="com.sentinel.crier.PushDashboardTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

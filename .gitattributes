@@ -8,4 +8,7 @@ docs/acceptance/2026-10-26/terminal-reconciliation/*.json -text whitespace=cr-at
 docs/acceptance/2026-10-26/push-dashboard/*.json -text whitespace=cr-at-eol
 docs/acceptance/2026-10-26/push-dashboard/**/*.xml -text whitespace=cr-at-eol
 docs/acceptance/2026-10-26/push-dashboard/*.xml -text whitespace=cr-at-eol
+docs/acceptance/2026-10-26/reporting-recovery/*.json -text whitespace=cr-at-eol
+docs/acceptance/2026-10-26/reporting-recovery/**/*.xml -text whitespace=cr-at-eol
+docs/acceptance/2026-10-26/reporting-recovery/*.xml -text whitespace=cr-at-eol
 desktop/third-party/pystray/* -text

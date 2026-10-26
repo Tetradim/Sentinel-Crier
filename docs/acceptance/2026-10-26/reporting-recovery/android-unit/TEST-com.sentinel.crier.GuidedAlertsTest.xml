@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.sentinel.crier.GuidedAlertsTest" tests="24" skipped="0" failures="0" errors="0" timestamp="2026-10-26T19:52:07" hostname="runnervmr9t6g" time="0.067">
+  <properties/>
+  <testcase name="oauthDestinationRequiresCurrentOwnerButManualBrokerRecoveryWorks" classname="com.sentinel.crier.GuidedAlertsTest" time="0.007"/>
+  <testcase name="baselineExcludesHistoricalFillWithoutAdvancingCursor" classname="com.sentinel.crier.GuidedAlertsTest" time="0.001"/>
+  <testcase name="accountEnvironmentScopesRemainSeparateIncludingInactiveDestinationUncertainty" classname="com.sentinel.crier.GuidedAlertsTest" time="0.006"/>
+  <testcase name="savedConfigAndRestartNeverImplyReadinessOrEnable" classname="com.sentinel.crier.GuidedAlertsTest" time="0.001"/>
+  <testcase name="readAdapterUsesOnlyAllowlistedAccountAndFillGetUrls" classname="com.sentinel.crier.GuidedAlertsTest" time="0.002"/>
+  <testcase name="brokerActivityFillUsesActualFractionalQuantityAndExecutionPriceOnce" classname="com.sentinel.crier.GuidedAlertsTest" time="0.009"/>
+  <testcase name="lostAcknowledgementRemainsUncertainAcrossRestartAndNeverAutomaticallyRetries" classname="com.sentinel.crier.GuidedAlertsTest" time="0.004"/>
+  <testcase name="stoppedDuringBaselineWriteCannotReenableAfterPause" classname="com.sentinel.crier.GuidedAlertsTest" time="0.001"/>
+  <testcase name="stoppedDuringVerificationWriteCannotRestoreSessionEvidence" classname="com.sentinel.crier.GuidedAlertsTest" time="0.002"/>
+  <testcase name="changingSetupDuringFillReadPreventsPublication" classname="com.sentinel.crier.GuidedAlertsTest" time="0.002"/>
+  <testcase name="reconnectRetainsBaselineAndDeduplicationForSameIdentity" classname="com.sentinel.crier.GuidedAlertsTest" time="0.004"/>
+  <testcase name="uncertainMessagesBlockDestinationChangeAndRetainHistoryAfterExplicitClose" classname="com.sentinel.crier.GuidedAlertsTest" time="0.002"/>
+  <testcase name="malformedPageHasNoPartialFillPublicationOrCursorAdvance" classname="com.sentinel.crier.GuidedAlertsTest" time="0.001"/>
+  <testcase name="executionWorkerRequiresAnExplicitActionAndRejectsSystemRestoration" classname="com.sentinel.crier.GuidedAlertsTest" time="0.004"/>
+  <testcase name="verificationDoesNotRequireTradingPermissionChannelOrRelay" classname="com.sentinel.crier.GuidedAlertsTest" time="0.0"/>
+  <testcase name="configurationChangeAndDisconnectInvalidateAllReadiness" classname="com.sentinel.crier.GuidedAlertsTest" time="0.002"/>
+  <testcase name="healthUsesObservedReadsAndAcknowledgementsWithoutRestoringPermission" classname="com.sentinel.crier.GuidedAlertsTest" time="0.003"/>
+  <testcase name="changingSetupDuringVerificationDiscardsStaleNetworkCompletion" classname="com.sentinel.crier.GuidedAlertsTest" time="0.001"/>
+  <testcase name="stopDuringDispatchClaimPreventsAnyNewHttpSend" classname="com.sentinel.crier.GuidedAlertsTest" time="0.002"/>
+  <testcase name="previewTestAndPermissionAreSeparateAndTestIsOptional" classname="com.sentinel.crier.GuidedAlertsTest" time="0.0"/>
+  <testcase name="healthNeverHidesAnUncertainMessageWhenThereIsNothingToRetry" classname="com.sentinel.crier.GuidedAlertsTest" time="0.002"/>
+  <testcase name="recreationReusesOneDocumentOwnerWhileLateAcknowledgementIsRecorded" classname="com.sentinel.crier.GuidedAlertsTest" time="0.003"/>
+  <testcase name="stopDuringTestEnqueuePreventsAnyHttpDispatch" classname="com.sentinel.crier.GuidedAlertsTest" time="0.001"/>
+  <testcase name="missingMessageIdDoesNotBecomeSuccessfulTestOrFillEvidence" classname="com.sentinel.crier.GuidedAlertsTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

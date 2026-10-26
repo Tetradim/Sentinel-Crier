@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.sentinel.crier.TerminalReconciliationTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-10-26T19:52:07" hostname="runnervmr9t6g" time="0.009">
+  <properties/>
+  <testcase name="onlyExplicitZeroFillLocalRefusalsSkipLookup" classname="com.sentinel.crier.TerminalReconciliationTest" time="0.002"/>
+  <testcase name="terminalRejectedOrCanceledExitIsRefreshedButNeverAutomaticallyRetried" classname="com.sentinel.crier.TerminalReconciliationTest" time="0.0"/>
+  <testcase name="terminalAccountChangeRefusesBeforeLookup" classname="com.sentinel.crier.TerminalReconciliationTest" time="0.001"/>
+  <testcase name="malformedTerminalBindingsAndRegressingEvidenceNeverAuthorizeExit" classname="com.sentinel.crier.TerminalReconciliationTest" time="0.001"/>
+  <testcase name="localRefusalMarkersNeverHideBrokerIdsOrFills" classname="com.sentinel.crier.TerminalReconciliationTest" time="0.0"/>
+  <testcase name="terminalSellUnavailableAndLaterFillRefreshPreventOverselling" classname="com.sentinel.crier.TerminalReconciliationTest" time="0.0"/>
+  <testcase name="failedWorkingLookupNeverCancelsItsCachedBrokerId" classname="com.sentinel.crier.TerminalReconciliationTest" time="0.0"/>
+  <testcase name="lifecycleFailuresAbortBeforeAnotherLookupOrCancellation" classname="com.sentinel.crier.TerminalReconciliationTest" time="0.001"/>
+  <testcase name="everyBrokerBackedTerminalStatusNeedsFreshEvidence" classname="com.sentinel.crier.TerminalReconciliationTest" time="0.0"/>
+  <testcase name="failedTerminalLookupDoesNotPreventCancelOfAnotherFreshWorkingBuy" classname="com.sentinel.crier.TerminalReconciliationTest" time="0.002"/>
+  <testcase name="terminalBuyUnavailableBlocksExitThenRecoverySubmitsOnce" classname="com.sentinel.crier.TerminalReconciliationTest" time="0.0"/>
+  <testcase name="interruptionDuringACompletedLookupStillAbortsBeforeAnotherRowOrCancel" classname="com.sentinel.crier.TerminalReconciliationTest" time="0.001"/>
+  <testcase name="terminalBuyUnavailableBlocksReplace" classname="com.sentinel.crier.TerminalReconciliationTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

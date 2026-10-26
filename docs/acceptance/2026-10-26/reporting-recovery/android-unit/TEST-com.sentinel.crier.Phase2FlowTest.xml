@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.sentinel.crier.Phase2FlowTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-10-26T19:52:07" hostname="runnervmr9t6g" time="0.023">
+  <properties/>
+  <testcase name="malformedAndConflictingEventsDoNotBlockFollowingRevisionOrRestart" classname="com.sentinel.crier.Phase2FlowTest" time="0.005"/>
+  <testcase name="settingsMigrationAndCredentialRotationKeepLegacyJournalAndIdentity" classname="com.sentinel.crier.Phase2FlowTest" time="0.0"/>
+  <testcase name="eventKeyOrderIsNotAConflict" classname="com.sentinel.crier.Phase2FlowTest" time="0.001"/>
+  <testcase name="commonWireFixtures" classname="com.sentinel.crier.Phase2FlowTest" time="0.001"/>
+  <testcase name="brokerFillNeverInventsAnExecutionPriceFromIntentLimit" classname="com.sentinel.crier.Phase2FlowTest" time="0.001"/>
+  <testcase name="missingReceiptAndCrashReservationNeverBlindlyRetry" classname="com.sentinel.crier.Phase2FlowTest" time="0.002"/>
+  <testcase name="releaseUpgradeReopensSettingsWithoutChangingJournalOwnership" classname="com.sentinel.crier.Phase2FlowTest" time="0.0"/>
+  <testcase name="definitiveDiscordRejectionsBlockAndRateLimitDefersChannel" classname="com.sentinel.crier.Phase2FlowTest" time="0.002"/>
+  <testcase name="supabaseGatewayPreservesInvitationBaseAndEndpointPath" classname="com.sentinel.crier.Phase2FlowTest" time="0.001"/>
+  <testcase name="invitationValidationAndEnvironmentSafety" classname="com.sentinel.crier.Phase2FlowTest" time="0.0"/>
+  <testcase name="deliveredMessageHasReceiptAndNeverResends" classname="com.sentinel.crier.Phase2FlowTest" time="0.0"/>
+  <testcase name="testMessageNeverDispatchesAnOlderRealAlert" classname="com.sentinel.crier.Phase2FlowTest" time="0.001"/>
+  <testcase name="accountAndChannelChangesNeverReuseOwnershipJournalAndCanBeRestored" classname="com.sentinel.crier.Phase2FlowTest" time="0.0"/>
+  <testcase name="unsupportedRollbackSchemaFailsWithoutMutatingSavedSettings" classname="com.sentinel.crier.Phase2FlowTest" time="0.0"/>
+  <testcase name="discordProvenanceAlwaysVisibleAndMentionsSuppressed" classname="com.sentinel.crier.Phase2FlowTest" time="0.005"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
