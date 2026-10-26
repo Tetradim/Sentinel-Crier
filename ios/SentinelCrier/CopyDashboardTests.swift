@@ -2,6 +2,38 @@ import XCTest
 @testable import SentinelCrier
 
 final class CopyDashboardTests: XCTestCase {
+    func testMetadataFailureBecomesReadyThenSuccessIsNotRetried() throws {
+        var recovery = CopyMetadataRecovery()
+        let first = try XCTUnwrap(recovery.begin(tradeID: "trade", now: 10))
+        XCTAssertNil(recovery.begin(tradeID: "trade", now: 100)) // Still in flight.
+        XCTAssertTrue(recovery.finish(tradeID: "trade", attempt: first, succeeded: false, now: 100))
+        XCTAssertNil(recovery.begin(tradeID: "trade", now: 104.999))
+        let retry = try XCTUnwrap(recovery.begin(tradeID: "trade", now: 105))
+        XCTAssertTrue(recovery.finish(tradeID: "trade", attempt: retry, succeeded: true, now: 106))
+        XCTAssertNil(recovery.begin(tradeID: "trade", now: 10_000))
+        XCTAssertNotNil(recovery.begin(tradeID: "other", now: 106))
+    }
+    func testMetadataBackoffDoublesAndStaysCapped() throws {
+        var recovery = CopyMetadataRecovery(); var now: TimeInterval = 0
+        for delay in [TimeInterval(5), 10, 20, 40, 80, 160, 300, 300, 300] {
+            let attempt = try XCTUnwrap(recovery.begin(tradeID: "trade", now: now))
+            XCTAssertTrue(recovery.finish(tradeID: "trade", attempt: attempt, succeeded: false, now: now))
+            XCTAssertNil(recovery.begin(tradeID: "trade", now: now + delay - 0.001))
+            now += delay
+        }
+        XCTAssertNotNil(recovery.begin(tradeID: "trade", now: now))
+    }
+    func testMetadataResetFencesLateCompletionAndClearsBackoff() throws {
+        var recovery = CopyMetadataRecovery()
+        let old = try XCTUnwrap(recovery.begin(tradeID: "trade", now: 0))
+        recovery.reset()
+        let current = try XCTUnwrap(recovery.begin(tradeID: "trade", now: 1))
+        XCTAssertFalse(recovery.finish(tradeID: "trade", attempt: old, succeeded: true, now: 2))
+        XCTAssertNil(recovery.begin(tradeID: "trade", now: 3))
+        XCTAssertTrue(recovery.finish(tradeID: "trade", attempt: current, succeeded: false, now: 3))
+        recovery.reset()
+        XCTAssertNotNil(recovery.begin(tradeID: "trade", now: 3))
+    }
     func testSharedDashboardArithmeticFixtures() throws {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "copy-dashboard", withExtension: "json"))
         let root = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])

@@ -93,14 +93,13 @@ class SyncService: Service() {
   val diagnostics=Diagnostics(journal,config)
   worker { diagnostics.tick(); Thread.sleep(250) }
   val rawBroker=Broker(config)
-  val metadataAttempted=mutableSetOf<String>()
+  val metadataRetry=MetadataRetry { android.os.SystemClock.elapsedRealtime() }
   worker {
    for(event in journal.history().take(50)) {
     if(!currentScope()) break
     val id=event.getString("trade_id")
-    if(metadataAttempted.add(id)) runCatching {
-     val binding=rawBroker.binding(event)
-     check(currentScope()); journal.setMeta("copyBinding:$id",binding.toString()); JournalWakes.telemetry.wake()
+    metadataRetry.resolve(id,::currentScope,{ rawBroker.binding(event) }) { binding ->
+     journal.setMeta("copyBinding:$id",binding.toString()); JournalWakes.telemetry.wake()
     }
    }
    Thread.sleep(15000)

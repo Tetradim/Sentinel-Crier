@@ -6,6 +6,36 @@ import org.json.JSONObject
 import java.io.ByteArrayInputStream
 
 class PushDashboardTest {
+ @Test fun metadataFailureRecoversAfterBackoffAndSuccessStaysComplete() {
+  var now=0L; var lookups=0; var cached=""; val retry=MetadataRetry { now }
+  fun attempt()=retry.resolve("trade",{true},{ lookups++; if(lookups==1) error("temporary"); "verified" },{ cached=it })
+  assertFalse(attempt()); assertEquals("",cached)
+  now=4999; assertFalse(attempt()); assertEquals(1,lookups)
+  now=5000; assertTrue(attempt()); assertEquals("verified",cached)
+  now=1000000; assertFalse(attempt()); assertEquals(2,lookups)
+ }
+ @Test fun metadataRetriesDoubleToFiveMinuteCapAndRemainPerTrade() {
+  var now=0L; var lookups=0; val retry=MetadataRetry { now }
+  fun attempt(id:String="one")=retry.resolve(id,{true},{ lookups++; error("offline") },{ _:String -> fail("must not cache failure") })
+  assertFalse(attempt()); assertEquals(1,lookups)
+  assertFalse(attempt("two")); assertEquals(2,lookups)
+  for(delay in listOf(5000L,10000L,20000L,40000L,80000L,160000L,300000L,300000L)) {
+   now+=delay-1; val prior=lookups; assertFalse(attempt()); assertEquals(prior,lookups)
+   now++; assertFalse(attempt()); assertEquals(prior+1,lookups)
+  }
+ }
+ @Test fun metadataScopeLossNeverCachesAndInflightLookupCannotRepeat() {
+  var now=0L; var active=false; var lookups=0; var caches=0; val retry=MetadataRetry { now }
+  fun attempt()=retry.resolve("trade",{active},{ lookups++; active=false; "verified" },{ caches++ })
+  assertFalse(attempt()); assertEquals(0,lookups)
+  active=true; assertFalse(attempt()); assertEquals(1,lookups); assertEquals(0,caches)
+  now=5000; active=true
+  assertTrue(retry.resolve("trade",{active},{
+   assertFalse(retry.resolve("trade",{true},{ fail("already in flight"); "duplicate" },{ caches++ }))
+   "verified"
+  },{ caches++ }))
+  assertEquals(1,caches)
+ }
  @Test fun staleDashboardFetchCannotOverwriteNewerStreamSnapshot() {
   val config=JSONObject("""{"url":"https://example.test","token":"private","role":"follower","environment":"paper","account":"one"}""")
   fun snapshot(at:String)=JSONObject("""{"version":1,"role":"follower","environment":"paper","generated_at":"$at","events":[],"members":[],"statuses":[],"diagnostics":[]}""")

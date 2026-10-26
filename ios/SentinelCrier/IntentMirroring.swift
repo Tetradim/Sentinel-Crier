@@ -462,6 +462,7 @@ struct IntentPairing: Codable {
     private var brokerObserved: [String: String] = [:]
     private var copyBindings: [String: IntentPolicyBinding] = [:]
     private var copyMetadataTasks: [String: Task<Void, Never>] = [:]
+    private var copyMetadataRecovery = CopyMetadataRecovery()
     private var copyFile: URL { file.appendingPathExtension("reports") }
     var onHealth: NativeHealthObserver?
     private let file: URL
@@ -552,7 +553,7 @@ struct IntentPairing: Codable {
         copyReportingEnabled = startWorkers
         copyGeneration = UUID(); copyDashboard = nil; copyTransport = "connecting"
         copyReporter?.cancel()
-        for task in copyMetadataTasks.values { task.cancel() }; copyMetadataTasks = [:]; copyBindings = [:]; brokerObserved = [:]
+        for task in copyMetadataTasks.values { task.cancel() }; copyMetadataTasks = [:]; copyMetadataRecovery.reset(); copyBindings = [:]; brokerObserved = [:]
         copyJournal = (try? JSONDecoder().decode(CopyTelemetryJournal.self, from: Data(contentsOf: copyFile))) ?? CopyTelemetryJournal()
         if copyJournal.pair != pair.fingerprint { copyJournal = CopyTelemetryJournal(pair: pair.fingerprint) }
         guard startWorkers else { return }
@@ -564,7 +565,7 @@ struct IntentPairing: Codable {
         diagnosticWorker = Task { while !Task.isCancelled { await syncDiagnostics(); try? await Task.sleep(nanoseconds: 5_000_000_000) } }
         message = "\(pair.role.capitalized) connected. Keep Crier open for delivery."
     }
-    func disconnect() { copyReportingEnabled = false; copyGeneration = UUID(); copyReporter?.cancel(); copyReporter = nil; for task in copyMetadataTasks.values { task.cancel() }; copyMetadataTasks = [:]; copyBindings = [:]; brokerObserved = [:]; copyDashboard = nil; copyTransport = "connecting"; processPending = false; message = "Disconnected; execution journals retained."; diagnosticSession = UUID(); diagnosticWorker?.cancel(); diagnosticWorker = nil; diagnosticClock = nil; receiver?.cancel(); worker?.cancel(); transmitter?.cancel(); receiver = nil; worker = nil; transmitter = nil; api?.invalidate(); api = nil; pair = nil }
+    func disconnect() { copyReportingEnabled = false; copyGeneration = UUID(); copyReporter?.cancel(); copyReporter = nil; for task in copyMetadataTasks.values { task.cancel() }; copyMetadataTasks = [:]; copyMetadataRecovery.reset(); copyBindings = [:]; brokerObserved = [:]; copyDashboard = nil; copyTransport = "connecting"; processPending = false; message = "Disconnected; execution journals retained."; diagnosticSession = UUID(); diagnosticWorker?.cancel(); diagnosticWorker = nil; diagnosticClock = nil; receiver?.cancel(); worker?.cancel(); transmitter?.cancel(); receiver = nil; worker = nil; transmitter = nil; api?.invalidate(); api = nil; pair = nil }
     func archiveResolvedChannel() throws {
         guard !processing, !publishing, api == nil else { throw AlpacaError.invalid("Disconnect before changing channel.") }
         guard state.unresolved.isEmpty, state.outgoing.isEmpty else { throw AlpacaError.invalid("Resolve tracked holdings, pending orders and relay outbox before changing channel. Reconnect to the original account to recover.") }
@@ -1183,10 +1184,17 @@ extension IntentController {
         do {
             for (id, trade) in state.trades {
                 guard let event = trade.desired else { continue }
-                if trade.policyBinding == nil, copyBindings[id] == nil, copyMetadataTasks[id] == nil {
+                if trade.policyBinding == nil, copyBindings[id] == nil, copyMetadataTasks[id] == nil,
+                   let attempt = copyMetadataRecovery.begin(tradeID: id, now: monotonic()) {
+                    let accountID = state.accountID
                     copyMetadataTasks[id] = Task {
-                        let binding = try? await api.policyBinding(symbol: event.symbol, option: event.asset == "option", accountID: state.accountID)
-                        guard generation == copyGeneration, !Task.isCancelled else { return }
+                        guard generation == copyGeneration, self.api === api, self.pair?.fingerprint == pair.fingerprint,
+                              state.accountID == accountID, copyReportingEnabled, !Task.isCancelled else { return }
+                        let binding = try? await api.policyBinding(symbol: event.symbol, option: event.asset == "option", accountID: accountID)
+                        guard generation == copyGeneration, self.api === api, self.pair?.fingerprint == pair.fingerprint,
+                              state.accountID == accountID, copyReportingEnabled, !Task.isCancelled else { return }
+                        copyMetadataTasks.removeValue(forKey: id)
+                        copyMetadataRecovery.finish(tradeID: id, attempt: attempt, succeeded: binding != nil, now: monotonic())
                         if let binding { copyBindings[id] = binding; await reportCopyStatus() }
                     }
                 }

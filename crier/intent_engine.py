@@ -42,6 +42,7 @@ class IntentEngine(PolicyJournal):
             CREATE TABLE IF NOT EXISTS intent_pin(id INTEGER PRIMARY KEY, environment TEXT, account TEXT);
             CREATE TABLE IF NOT EXISTS intent_cancel_requested(cid TEXT PRIMARY KEY);
             CREATE TABLE IF NOT EXISTS intent_settled(id TEXT PRIMARY KEY, data TEXT);
+            CREATE TABLE IF NOT EXISTS intent_decisions(event_id TEXT PRIMARY KEY, trade_id TEXT, data TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS intent_trace(id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, monotonic_ns INTEGER NOT NULL, trade_id TEXT NOT NULL, event_id TEXT, stage TEXT NOT NULL, details TEXT NOT NULL);''')
             if 'attempted_at' not in {r[1] for r in db.execute('PRAGMA table_info(intent_cancel_requested)')}:
                 db.execute('ALTER TABLE intent_cancel_requested ADD COLUMN attempted_at REAL')
@@ -152,6 +153,9 @@ class IntentEngine(PolicyJournal):
             if row is None: self.snapshot_policy(db,e,settings)
             desired=encoded if not prior or e['sequence']>prior['sequence'] else row['data']
             db.execute('INSERT OR REPLACE INTO intent_trades VALUES (?,?,?,?)',(e['trade_id'],desired,invalid,skipped))
+            if e['action'] in ('enter','replace') and not settings['enabled']:
+                db.execute('INSERT OR IGNORE INTO intent_decisions VALUES (?,?,?)',
+                           (e['event_id'],e['trade_id'],json.dumps(dict(state='skipped',reason='entries_paused'))))
         self._trace(e['trade_id'],'instruction_stored',e['event_id'],action=e['action'],sequence=e['sequence'],symbol=e['symbol'],asset=e['asset'],quantity=e['quantity'],limit_price=e['limit_price'],sender_created_at=e['created_at'],expires_at=e['expires_at'])
         return {'state':'stored','trade_id':e['trade_id']}
     def status(self):
@@ -208,11 +212,15 @@ class IntentEngine(PolicyJournal):
                     results.append({'trade_id':tid,'state':'reconcile_required','error':type(exc).__name__})
         finally: self.worker.release()
         return results
-    def _settle(self, tid, event, state):
+    def _settle(self, tid, event, state, *, reason=None):
         with self._db() as db:
             current=db.execute('SELECT data FROM intent_trades WHERE id=?',(tid,)).fetchone()[0]
             if json.loads(current)==event:
                 db.execute('INSERT OR REPLACE INTO intent_settled VALUES (?,?)',(tid,current))
+                prior=db.execute('SELECT data FROM intent_decisions WHERE event_id=?',(event['event_id'],)).fetchone()
+                saved_reason=reason if reason is not None else json.loads(prior[0]).get('reason') if prior else None
+                db.execute('INSERT OR REPLACE INTO intent_decisions VALUES (?,?,?)',
+                           (event['event_id'],tid,json.dumps(dict(state=state,reason=saved_reason))))
         self._trace(tid,'execution_decision',event.get('event_id'),state=state)
         return {'trade_id':tid,'state':state}
     def _step(self, tid):
@@ -283,8 +291,11 @@ class IntentEngine(PolicyJournal):
         if side=='buy' and (not settings['enabled'] or now>=datetime.fromisoformat(e['expires_at'].replace('Z','+00:00')) or (now-datetime.fromisoformat(e['created_at'].replace('Z','+00:00'))).total_seconds()>settings['max_age_seconds'] or e['quantity']>settings['max_quantity']):
             reason='entries_paused' if not settings['enabled'] else 'expired' if now>=datetime.fromisoformat(e['expires_at'].replace('Z','+00:00')) else 'max_age' if (now-datetime.fromisoformat(e['created_at'].replace('Z','+00:00'))).total_seconds()>settings['max_age_seconds'] else 'max_quantity'
             self._trace(tid,'entry_skipped',e['event_id'],reason=reason)
-            with self._db() as db: db.execute('UPDATE intent_trades SET skipped=1 WHERE id=?',(tid,))
-            return self._settle(tid,e,'skipped')
+            with self._db() as db:
+                db.execute('UPDATE intent_trades SET skipped=1 WHERE id=?',(tid,))
+                db.execute('INSERT OR REPLACE INTO intent_decisions VALUES (?,?,?)',
+                           (e['event_id'],tid,json.dumps(dict(state='skipped',reason=reason))))
+            return self._settle(tid,e,'skipped',reason=reason)
         bought=sum((Decimal(o['filled']) for o in orders if o['side']=='buy'),Decimal(0))
         sold=sum((Decimal(o['filled']) for o in orders if o['side']=='sell'),Decimal(0))
         revision_exits=[o for o in orders if o['side']=='sell' and o['sequence']==e['sequence']]

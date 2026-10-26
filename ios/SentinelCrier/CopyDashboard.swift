@@ -1,6 +1,37 @@
 import Foundation
 import SwiftUI
 
+/// Session-local scheduling for optional, read-only metadata. Callers supply
+/// monotonic time; report ticks may run later than the earliest retry time.
+struct CopyMetadataRecovery {
+    private struct Entry {
+        var attempt: UUID?
+        var succeeded = false
+        var nextAttempt: TimeInterval = 0
+        var delay: TimeInterval = 5
+    }
+    private var entries: [String: Entry] = [:]
+
+    mutating func begin(tradeID: String, now: TimeInterval) -> UUID? {
+        var entry = entries[tradeID] ?? Entry()
+        guard entry.attempt == nil, !entry.succeeded, now >= entry.nextAttempt else { return nil }
+        let attempt = UUID(); entry.attempt = attempt; entries[tradeID] = entry
+        return attempt
+    }
+    @discardableResult
+    mutating func finish(tradeID: String, attempt: UUID, succeeded: Bool, now: TimeInterval) -> Bool {
+        guard var entry = entries[tradeID], entry.attempt == attempt else { return false }
+        entry.attempt = nil; entry.succeeded = succeeded
+        if !succeeded {
+            entry.nextAttempt = now + entry.delay
+            entry.delay = min(300, entry.delay * 2)
+        }
+        entries[tradeID] = entry
+        return true
+    }
+    mutating func reset() { entries.removeAll() }
+}
+
 /// Incremental byte parser: bounds apply even to ignored events and comments.
 struct CopySSEParser {
     struct Frame { var name: String; var data: Data }

@@ -5,6 +5,40 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.Instant
 
+/** Session-local admission for optional, read-only metadata lookups. */
+class MetadataRetry(private val monotonicMillis:()->Long={System.nanoTime()/1000000}) {
+ private enum class Phase { READY, IN_FLIGHT, SUCCEEDED }
+ private data class Attempt(var phase:Phase=Phase.READY,var due:Long=Long.MIN_VALUE,var delay:Long=5000)
+ private val attempts=mutableMapOf<String,Attempt>()
+ fun <T> resolve(trade:String,active:()->Boolean,lookup:()->T,cache:(T)->Unit):Boolean {
+  if(!active()) return false
+  val attempt=synchronized(attempts) {
+   val state=attempts.getOrPut(trade) { Attempt() }
+   if(state.phase!=Phase.READY || monotonicMillis()<state.due) return false
+   state.phase=Phase.IN_FLIGHT
+   state
+  }
+  var succeeded=false
+  try {
+   check(active())
+   val binding=lookup()
+   check(active())
+   cache(binding)
+   succeeded=true
+   return true
+  } catch(_:Exception) { return false }
+  finally {
+   synchronized(attempts) {
+    attempt.phase=if(succeeded) Phase.SUCCEEDED else Phase.READY
+    if(!succeeded) {
+     attempt.due=monotonicMillis()+attempt.delay
+     attempt.delay=(attempt.delay*2).coerceAtMost(300000)
+    }
+   }
+  }
+ }
+}
+
 /** Observational only. Never calls a broker or changes the intent queue. */
 object CopyReports {
  private val zero=BigDecimal.ZERO
