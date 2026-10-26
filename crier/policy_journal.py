@@ -3,7 +3,7 @@ from dataclasses import asdict
 from decimal import Decimal
 import json
 import math
-from .execution_policy import ExecutionPolicy, validate_metadata, entry_target, source_exit_fraction, final_limit
+from .execution_policy import ExecutionPolicy, validate_metadata, entry_target, source_exit_fraction, final_limit, exact_cost
 
 
 class PolicyJournal:
@@ -116,7 +116,8 @@ class PolicyJournal:
                     raise ValueError('Cumulative buy cost unavailable')
                 average=Decimal(evidence['average'])
                 if not average.is_finite() or average<=0: raise ValueError('Invalid cumulative buy cost')
-                spent+=Decimal(order['filled'])*average*multiplier
+                filled_cost=exact_cost(Decimal(order['filled']),average,multiply=True)
+                spent=exact_cost(spent,exact_cost(filled_cost,Decimal(multiplier),multiply=True))
         return spent
 
     def validate_saved_plan(self, plan, policy, snapshot, event, metadata, bought, spent):
@@ -167,8 +168,10 @@ class PolicyJournal:
         if request.get('limit_price')!=plan['limit_price']:
             request['limit_price']=plan['limit_price']
         for cap in (policy.budget if policy.mode=='budget' else None,policy.max_entry_notional):
-            if cap is not None and spent+quantity*Decimal(plan['limit_price'])*metadata['multiplier']>Decimal(cap):
-                raise ValueError('Remaining entry cost exceeds policy')
+            if cap is not None:
+                reserved=exact_cost(quantity,Decimal(plan['limit_price']),multiply=True)
+                projected=exact_cost(spent,exact_cost(reserved,Decimal(metadata['multiplier']),multiply=True))
+                if projected>Decimal(cap): raise ValueError('Remaining entry cost exceeds policy')
         request['_policy_metadata']=metadata
         return quantity,plan
 

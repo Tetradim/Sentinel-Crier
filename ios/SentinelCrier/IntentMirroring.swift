@@ -112,16 +112,49 @@ struct IntentExecutionPolicy: Codable, Equatable {
         if mode == "fixed" { target = fixed_quantity! }
         if mode == "ratio" { target = source * ratio_bps! / 10000 }
         if mode == "budget" {
-            let remaining = max(0, try Self.money(budget!) - spent)
-            let quotient = remaining / unit!
-            // Compare before converting to Int, including very large valid dollar amounts.
-            guard quotient < Decimal(max_local_quantity + 1) else { throw AlpacaError.invalid("Local target cap exceeded.") }
-            target = bought + NSDecimalNumber(decimal: quotient).intValue
+            let remaining = max(0, try IntentBrokerDecimal.add(Self.money(budget!), -spent))
+            var quotient = remaining / unit!
+            var whole = Decimal()
+            NSDecimalRound(&whole, &quotient, 0, .down)
+            // Integer conversion is only performed after explicit decimal floor and boundedness checks.
+            // Foundation's conversion of a fractional NSDecimalNumber is not the sizing rounding rule.
+            guard whole <= Decimal(max_local_quantity), whole >= 0 else { throw AlpacaError.invalid("Local target cap exceeded.") }
+            target = bought + NSDecimalNumber(decimal: whole).intValue
         }
         guard target <= max_local_quantity else { throw AlpacaError.invalid("Local target cap exceeded.") }
-        if let cap = max_entry_notional, let unit,
-           spent + Decimal(max(0, target - bought)) * unit > (try Self.money(cap)) { throw AlpacaError.invalid("Entry notional cap exceeded.") }
+        if let cap = max_entry_notional, let unit {
+            let reserved = try IntentBrokerDecimal.multiply(Decimal(max(0, target - bought)), unit)
+            if try IntentBrokerDecimal.add(spent, reserved) > Self.money(cap) { throw AlpacaError.invalid("Entry notional cap exceeded.") }
+        }
         return target
+    }
+}
+// Broker weighted average prices are evidence, not policy input amounts. Preserve every
+// representable digit and reject precision loss instead of applying the policy's eight-place limit.
+enum IntentBrokerDecimal {
+    private static func canonical(_ text: String) -> String {
+        let parts = text.split(separator: ".", omittingEmptySubsequences: false)
+        let whole = String(parts[0].drop(while: { $0 == "0" }))
+        let fraction = parts.count == 2 ? String(parts[1].reversed().drop(while: { $0 == "0" }).reversed()) : ""
+        return (whole.isEmpty ? "0" : whole) + (fraction.isEmpty ? "" : "." + fraction)
+    }
+    static func price(_ text: String) throws -> Decimal {
+        guard text.count <= 1024, text.range(of: "^[0-9]+(?:\\.[0-9]+)?$", options: .regularExpression) != nil,
+              var value = Decimal(string: text, locale: Locale(identifier: "en_US_POSIX")), !value.isNaN, value > 0 else { throw AlpacaError.invalid("Invalid authoritative broker fill average.") }
+        let roundTrip = NSDecimalString(&value, Locale(identifier: "en_US_POSIX"))
+        guard roundTrip.range(of: "^[0-9]+(?:\\.[0-9]+)?$", options: .regularExpression) != nil,
+              canonical(roundTrip) == canonical(text) else { throw AlpacaError.invalid("Broker fill average exceeds exact decimal precision.") }
+        return value
+    }
+    static func multiply(_ left: Decimal, _ right: Decimal) throws -> Decimal {
+        var lhs = left, rhs = right, result = Decimal()
+        guard NSDecimalMultiply(&result, &lhs, &rhs, .plain) == .noError else { throw AlpacaError.invalid("Authoritative fill cost loses decimal precision.") }
+        return result
+    }
+    static func add(_ left: Decimal, _ right: Decimal) throws -> Decimal {
+        var lhs = left, rhs = right, result = Decimal()
+        guard NSDecimalAdd(&result, &lhs, &rhs, .plain) == .noError else { throw AlpacaError.invalid("Cumulative fill cost loses decimal precision.") }
+        return result
     }
 }
 struct IntentPolicySnapshot: Codable, Equatable {
@@ -267,7 +300,10 @@ struct IntentTrade: Codable {
             let filled = Decimal(string: mutation.order?.filled_qty ?? "0") ?? 0
             guard filled > 0 else { return sum }
             guard let text = mutation.order?.filled_avg_price else { throw AlpacaError.invalid("Cumulative buy fill cost unavailable.") }
-            return sum + filled * (try IntentExecutionPolicy.money(text)) * Decimal(multiplier)
+            let average = try IntentBrokerDecimal.price(text)
+            let filledPremium = try IntentBrokerDecimal.multiply(filled, average)
+            let cost = try IntentBrokerDecimal.multiply(filledPremium, Decimal(multiplier))
+            return try IntentBrokerDecimal.add(sum, cost)
         }
     }
     func proportionalDue(event: IntentEvent, history: [String: IntentEvent]) throws -> Int {
@@ -826,7 +862,9 @@ struct IntentPairing: Codable {
                 if policy.mode == "budget" || policy.max_entry_notional != nil {
                     let spent = try trade.premiumSpent(multiplier: binding.multiplier)
                     guard let price else { throw AlpacaError.invalid("Final valuation unavailable.") }
-                    let total = spent + Decimal(quantity) * (try IntentExecutionPolicy.money(price)) * Decimal(binding.multiplier)
+                    let premium = try IntentBrokerDecimal.multiply(Decimal(quantity), IntentExecutionPolicy.money(price))
+                    let reserved = try IntentBrokerDecimal.multiply(premium, Decimal(binding.multiplier))
+                    let total = try IntentBrokerDecimal.add(spent, reserved)
                     if let budget = policy.budget, total > (try IntentExecutionPolicy.money(budget)) { throw AlpacaError.invalid("Entry budget exhausted.") }
                     if let cap = policy.max_entry_notional, total > (try IntentExecutionPolicy.money(cap)) { throw AlpacaError.invalid("Entry notional cap exceeded.") }
                 }

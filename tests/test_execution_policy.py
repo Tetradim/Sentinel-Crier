@@ -215,6 +215,16 @@ def test_corrupt_saved_enabled_flag_cannot_bypass_final_pause_gate(tmp_path):
     with engine._db() as db: assert db.execute('SELECT status FROM intent_orders').fetchone()[0]=='skipped'
 
 
+def test_broker_cost_evidence_does_not_round_to_global_decimal_precision(tmp_path):
+    engine,broker=configured(tmp_path,{'mode':'budget','budget':'100'})
+    instruction=event(asset='option',symbol='SPY261218C00750000',limit_price='0.20')
+    engine.accept(instruction); engine.tick()
+    row=next(iter(broker.orders.values()))
+    row.update(status='canceled',filled_qty='3',filled_avg_price='0.'+'3'*29)
+    engine.tick()
+    assert engine.policy_spent(engine._orders(instruction['trade_id']),100)==Decimal('99.'+'9'*27)
+
+
 def test_close_tracked_exit_ignores_requested_units_but_bounds_holdings(tmp_path):
     engine,broker=configured(tmp_path,{'mode':'fixed','fixed_quantity':5,'exit_mode':'close_tracked'})
     instruction=event(); engine.accept(instruction); engine.tick()

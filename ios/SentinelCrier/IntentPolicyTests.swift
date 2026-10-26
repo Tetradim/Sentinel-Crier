@@ -62,6 +62,18 @@ final class IntentPolicyTests: XCTestCase {
         XCTAssertThrowsError(try trade.premiumSpent(multiplier: 100))
         XCTAssertEqual(trade.owned, 4)
     }
+    func testBrokerWeightedAverageRetainsLongFractionAndRejectsInvalidPrecision() throws {
+        let average = "0.1666666667"
+        XCTAssertEqual(try IntentBrokerDecimal.price(average), Decimal(string: average))
+        var trade = IntentTrade()
+        trade.mutations = [IntentMutation(clientID: "buy", eventID: "event", sell: false, quantity: 3,
+            order: AlpacaOrder(id: "broker", client_order_id: "buy", symbol: "AAPL", status: "filled", qty: "3", limit_price: "1", filled_qty: "3", filled_avg_price: average, side: "buy"))]
+        XCTAssertEqual(try trade.premiumSpent(multiplier: 100), Decimal(string: "50.00000001"))
+        for value in ["NaN", "Infinity", "0", "-1", "0.123456789012345678901234567890123456789123456789"] {
+            XCTAssertThrowsError(try IntentBrokerDecimal.price(value), value)
+        }
+        XCTAssertEqual(try IntentBrokerDecimal.price("000.166666666700"), Decimal(string: average))
+    }
     func testProportionalHistoryUsesDistinctCumulativeExitIntentAndRejectsGaps() throws {
         let entry = event(); let first = event(2, action: "exit", quantity: 2, tradeID: entry.trade_id)
         let second = event(3, action: "exit", quantity: 3, tradeID: entry.trade_id)
@@ -261,7 +273,7 @@ final class IntentPolicyRuntimeTests: XCTestCase {
         await restored.process(); restored.disconnect()
         XCTAssertEqual(posts, 1)
         XCTAssertNil(restored.state.trades[first.trade_id]?.entryPlans?[replacement.event_id])
-        XCTAssertTrue(restored.message.contains("no frozen plan"))
+        XCTAssertTrue(restored.state.trades[first.trade_id]?.policyRefusals?[replacement.event_id]?.contains("no frozen plan") == true)
         var exiting = restored.state
         var exit = replacement; exit.sequence = 3; exit.action = "exit"; exit.event_id = UUID().uuidString.lowercased(); exit.quantity = 1
         try exiting.trades[first.trade_id]!.accept(exit); exiting.received[exit.event_id] = exit

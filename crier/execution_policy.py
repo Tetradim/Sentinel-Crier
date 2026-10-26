@@ -1,6 +1,6 @@
 """Validated local execution policy; these calculations never authorize a POST."""
 from dataclasses import dataclass, asdict
-from decimal import Decimal, localcontext, ROUND_DOWN, ROUND_UP
+from decimal import Decimal, localcontext, ROUND_DOWN, ROUND_UP, Inexact
 from .policy_preview import SizingPolicy, preview_entry
 
 
@@ -29,6 +29,14 @@ class ExecutionPolicy(SizingPolicy):
     def sizing(self):
         return {k: v for k, v in asdict(self).items()
                 if k not in ('exit_mode', 'entry_timeout_seconds')}
+
+
+def exact_cost(left, right, *, multiply=False):
+    """Broker evidence may exceed policy input precision; never round spending."""
+    with localcontext() as context:
+        context.prec=80
+        context.traps[Inexact]=True
+        return left*right if multiply else left+right
 
 
 def validate_metadata(value, event, account):
@@ -63,6 +71,7 @@ def entry_target(policy, event, limit, metadata, bought=0, spent=Decimal(0)):
     """Freeze a revision target using verified cumulative buys, never net holdings."""
     with localcontext() as context:
         context.prec = 80
+        context.traps[Inexact] = True
         if policy.mode == 'budget' and bought:
             if limit is None:
                 raise ValueError('Budget requires a limit')
