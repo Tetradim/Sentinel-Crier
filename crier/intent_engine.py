@@ -255,7 +255,10 @@ class IntentEngine(PolicyJournal):
                         # A retry always needs another validated broker snapshot.
                         raise
             if any(order['cid'] in reconciled and order['broker_id'] for order in cancel):
-                return {'trade_id':tid,'state':'cancel_pending'}
+                pending={'trade_id':tid,'state':'cancel_pending'}
+                if failures or any(order['cid'] not in reconciled for order in orders):
+                    pending['reconciliation_required']=True
+                return pending
             if failures: return {'trade_id':tid,'state':'reconcile_required','error':failures[0]}
             return {'trade_id':tid,'state':'waiting_for_reconciliation'}
         if failures: return {'trade_id':tid,'state':'reconcile_required','error':failures[0]}

@@ -245,7 +245,7 @@ class IntentDevice:
             if self.engine:
                 try:
                     results=await asyncio.to_thread(self.engine.tick)
-                    reconciliation=any(r.get('state') in ('reconcile_required','waiting_for_reconciliation') for r in results)
+                    reconciliation=any(r.get('state') in ('reconcile_required','waiting_for_reconciliation') or r.get('reconciliation_required') is True for r in results)
                     emit(self.observe,'execution','blocked' if reconciliation else 'healthy','reconciliation_required' if reconciliation else 'checked')
                     if self.pair and self.pair['role']=='host':
                         for result in results:

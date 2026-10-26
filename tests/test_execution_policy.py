@@ -314,7 +314,8 @@ def test_bad_old_terminal_evidence_does_not_block_fresh_working_buy_cancel(tmp_p
             return original(cid)
         broker.lookup=lookup
     engine.accept(event('cancel',3,instruction['trade_id']))
-    assert engine.tick()[0]['state']=='cancel_pending'
+    result=engine.tick()[0]
+    assert result['state']=='cancel_pending' and result['reconciliation_required'] is True
     assert working['status']=='canceled'
     assert len(broker.sent)==2
 
