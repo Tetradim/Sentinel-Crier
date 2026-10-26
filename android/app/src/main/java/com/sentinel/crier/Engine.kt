@@ -6,13 +6,15 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
  private var timerSession=java.util.UUID.randomUUID().toString()
  fun reconnect() { timerSession=java.util.UUID.randomUUID().toString() }
  private val entryTime=entryClock ?: EntryClock(clock)
+ private val freshlyReconciled=mutableSetOf<String>()
+ private var reconciliationError:Exception?=null
  var reconciliationHealthy=false; private set
 
  private val terminal=setOf("filled","canceled","expired","rejected","replaced","superseded")
  fun step(e:JSONObject) {
   journal.diagnostic(e.getString("event_id"),"execution_started","Account validation and reconciliation")
   val trade=e.getString("trade_id"); val seq=e.getInt("sequence"); val action=e.getString("action")
-  if(!reconcile(e)) return
+  val reconciled=reconcile(e)
   val orders=journal.orders(trade)
   val revision=journal.revision(trade)
   val received=LivePolicy.validateSnapshot(journal.policy(trade))
@@ -21,7 +23,7 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
   val timerClosed=journal.meta("entry_closed:$trade")=="true"
   val shouldCancel=timerClosed || action in setOf("replace","cancel","exit") || seq<revision.first || revision.second
   if(shouldCancel) {
-   for(o in orders.filter { it.side=="buy" && it.state !in terminal && (it.sequence!=seq || action in setOf("cancel","exit") || revision.second || timerClosed) }) {
+   for(o in orders.filter { it.side=="buy" && it.state !in terminal && it.client in freshlyReconciled && (it.sequence!=seq || action in setOf("cancel","exit") || revision.second || timerClosed) }) {
     val lastAttempt=journal.meta("cancel_attempt_ms:${o.client}").toLongOrNull()
     val now=clock().toEpochMilli()
     if(o.state!="pending_cancel" && (lastAttempt==null || now-lastAttempt>=5000)) {
@@ -29,11 +31,13 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
      journal.setMeta("cancel:${o.client}","requested")
      journal.state(o.client,"cancel_unknown")
      journal.diagnostic(e.getString("event_id"),"cancel_requested",o.client)
+     BrokerLifecycleFence.interrupted()
      broker.cancel(o.broker)
     }
    }
-   if(orders.any { it.side=="buy" && it.state !in terminal }) return
+   if(orders.any { it.side=="buy" && it.state !in terminal }) { reconciliationError?.let { throw it }; return }
   }
+  if(!reconciled) { reconciliationError?.let { throw it }; return }
   if(seq<revision.first || action=="cancel" || (timerClosed && action!="exit")) { journal.mark(e.getString("event_id"),false); return }
   val sell=action=="exit"
   val filled=orders.filter { it.side=="buy" }.sumOf { it.filled }
@@ -55,6 +59,7 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
    if(!Policy.canEnter(revision.second,paused(),seq,revision.first,age,config.optInt("age",10)) || now>created.plusSeconds(config.optInt("age",10).toLong()) || now>=Instant.parse(e.getString("expires_at")) || e.getInt("quantity")>config.optInt("maxQuantity",1000)) { journal.diagnostic(e.getString("event_id"),"entry_skipped",if(paused()) "entries_paused" else if(now>=Instant.parse(e.getString("expires_at"))) "expired" else if(e.getInt("quantity")>config.optInt("maxQuantity",1000)) "max_quantity" else "age_or_revision_limit"); journal.mark(e.getString("event_id"),false); return }
   }
   if(orders.any { it.state !in terminal }) return
+  var desiredExitDue=0
   val remaining=e.getInt("quantity")-orders.filter { it.sequence==seq && it.side=="sell" }.sumOf { it.filled }
   var plan:JSONObject?=null
   val qty=if(advanced) {
@@ -67,8 +72,11 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
      "proportional"->{ val history=journal.sourceEvents(trade); require(history.lastOrNull()?.getInt("sequence")==seq); val (denominator,numerator)=LivePolicy.sourceIntent(history); filled*numerator/denominator-sold }
      else->remaining
     }
-    plan=JSONObject().put("binding",broker.binding(e)).put("price",Policy.price(e.getString("limit_price"),config.optString("mode","exact_limit"),true,config.optInt("bps",100),config.optString("amount","0.02")) ?: JSONObject.NULL)
-    Policy.exitQuantity(due.coerceAtLeast(0),filled,sold,broker.holdings(e.getString("symbol")))
+    desiredExitDue=due.coerceAtLeast(0)
+    if(desiredExitDue==0) 0 else {
+     plan=JSONObject().put("binding",broker.binding(e)).put("price",Policy.price(e.getString("limit_price"),config.optString("mode","exact_limit"),true,config.optInt("bps",100),config.optString("amount","0.02")) ?: JSONObject.NULL)
+     Policy.exitQuantity(desiredExitDue,filled,sold,broker.holdings(e.getString("symbol")))
+    }
    } else {
     // Quantity-only recovery remains available for exits; new buys require every prior plan.
     for(previous in orders.filter { it.side=="buy" }) {
@@ -102,8 +110,8 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
     }
     (target-filled).coerceAtLeast(0)
    }
-  } else if(sell) Policy.exitQuantity(remaining,filled,sold,broker.holdings(e.getString("symbol"))) else (e.getInt("quantity")-filled).coerceAtLeast(0)
-  if(qty==0 && sell && remaining>0 && filled>sold) return
+  } else if(sell) { desiredExitDue=remaining.coerceAtLeast(0); if(desiredExitDue==0) 0 else Policy.exitQuantity(remaining,filled,sold,broker.holdings(e.getString("symbol"))) } else (e.getInt("quantity")-filled).coerceAtLeast(0)
+  if(qty==0 && sell && desiredExitDue>0 && filled>sold) return
   if(qty==0) { journal.mark(e.getString("event_id"),false); return }
   val ordinal=orders.count { it.sequence==seq && it.side=="sell" }
   val client="si-${e.getString("event_id")}-${if(sell) "s$ordinal" else "b"}"
@@ -132,19 +140,27 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
   catch(_:Superseded) { journal.state(client,"superseded"); journal.diagnostic(e.getString("event_id"),"broker_not_submitted",refused); journal.setMeta("status","Not submitted before dispatch: $refused. Journal retained; use a new revision if needed.") }
   catch(error:HttpError) {
    if(error.status in setOf(400,401,403)) {
+    journal.setMeta("known_local_refusal:$client","http_${error.status}")
     journal.state(client,"rejected")
     if(!sell && config.getString("role")=="host") journal.create("cancel",e.getString("symbol"),e.getString("asset"),e.getInt("quantity"),e.getString("limit_price"),e.getString("environment"),trade)
    }
    throw error
   }
  }
- /** Refresh every outstanding order before allowing new work after process/service resume. */
+ /** Refresh broker-backed evidence, including terminal mutations, at each pending execution boundary. */
  fun reconcile(e:JSONObject):Boolean {
-  reconciliationHealthy=false
+  reconciliationHealthy=false; reconciliationError=null; freshlyReconciled.clear()
+  BrokerLifecycleFence.interrupted()
   require(broker.account()==config.getString("account")) { "Account changed" }
-  for(o in journal.orders(e.getString("trade_id"))) if(o.state !in terminal) {
+  var healthy=true
+  for(o in journal.orders(e.getString("trade_id"))) {
+   val knownLocalRefusal=o.broker.isBlank() && o.filled==0 && (o.state=="superseded" || (o.state=="rejected" && journal.meta("known_local_refusal:${o.client}") in setOf("http_400","http_401","http_403")))
+   if(knownLocalRefusal) continue
+   try {
+   BrokerLifecycleFence.interrupted()
    val remote=broker.order(o.client)
-   if(remote==null) { journal.diagnostic(e.getString("event_id"),"reconciliation_wait","Broker outcome unknown; submission blocked"); return false }
+   BrokerLifecycleFence.interrupted()
+   if(remote==null) { healthy=false; journal.diagnostic(e.getString("event_id"),"reconciliation_wait","Broker outcome unknown; submission blocked"); continue }
    validate(remote,o.client,e.getString("symbol"),o.side,journal.meta("quantity:${o.client}").toIntOrNull(),o.filled,o.broker)
    val snapshot=journal.policy(e.getString("trade_id"))
    var timer:String?=null
@@ -157,8 +173,16 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
    }
    journal.updateObserved(o.client,remote,timer)
    if(timer!=null) submittedHere.remove(o.client)
+   freshlyReconciled.add(o.client)
+   } catch(error:Exception) {
+    if(error is InterruptedException) { Thread.currentThread().interrupt(); throw error }
+    if(error is Superseded || error is java.util.concurrent.CancellationException) throw error
+    BrokerLifecycleFence.interrupted()
+    healthy=false; if(reconciliationError==null) reconciliationError=error
+    journal.diagnostic(e.getString("event_id"),"reconciliation_error","Broker evidence unavailable or invalid for ${o.client}; new submissions blocked")
+   }
   }
-  reconciliationHealthy=true; return true
+  reconciliationHealthy=healthy; return healthy
  }
  private fun validate(order:JSONObject,client:String,symbol:String,side:String,quantity:Int?,previous:Int,expectedBroker:String="") {
   require(order.getString("id").isNotBlank() && (expectedBroker.isBlank() || order.getString("id")==expectedBroker)) { "Broker order ID changed" }

@@ -23,12 +23,13 @@ class EngineTest {
   var submissionError:HttpError?=null
   var beforeSubmit:(()->Unit)?=null
   var cancelError:Exception?=null
+  val responses=mutableMapOf<String,JSONObject>(); val unavailable=mutableSetOf<String>(); val lookups=mutableListOf<String>(); val canceledIds=mutableListOf<String>()
   var posts=0; var canceled=0; var quantity=0; var remote:JSONObject?=null; var available=5
   override fun account()="account"
-  override fun order(client:String)=remote
-  override fun cancel(id:String) { canceled++; cancelError?.let { throw it } }
+  override fun order(client:String):JSONObject? { lookups.add(client); return if(client in unavailable) null else if(remote?.optString("client_order_id")==client) remote else responses[client] }
+  override fun cancel(id:String) { canceled++; canceledIds.add(id); cancelError?.let { throw it } }
   override fun holdings(symbol:String)=available
-  override fun submit(event:JSONObject,client:String,quantity:Int,sell:Boolean,canSubmit:()->Boolean):JSONObject { beforeSubmit?.invoke(); if(!canSubmit()) throw Superseded(); submissionError?.let { throw it }; posts++; this.quantity=quantity; val r=JSONObject().put("status","accepted").put("id","broker").put("filled_qty","0").put("client_order_id",client).put("symbol",event.getString("symbol")).put("side",if(sell) "sell" else "buy").put("qty",quantity.toString()); remote=r; return r }
+  override fun submit(event:JSONObject,client:String,quantity:Int,sell:Boolean,canSubmit:()->Boolean):JSONObject { beforeSubmit?.invoke(); if(!canSubmit()) throw Superseded(); submissionError?.let { throw it }; remote?.let { responses[it.getString("client_order_id")]=it }; posts++; this.quantity=quantity; val r=JSONObject().put("status","accepted").put("id","broker").put("filled_qty","0").put("client_order_id",client).put("symbol",event.getString("symbol")).put("side",if(sell) "sell" else "buy").put("qty",quantity.toString()); remote=r; return r }
  }
  private fun event(action:String="enter",seq:Int=1)=JSONObject().put("event_id","event").put("trade_id","trade").put("sequence",seq).put("action",action).put("symbol","SPY").put("asset","stock").put("quantity",5).put("limit_price","1.00").put("created_at",Instant.now().toString()).put("expires_at",Instant.now().plusSeconds(30).toString())
  @Test fun pricingChangedDuringPreflightNeverPostsTheOldOrder() {
@@ -83,9 +84,9 @@ class EngineTest {
   b.remote=JSONObject().put("status","canceled").put("id","broker").put("filled_qty","3").put("client_order_id","client").put("symbol","SPY").put("side","buy").put("qty","5"); b.available=2
   e.step(event("exit",2)); assertEquals(1,b.posts); assertEquals(2,b.quantity)
  }
- @Test fun replacementOnlyBuysOutstandingTarget() { val s=Store(); s.rev=Pair(2,false); s.os.add(Journal.Order("old",1,"buy","canceled","broker",3)); val b=Fake(); engine(s,b).step(event("replace",2)); assertEquals(2,b.quantity) }
+ @Test fun replacementOnlyBuysOutstandingTarget() { val s=Store(); s.rev=Pair(2,false); s.os.add(Journal.Order("old",1,"buy","canceled","broker",3)); s.setMeta("quantity:old","5"); val b=Fake(); b.remote=JSONObject().put("id","broker").put("client_order_id","old").put("symbol","SPY").put("side","buy").put("qty","5").put("filled_qty","3").put("status","canceled"); engine(s,b).step(event("replace",2)); assertEquals(2,b.quantity) }
  @Test fun preflightInvalidationPreventsPost() { val s=Store(); val b=Fake(); b.beforeSubmit={ s.rev=Pair(2,true) }; engine(s,b).step(event()); assertEquals(0,b.posts); assertEquals("superseded",s.os.single().state) }
- @Test fun partialExitContinuesOnlyAfterFill() { val s=Store(); s.rev=Pair(2,true); s.os.add(Journal.Order("buy",1,"buy","filled","buyid",5)); val b=Fake(); b.available=2; val e=engine(s,b); e.step(event("exit",2)); assertEquals(2,b.quantity); assertEquals("si-event-s0",s.os.last().client); b.remote!!.put("status","filled").put("filled_qty","2"); b.available=0; e.step(event("exit",2)); assertEquals(1,b.posts); assertFalse(s.done); b.available=3; e.step(event("exit",2)); assertEquals(2,b.posts); assertEquals(3,b.quantity); assertNotEquals(s.os[1].client,s.os[2].client) }
+ @Test fun partialExitContinuesOnlyAfterFill() { val s=Store(); s.rev=Pair(2,true); s.os.add(Journal.Order("buy",1,"buy","filled","buyid",5)); s.setMeta("quantity:buy","5"); val b=Fake(); b.remote=JSONObject().put("id","buyid").put("client_order_id","buy").put("symbol","SPY").put("side","buy").put("qty","5").put("filled_qty","5").put("status","filled"); b.available=2; val e=engine(s,b); e.step(event("exit",2)); assertEquals(2,b.quantity); assertEquals("si-event-s0",s.os.last().client); b.remote!!.put("status","filled").put("filled_qty","2"); b.available=0; e.step(event("exit",2)); assertEquals(1,b.posts); assertFalse(s.done); b.available=3; e.step(event("exit",2)); assertEquals(2,b.posts); assertEquals(3,b.quantity); assertNotEquals(s.os[1].client,s.os[2].client) }
   @Test fun replacementDoesNotCancelItsOwnNewOrder() { val s=Store(); s.rev=Pair(2,false); val b=Fake(); val e=engine(s,b); e.step(event("replace",2)); e.step(event("replace",2)); assertEquals(1,b.posts); assertEquals(0,b.canceled) }
 
  private fun cancelSetup():Pair<Store,Fake> {
@@ -168,7 +169,7 @@ class EngineTest {
   assertFalse(engine(s,b).reconcile(event("exit",2))); assertEquals(0,b.posts)
   s.os[0]=s.os[0].copy(filled=2)
   b.remote=JSONObject().put("id","broker").put("client_order_id","client").put("symbol","SPY").put("side","buy").put("qty","5").put("filled_qty","1").put("status","canceled")
-  assertTrue(runCatching { engine(s,b).reconcile(event("exit",2)) }.isFailure)
+  assertFalse(engine(s,b).reconcile(event("exit",2)))
   assertEquals(2,s.os[0].filled); assertEquals(0,b.posts)
  }
 }

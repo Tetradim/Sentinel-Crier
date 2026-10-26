@@ -19,4 +19,8 @@ class ExecutionStartGateTest {
   assertTrue(gate.claim(ticket,next,true)); gate.drained(old); assertTrue(gate.active)
   gate.drained(next); assertFalse(gate.active)
  }
+ @Test fun stopRevokesMutationAdmissionBeforeTheWorkerDrains() {
+  val gate=ExecutionStartGate(); val worker=Any(); assertTrue(gate.claim(gate.reserve(),worker,true)); assertTrue(gate.permits(worker))
+  gate.stop(); assertTrue(gate.active); assertFalse(gate.permits(worker)); gate.drained(worker); assertFalse(gate.permits(worker))
+ }
 }

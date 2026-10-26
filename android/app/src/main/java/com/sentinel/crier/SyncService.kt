@@ -68,11 +68,14 @@ class SyncService: Service() {
   val diagnostics=Diagnostics(journal,config)
   worker { diagnostics.tick(); Thread.sleep(250) }
   val rawBroker=Broker(config)
+  val mutationFence=BrokerLifecycleFence(config,{ running && gate.permits(this) },{ Vault(this).read() },{ EncryptedCustomerSessions(this).read() },customerService)
   fun dispatchAllowed(event:org.json.JSONObject,sell:Boolean):Boolean = running && runCatching {
+   mutationFence.check()
    val saved=Vault(this).read(); require(Settings.sameIdentity(config,saved)); require(listOf("mode","bps","amount").all { config.optString(it)==saved.optString(it) }); if(!sell) require(event.getInt("quantity")<=saved.optInt("maxQuantity",1000))
    if(config.optString("authMode")=="oauth") { val session=EncryptedCustomerSessions(this).read(); require(OAuthProvenance.matches(saved,session.optString("owner"),customerService) && saved.optString("bearer")==config.optString("bearer")) }; true
   }.getOrDefault(false)
   val observedBroker=object:BrokerPort by rawBroker {
+   override fun cancel(id:String) { mutationFence.check(); rawBroker.cancel(id) }
    override fun submit(event:org.json.JSONObject,client:String,quantity:Int,sell:Boolean,canSubmit:()->Boolean)=rawBroker.submit(event,client,quantity,sell) { dispatchAllowed(event,sell) && canSubmit() }
    override fun submitPlanned(event:org.json.JSONObject,client:String,quantity:Int,sell:Boolean,plan:org.json.JSONObject,canSubmit:()->Boolean)=rawBroker.submitPlanned(event,client,quantity,sell,plan) { dispatchAllowed(event,sell) && canSubmit() }
 

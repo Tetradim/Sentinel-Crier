@@ -225,6 +225,100 @@ def test_broker_cost_evidence_does_not_round_to_global_decimal_precision(tmp_pat
     assert engine.policy_spent(engine._orders(instruction['trade_id']),100)==Decimal('99.'+'9'*27)
 
 
+def test_unavailable_terminal_buy_evidence_cannot_authorize_new_exit(tmp_path):
+    engine,broker=configured(tmp_path,{'mode':'fixed','fixed_quantity':3,'exit_mode':'close_tracked'})
+    instruction=event(); engine.accept(instruction); engine.tick()
+    row=next(iter(broker.orders.values())); row.update(status='filled',filled_qty='3',filled_avg_price='10')
+    engine.tick()
+    original=broker.lookup
+    broker.lookup=lambda cid: None if cid==row['client_order_id'] else original(cid)
+    engine.accept(event('exit',2,instruction['trade_id'],quantity=3)); engine.tick()
+    assert len(broker.sent)==1
+    broker.lookup=original
+    assert engine.tick()[0]['state']=='submitted'
+    assert broker.sent[-1]['side']=='sell' and broker.sent[-1]['qty']=='3'
+    engine.tick(); assert len(broker.sent)==2
+
+
+def test_updated_terminal_fill_cost_is_consumed_before_budget_replace(tmp_path):
+    engine,broker=configured(tmp_path,{'mode':'budget','budget':'100'})
+    instruction=event(); engine.accept(instruction); engine.tick()
+    row=next(iter(broker.orders.values())); row.update(status='canceled',filled_qty='2',filled_avg_price='9')
+    engine.tick()
+    row.update(filled_qty='3',filled_avg_price='8')
+    replacement=event('replace',2,instruction['trade_id'],limit_price='20')
+    engine.accept(replacement); engine.tick()
+    assert broker.sent[-1]['qty']=='3'
+    assert engine.status()['plans'][replacement['event_id']]['baseline_bought']==3
+    assert engine.status()['plans'][replacement['event_id']]['baseline_spent']=='24'
+
+
+def test_terminal_sale_unavailable_blocks_next_exit_and_recovers_once(tmp_path):
+    engine,broker=configured(tmp_path,{'mode':'fixed','fixed_quantity':5})
+    instruction=event(); engine.accept(instruction); engine.tick()
+    next(iter(broker.orders.values())).update(status='filled',filled_qty='5',filled_avg_price='10')
+    engine.accept(event('exit',2,instruction['trade_id'],quantity=2)); engine.tick()
+    sale=next(reversed(broker.orders.values())); sale.update(status='filled',filled_qty='2',filled_avg_price='11')
+    engine.tick()
+    original=broker.lookup
+    broker.lookup=lambda cid: None if cid==sale['client_order_id'] else original(cid)
+    engine.accept(event('exit',3,instruction['trade_id'],quantity=2))
+    assert engine.tick()[0]['state']=='waiting_for_reconciliation'; assert len(broker.sent)==2
+    broker.lookup=original; engine.tick(); engine.tick()
+    assert len(broker.sent)==3 and broker.sent[-1]['qty']=='2'
+
+
+def test_local_definitive_no_post_does_not_require_fabricated_broker_lookup(tmp_path):
+    from crier.intent_broker import BrokerNotSubmitted
+    engine,broker=configured(tmp_path,{'mode':'fixed','fixed_quantity':3})
+    submit=broker.submit_checked
+    def refuse(request,check): raise BrokerNotSubmitted('Local preflight refusal')
+    broker.submit_checked=refuse
+    instruction=event(); engine.accept(instruction); assert engine.tick()[0]['state']=='rejected'
+    client=engine.status()['orders'][0]['cid']
+    original=broker.lookup
+    def lookup(cid):
+        assert cid!=client, 'Known no-POST record is not a real broker order'
+        return original(cid)
+    broker.lookup=lookup; broker.submit_checked=submit
+    engine.accept(event('replace',2,instruction['trade_id'])); engine.tick()
+    assert len(broker.sent)==1 and broker.sent[-1]['qty']=='3'
+
+
+def test_legacy_exit_also_requires_terminal_broker_evidence(tmp_path):
+    broker=Broker(); engine=IntentEngine(tmp_path/'legacy-fresh.db',broker)
+    engine.save_settings({'enabled':True})
+    instruction=event(); engine.accept(instruction); engine.tick()
+    next(iter(broker.orders.values())).update(status='filled',filled_qty='10',filled_avg_price='10')
+    engine.tick(); broker.lookup=lambda _:None
+    engine.accept(event('exit',2,instruction['trade_id']))
+    assert engine.tick()[0]['state']=='waiting_for_reconciliation'
+    assert len(broker.sent)==1
+
+
+@pytest.mark.parametrize('failure',['malformed','transport','missing'])
+def test_bad_old_terminal_evidence_does_not_block_fresh_working_buy_cancel(tmp_path,failure):
+    engine,broker=configured(tmp_path,{'mode':'fixed','fixed_quantity':5})
+    instruction=event(); engine.accept(instruction); engine.tick()
+    prior=next(iter(broker.orders.values())); prior.update(status='canceled',filled_qty='2',filled_avg_price='10')
+    engine.accept(event('replace',2,instruction['trade_id'])); engine.tick()
+    working=next(reversed(broker.orders.values()))
+    assert working['qty']=='3' and working['status']=='new'
+    if failure=='malformed': prior['filled_avg_price']='-1'
+    else:
+        original=broker.lookup
+        def lookup(cid):
+            if cid==prior['client_order_id']:
+                if failure=='transport': raise TimeoutError('Old terminal lookup unavailable')
+                return None
+            return original(cid)
+        broker.lookup=lookup
+    engine.accept(event('cancel',3,instruction['trade_id']))
+    assert engine.tick()[0]['state']=='cancel_pending'
+    assert working['status']=='canceled'
+    assert len(broker.sent)==2
+
+
 def test_close_tracked_exit_ignores_requested_units_but_bounds_holdings(tmp_path):
     engine,broker=configured(tmp_path,{'mode':'fixed','fixed_quantity':5,'exit_mode':'close_tracked'})
     instruction=event(); engine.accept(instruction); engine.tick()

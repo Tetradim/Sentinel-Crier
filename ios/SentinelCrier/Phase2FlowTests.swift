@@ -154,9 +154,10 @@ final class Phase2RecoveryTests: XCTestCase {
             try controller.connect(api: api(), account: "account", pairing: pair(), startWorkers: false)
             await controller.process(); await controller.process()
             XCTAssertEqual(posts, 1, "HTTP \(status)")
-            XCTAssertEqual(controller.state.trades[event.trade_id]?.mutations.first?.order?.status, "rejected")
+            XCTAssertEqual(controller.state.trades[event.trade_id]?.mutations.first?.notSubmitted, true)
+            XCTAssertNil(controller.state.trades[event.trade_id]?.mutations.first?.order)
             let restored = try IntentController(file: file)
-            XCTAssertEqual(restored.state.trades[event.trade_id]?.mutations.first?.order?.status, "rejected")
+            XCTAssertEqual(restored.state.trades[event.trade_id]?.mutations.first?.notSubmitted, true)
         }
     }
     func testDuplicate422SubmissionAfterRestartOnlyLooksUpNeverReposts() async throws {
@@ -197,6 +198,11 @@ final class Phase2RecoveryTests: XCTestCase {
         AlpacaMockURLProtocol.handler = { request in
             if request.url?.path == "/v2/account" {
                 return (200, Data(#"{"id":"account","status":"ACTIVE","buying_power":"1000","equity":"1000","trading_blocked":false,"account_blocked":false}"#.utf8))
+            }
+            if request.url?.path == "/v2/orders:by_client_order_id" {
+                let client = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first?.value ?? ""
+                if client == "entry" { return (200, try JSONEncoder().encode(trade.mutations[0].order!)) }
+                return (200, try JSONEncoder().encode(AlpacaOrder(id: "exit-broker", client_order_id: client, symbol: symbol, status: "filled", qty: "1", limit_price: "0.20", filled_qty: "1", filled_avg_price: "0.20", side: "sell")))
             }
             if request.url?.path == "/v2/positions" {
                 return (200, try JSONSerialization.data(withJSONObject: [["symbol": symbol, "qty": "50", "qty_available": "50", "avg_entry_price": "0.20"], ["symbol": "AAPL", "qty": "100", "qty_available": "100", "avg_entry_price": "10"]]))

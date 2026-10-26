@@ -243,7 +243,9 @@ struct IntentMutation: Codable {
     var notSubmitted: Bool?
     var acknowledgedSession: String?; var acknowledgedUptime: TimeInterval?
     var brokerResponseSession: String?
+    var priorHTTPRefusalOrder: AlpacaOrder?
     func validateLocalDisposition() throws {
+        guard priorHTTPRefusalOrder == nil || (notSubmitted == true && order == nil) else { throw AlpacaError.invalid("Contradictory HTTP-refusal upgrade evidence.") }
         guard (acknowledgedSession == nil) == (acknowledgedUptime == nil),
               acknowledgedUptime.map({ $0.isFinite && $0 >= 0 }) ?? true,
               acknowledgedSession.map({ !$0.isEmpty && !sell && order != nil && notSubmitted != true }) ?? true else { throw AlpacaError.invalid("Contradictory timed-order acknowledgement.") }
@@ -257,13 +259,15 @@ struct IntentMutation: Codable {
         return cancelAttemptedAt.map { now.timeIntervalSince($0) >= 5 } ?? true
     }
     func validate(_ incoming: AlpacaOrder, symbol: String) throws {
-        guard incoming.client_order_id == clientID, incoming.symbol == symbol,
+        let statuses = ["new", "partially_filled", "filled", "done_for_day", "canceled", "expired", "replaced", "pending_cancel", "pending_replace", "accepted", "pending_new", "accepted_for_bidding", "stopped", "rejected", "suspended", "calculated"]
+        guard statuses.contains(incoming.status), incoming.client_order_id == clientID, incoming.symbol == symbol,
               incoming.side == (sell ? "sell" : "buy"), !incoming.id.isEmpty,
               order == nil || order?.id == incoming.id,
               incoming.qty.flatMap({ Decimal(string: $0) }) == Decimal(quantity),
               let filled = Decimal(string: incoming.filled_qty), filled >= 0, filled <= Decimal(quantity),
               filled >= (Decimal(string: order?.filled_qty ?? "0") ?? 0),
               filled == Decimal(NSDecimalNumber(decimal: filled).intValue) else { throw AlpacaError.invalid("Broker order identity or cumulative fill mismatch.") }
+        if let average = incoming.filled_avg_price { _ = try IntentBrokerDecimal.price(average) }
     }
 }
 struct IntentTrade: Codable {
@@ -383,6 +387,40 @@ struct IntentState: Codable {
         }
         return accepted
     }
+    mutating func upgradeDiagnosticProvenHTTPRefusals() -> Bool {
+        var upgraded = false
+        for (id, trade) in trades {
+            for (index, mutation) in trade.mutations.enumerated() {
+                guard mutation.notSubmitted == nil, mutation.priorHTTPRefusalOrder == nil,
+                      !mutation.cancelUnknown, mutation.cancelAttemptedAt == nil,
+                      mutation.acknowledgedSession == nil, mutation.acknowledgedUptime == nil, mutation.brokerResponseSession == nil,
+                      let order = mutation.order, order.id == mutation.clientID, order.client_order_id == mutation.clientID,
+                      order.status == "rejected", order.filled_qty == "0", order.filled_avg_price == nil,
+                      order.qty == String(mutation.quantity), order.side == (mutation.sell ? "sell" : "buy"),
+                      order.position_intent == nil, order.order_class == nil,
+                      var diagnostic = diagnostics?[mutation.eventID], diagnostic.event.event_id == mutation.eventID,
+                      diagnostic.event.trade_id == id, diagnostic.event.symbol == order.symbol,
+                      diagnostic.event.environment == trade.desired?.environment,
+                      (try? diagnostic.event.validate()) != nil,
+                      mutation.sell ? diagnostic.event.action == "exit" : ["enter", "replace"].contains(diagnostic.event.action),
+                      mutation.clientID == "si-" + mutation.eventID + (mutation.sell ? "-s\(indexForExit(mutation, in: trade))" : "-b"),
+                      diagnostic.timeline.contains(where: { $0.stage == "broker_rejected" && ["HTTP 400", "HTTP 401", "HTTP 403", "HTTP 429"].contains($0.detail) }),
+                      !diagnostic.timeline.contains(where: { ["broker_response", "reconciled"].contains($0.stage) && $0.detail.hasPrefix("client=" + mutation.clientID + " ") }) else { continue }
+                // The exact old writer shape plus its durable definitive HTTP diagnostic proves
+                // local refusal. Retain both the old row and original timeline as audit evidence.
+                trades[id]!.mutations[index].priorHTTPRefusalOrder = order
+                trades[id]!.mutations[index].order = nil
+                trades[id]!.mutations[index].notSubmitted = true
+                diagnostic.timeline.append(DiagnosticStep(at: IntentDiagnosticRecord.timestamp(), stage: "local_refusal_upgraded", detail: "Retained synthetic HTTP-refusal order as audit evidence; no broker order asserted"))
+                diagnostics?[mutation.eventID] = diagnostic
+                upgraded = true
+            }
+        }
+        return upgraded
+    }
+    private func indexForExit(_ mutation: IntentMutation, in trade: IntentTrade) -> Int {
+        trade.mutations.filter { $0.eventID == mutation.eventID && $0.sell }.firstIndex(where: { $0.clientID == mutation.clientID }) ?? -1
+    }
     var preferences = IntentPreferences()
     mutating func discardSupersededEntries() {
         let invalidations = outgoing.filter { ["cancel", "exit"].contains($0.action) }
@@ -461,6 +499,9 @@ struct IntentPairing: Codable {
                 }
             }
             for mutation in trade.mutations { try mutation.validateLocalDisposition() }
+        }
+        if state.upgradeDiagnosticProvenHTTPRefusals() {
+            try JSONEncoder().encode(state).write(to: file, options: [.atomic, .completeFileProtection])
         }
     }
     static func local() throws -> IntentController {
@@ -601,20 +642,50 @@ struct IntentPairing: Codable {
         let account = try await api.account()
         guard account.id == state.accountID, account.status == "ACTIVE", !account.account_blocked, !account.trading_blocked else { throw AlpacaError.invalid("Reconnect account is changed or blocked.") }
         observed?(.broker, .healthy, .verified)
+        var failures: [String] = []; var freshByTrade: [String: Set<Int>] = [:]; var failedTrades = Set<String>()
         for id in state.trades.keys.sorted() {
             guard let trade = state.trades[id], let event = trade.desired else { continue }
+            if settled(trade) { continue }
             for index in trade.mutations.indices {
                 let mutation = trade.mutations[index]
-                if mutation.notSubmitted == true { continue }
-                if let order = mutation.order, terminal(order) { continue }
-                let order = try await api.order(clientID: mutation.clientID)
-                try mutation.validate(order, symbol: event.symbol)
-                try Task.checkCancellation()
-                guard self.api === api, pair != nil else { throw AlpacaError.invalid("Reconnect interrupted.") }
-                try recordReconciliation(id: id, index: index, order: order)
+                do {
+                    try mutation.validateLocalDisposition()
+                    if mutation.notSubmitted == true { continue }
+                    let order = try await api.order(clientID: mutation.clientID)
+                    try mutation.validate(order, symbol: event.symbol)
+                    try Task.checkCancellation()
+                    guard self.api === api, pair != nil else { throw AlpacaError.invalid("Reconnect interrupted.") }
+                    try recordReconciliation(id: id, index: index, order: order)
+                    freshByTrade[id, default: []].insert(index)
+                } catch {
+                    try Task.checkCancellation()
+                    guard self.api === api, pair != nil else { throw error }
+                    failedTrades.insert(id)
+                    failures.append(mutation.clientID + ": " + error.localizedDescription)
+                }
             }
         }
+        // Resume is cancellation-only: a failure elsewhere cannot prevent canceling a
+        // separately freshly verified working order before the workspace disconnects.
+        for id in freshByTrade.keys.sorted() {
+            do {
+                let cancelPending = try await cancelFreshWorkingMutation(id, api: api, freshIndexes: freshByTrade[id]!)
+                if !cancelPending, !failedTrades.contains(id), let trade = state.trades[id], let event = trade.desired {
+                    let stoppedEntry = event.action == "cancel" || ((trade.invalidated || trade.entryClosed == true) && event.action != "exit")
+                    let stoppedExit = event.action == "exit" && trade.mutations.contains { $0.eventID == event.event_id && $0.order?.status != "filled" }
+                    if stoppedEntry || stoppedExit { try completeTerminalInstruction(id, eventID: event.event_id) }
+                }
+            }
+            catch {
+                try Task.checkCancellation()
+                guard self.api === api, pair != nil else { throw error }
+                failedTrades.insert(id)
+                failures.append(id + ": " + error.localizedDescription)
+            }
+        }
+        if !failures.isEmpty { throw AlpacaError.invalid("Broker reconciliation required: " + failures.joined(separator: "; ")) }
     }
+
     func process() async {
         guard !processing, let api else { return }; processing = true; defer { processing = false }
         let observed = onHealth; var needsReconciliation = false
@@ -745,59 +816,102 @@ struct IntentPairing: Codable {
             }
         }
     }
+    private func requiresCancellation(_ trade: IntentTrade, mutation: IntentMutation) -> Bool {
+        guard let event = trade.desired,
+              event.action != "enter" || trade.invalidated || trade.entryClosed == true else { return false }
+        return mutation.eventID != event.event_id || event.action == "cancel" || ((event.action == "exit" || trade.entryClosed == true) && !mutation.sell)
+    }
+    private func cancelFreshWorkingMutation(_ id: String, api: AlpacaREST, freshIndexes: Set<Int>) async throws -> Bool {
+        guard let trade = state.trades[id], let event = trade.desired else { return false }
+        for index in trade.mutations.indices where freshIndexes.contains(index) {
+            let mutation = trade.mutations[index]
+            guard let order = mutation.order, !terminal(order), requiresCancellation(trade, mutation: mutation) else { continue }
+            try Task.checkCancellation()
+            guard self.api === api, let pairing = pair else { throw AlpacaError.invalid("Cancellation interrupted.") }
+            let attemptTime = now()
+            if mutation.mayRetryCancellation(now: attemptTime) {
+                try commit {
+                    $0.trades[id]!.mutations[index].cancelUnknown = true
+                    $0.trades[id]!.mutations[index].cancelAttemptedAt = attemptTime
+                }
+                diagnosticStep(event.event_id, "cancel_dispatch", "broker=\(order.id)")
+                try await api.cancel(orderID: order.id, canCancel: { [self] in
+                    guard !Task.isCancelled, self.api === api, pair?.fingerprint == pairing.fingerprint,
+                          let current = state.trades[id], current.mutations.indices.contains(index) else { return false }
+                    let bound = current.mutations[index]
+                    return bound.clientID == mutation.clientID && bound.order?.id == order.id && bound.order.map({ !terminal($0) }) == true && requiresCancellation(current, mutation: bound)
+                })
+            }
+            return true // Cancellation was attempted or is awaiting fresh terminal proof/cooldown.
+        }
+        return false
+    }
+    private func settled(_ trade: IntentTrade) -> Bool {
+        trade.desired != nil && trade.completed == trade.desired?.event_id && trade.mutations.allSatisfy { $0.notSubmitted == true || ($0.order.map(terminal) ?? false) }
+    }
+    private func completeTerminalInstruction(_ id: String, eventID: String) throws {
+        // Call only after this pass successfully reconciled all broker-backed rows.
+        try commit { state in
+            guard let trade = state.trades[id], trade.desired?.event_id == eventID,
+                  trade.mutations.allSatisfy({ $0.notSubmitted == true || ($0.order.map(terminal) ?? false) }) else { return }
+            state.trades[id]!.completed = eventID
+        }
+    }
     private func terminal(_ order: AlpacaOrder) -> Bool { ["filled", "canceled", "expired", "rejected", "replaced"].contains(order.status) }
     private func execute(_ id: String, api: AlpacaREST, observe: NativeHealthObserver? = nil) async throws {
         guard let initial = state.trades[id], let desired = initial.desired else { return }
-        if initial.completed == desired.event_id && initial.mutations.allSatisfy({ $0.notSubmitted == true || ($0.order.map(terminal) ?? false) }) { return }
+        if settled(initial) { return }
         let account = try await api.account()
         guard account.id == state.accountID, desired.environment == api.environment, account.status == "ACTIVE", !account.account_blocked, !account.trading_blocked else { throw AlpacaError.invalid("Account is changed or blocked.") }
         observe?(.broker, .healthy, .verified)
-        // Every unknown POST is reconciled; a 404 never permits another POST.
+        // Refresh every broker-backed mutation, including terminal records. An unrelated
+        // lookup failure blocks new orders but must not conceal a separately verified cancelable buy.
+        var freshIndexes = Set<Int>(); var failures: [String] = []
         for index in initial.mutations.indices {
-            let m = state.trades[id]!.mutations[index]
-            if m.notSubmitted == true { continue }
-            if let old = m.order, terminal(old) { continue }
-            let order = try await api.order(clientID: m.clientID)
-            try m.validate(order, symbol: desired.symbol)
-            try Task.checkCancellation()
-            guard self.api === api, pair != nil else { return }
-            diagnosticStep(m.eventID, "reconciled", "client=\(m.clientID) broker=\(order.id) status=\(order.status) filled=\(order.filled_qty) average=\(order.filled_avg_price ?? "unavailable")")
-            try recordReconciliation(id: id, index: index, order: order)
-            if order.status == "rejected", hosting, state.trades[id]?.desired?.action != "cancel" {
-                _ = try host(symbol: desired.symbol, asset: desired.asset, quantity: desired.quantity, price: desired.limit_price, tradeID: id, action: "cancel")
+            let mutation = state.trades[id]!.mutations[index]
+            do {
+                try mutation.validateLocalDisposition()
+                if mutation.notSubmitted == true { continue }
+                let order = try await api.order(clientID: mutation.clientID)
+                try mutation.validate(order, symbol: desired.symbol)
+                try Task.checkCancellation()
+                guard self.api === api, pair != nil else { return }
+                diagnosticStep(mutation.eventID, "reconciled", "client=\(mutation.clientID) broker=\(order.id) status=\(order.status) filled=\(order.filled_qty) average=\(order.filled_avg_price ?? "unavailable")")
+                try recordReconciliation(id: id, index: index, order: order)
+                freshIndexes.insert(index)
+                if order.status == "rejected", hosting, state.trades[id]?.desired?.action != "cancel" {
+                    _ = try host(symbol: desired.symbol, asset: desired.asset, quantity: desired.quantity, price: desired.limit_price, tradeID: id, action: "cancel")
+                }
+            } catch {
+                try Task.checkCancellation()
+                guard self.api === api, pair != nil else { return }
+                failures.append(mutation.clientID + ": " + error.localizedDescription)
             }
         }
         guard let trade = state.trades[id], let e = trade.desired else { return }
-        let revise = e.action != "enter" || trade.invalidated || trade.entryClosed == true
-        if revise {
-            for index in trade.mutations.indices {
-                let m = state.trades[id]!.mutations[index]
-                if let order = m.order, !terminal(order), m.eventID != e.event_id || e.action == "cancel" || (e.action == "exit" || trade.entryClosed == true) && !m.sell {
-                    try Task.checkCancellation()
-                    guard self.api === api, pair != nil else { return }
-                    let attemptTime = now()
-                    if m.mayRetryCancellation(now: attemptTime) {
-                        try commit {
-                            $0.trades[id]!.mutations[index].cancelUnknown = true
-                            $0.trades[id]!.mutations[index].cancelAttemptedAt = attemptTime
-                        }
-                        diagnosticStep(e.event_id, "cancel_dispatch", "broker=\(order.id)")
-                        try await api.cancel(orderID: order.id)
-                    }
-                    return // Wait for terminal broker status, including racing fills.
-                }
-            }
+        if try await cancelFreshWorkingMutation(id, api: api, freshIndexes: freshIndexes) {
+            if !failures.isEmpty { throw AlpacaError.invalid("Broker reconciliation required: " + failures.joined(separator: "; ")) }
+            return
         }
+        if !failures.isEmpty { throw AlpacaError.invalid("Broker reconciliation required: " + failures.joined(separator: "; ")) }
         if e.action == "cancel" || ((trade.invalidated || trade.entryClosed == true) && e.action != "exit") {
             diagnosticStep(e.event_id, "entry_invalidated", "Entry remainder canceled or superseded; tracked fills retained")
+            try completeTerminalInstruction(id, eventID: e.event_id)
             return
         }
         if trade.mutations.contains(where: { $0.notSubmitted != true && ($0.order.map { !terminal($0) } ?? true) }) { return }
         if trade.completed == e.event_id { return }
         let sell = e.action == "exit"
         let existing = trade.mutations.filter { $0.eventID == e.event_id }
-        if !sell && !existing.isEmpty { return }
-        if sell && existing.contains(where: { $0.order?.status != "filled" }) { message = "Exit is working or needs broker reconciliation; no duplicate sell submitted."; return }
+        if !sell && !existing.isEmpty {
+            try completeTerminalInstruction(id, eventID: e.event_id)
+            return
+        }
+        if sell && existing.contains(where: { $0.order?.status != "filled" }) {
+            try completeTerminalInstruction(id, eventID: e.event_id)
+            message = "Exit is terminal or needs broker reconciliation; no duplicate sell submitted."
+            return
+        }
         if !sell {
             guard let sample = entryClock.read() else {
                 diagnosticStep(e.event_id, "entry_deferred", "clock_changed: check device time and reconnect; cancellation/exit handling remains active")
@@ -926,9 +1040,12 @@ struct IntentPairing: Codable {
             message = "Not submitted before dispatch: \(refusal). Journal retained; use a new revision if needed."
         } catch AlpacaError.http(let code) where [400, 401, 403, 429].contains(code) {
             diagnosticStep(e.event_id, "broker_rejected", "HTTP \(code)")
-            // Definitive rejection has no owned quantity; retain a terminal broker-shaped record.
-            let rejected = AlpacaOrder(id: clientID, client_order_id: clientID, symbol: e.symbol, status: "rejected", qty: String(quantity), limit_price: price, filled_qty: "0", filled_avg_price: nil, side: sell ? "sell" : "buy")
-            try commit { s in let index = s.trades[id]!.mutations.firstIndex { $0.clientID == clientID }!; s.trades[id]!.mutations[index].order = rejected }
+            // A definitive HTTP refusal is a local no-order disposition, never fabricated broker proof.
+            try commit { s in
+                let index = s.trades[id]!.mutations.firstIndex { $0.clientID == clientID }!
+                s.trades[id]!.mutations[index].notSubmitted = true
+                s.trades[id]!.completed = e.event_id
+            }
             if hosting { _ = try host(symbol: e.symbol, asset: e.asset, quantity: e.quantity, price: e.limit_price, tradeID: id, action: "cancel") }
         }
     }

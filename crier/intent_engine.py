@@ -165,6 +165,10 @@ class IntentEngine(PolicyJournal):
     def _orders(self, tid):
         with self._db() as db: return [dict(r) for r in db.execute('SELECT * FROM intent_orders WHERE trade_id=?',(tid,))]
     def _reconcile(self, order):
+        if order['status'] in ('skipped','rejected') and order['broker_id'] is None and Decimal(order['filled'])==0:
+            # These states are written only on a definitive local no-POST outcome.
+            # Unknown submissions never acquire a terminal status without broker proof.
+            return True
         snap=self.broker.lookup(order['cid'])
         if snap is None:
             self._trace(order['trade_id'],'broker_lookup_unknown',client_order_id=order['cid'])
@@ -222,7 +226,13 @@ class IntentEngine(PolicyJournal):
             if pin and tuple(pin)!=(e['environment'],account): raise ValueError('Persisted account/environment mismatch')
             if not pin: db.execute('INSERT INTO intent_pin VALUES (1,?,?)',(e['environment'],account))
         snapshot=self.policy_for(tid,e,account)
-        reconciled={order['cid'] for order in self._orders(tid) if self._reconcile(order)}
+        reconciled=set(); failures=[]
+        for order in self._orders(tid):
+            try:
+                if self._reconcile(order): reconciled.add(order['cid'])
+            except Exception as exc:
+                failures.append(type(exc).__name__)
+                self._trace(tid,'broker_lookup_unusable',client_order_id=order['cid'],error_type=type(exc).__name__)
         orders=self._orders(tid); active=[o for o in orders if o['status'] not in TERMINAL]
         timed_out=self.timed_entry_closed(tid,snapshot,orders)
         cancel=[o for o in active if o['side']=='buy' and (row['invalid'] or row['skipped'] or timed_out or o['sequence']!=e['sequence'])]
@@ -244,7 +254,14 @@ class IntentEngine(PolicyJournal):
                         # Preserve the cooldown across failures and process restarts.
                         # A retry always needs another validated broker snapshot.
                         raise
-            return {'trade_id':tid,'state':'cancel_pending'}
+            if any(order['cid'] in reconciled and order['broker_id'] for order in cancel):
+                return {'trade_id':tid,'state':'cancel_pending'}
+            if failures: return {'trade_id':tid,'state':'reconcile_required','error':failures[0]}
+            return {'trade_id':tid,'state':'waiting_for_reconciliation'}
+        if failures: return {'trade_id':tid,'state':'reconcile_required','error':failures[0]}
+        if any(order['cid'] not in reconciled for order in orders):
+            self._trace(tid,'execution_deferred',e['event_id'],reason='prior_order_evidence_unavailable')
+            return {'trade_id':tid,'state':'waiting_for_reconciliation'}
         if active: return {'trade_id':tid,'state':'working'}
         settings=self.load_settings(); action=e['action']; side='sell' if action=='exit' else 'buy'
         if action=='cancel' or (side=='buy' and (row['invalid'] or row['skipped'] or timed_out)): return self._settle(tid,e,'invalidated')

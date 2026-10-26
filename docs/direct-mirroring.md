@@ -1,5 +1,7 @@
 # Direct trade mirroring
 
+This documents the **legacy confirmed-fill-to-PC receiver**, a separate path from current native submission-time mirroring. For iOS, Android and PC Host/Receive, use [submission-time mirroring](intent-mirroring.md). The PC-only execution restriction below applies to this legacy receiver.
+
 Crier can send confirmed Alpaca fills from a customer's iPhone directly to a PC receiver, which places matching Alpaca orders. Discord is optional and independent. This version executes on the PC; a phone can open its private web console, but phone-only execution is not implemented.
 
 ## Receiver setup

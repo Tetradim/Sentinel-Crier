@@ -19,3 +19,7 @@ These items have not been silently marked passed, and no new mandatory paper-com
 Phase J implements H.5's optional fixed/ratio/budget sizing, separate local quantity/notional enforcement, proportional source-intent/full-tracked exits and acknowledged entry timeouts on Python/Windows, Android and iOS. Durable receipt snapshots, frozen revision plans, verified metadata/costs and complete proportional history preserve legacy defaults and prevent settings edits from changing old trades. The [completed implementation plan](superpowers/plans/2026-10-25-live-execution-policy.md) and [accepted evidence](acceptance/2026-10-25/live-execution-policy/source-evidence.json) record source verification. Automatic exit repricing remains outside this scope.
 
 The [current settings guide](execution-policies.md) describes available behavior. The [customer acceptance guide](customer-acceptance.md) identifies installable testing routes, recovery, support, automated checks and the deferred real trials.
+
+## Reconciliation hardening under verification
+
+The [Phase K plan](superpowers/plans/2026-10-26-terminal-reconciliation.md) adds fresh terminal-order evidence at execution boundaries. It prevents unavailable or corrected cached fills from authorizing another order, while retaining independently verified cancellations. Source implementation and local tests are complete; native/source-bound CI and final evidence are pending.

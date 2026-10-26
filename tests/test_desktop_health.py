@@ -35,13 +35,14 @@ def test_account_and_fill_checks_have_separate_scoped_evidence_and_restart_stops
     finally: client.close()
 
 
-def test_execution_worker_cannot_report_healthy_while_reconciliation_is_required(tmp_path):
+@pytest.mark.parametrize('state',['reconcile_required','waiting_for_reconciliation'])
+def test_execution_worker_cannot_report_healthy_while_reconciliation_is_required(tmp_path,state):
     async def run():
         observations=[]; stop=asyncio.Event(); loop=asyncio.get_running_loop()
         device=IntentDevice(tmp_path,observe=lambda *args:observations.append(args))
         def tick():
             loop.call_soon_threadsafe(stop.set); loop.call_soon_threadsafe(device.changed.set)
-            return [{'state':'reconcile_required'}]
+            return [{'state':state}]
         device.engine=SimpleNamespace(tick=tick)
         await device.execute_loop(stop)
         assert observations==[('execution','blocked','reconciliation_required')]

@@ -86,6 +86,22 @@ final class IntentPolicyTests: XCTestCase {
         trade.sourceHistoryInvalid = true
         XCTAssertThrowsError(try trade.proportionalDue(event: second, history: history))
     }
+    func testFreshTerminalProofValidatesBindingStatusFillsAndAverage() throws {
+        let cached = AlpacaOrder(id: "broker", client_order_id: "buy", symbol: "AAPL", status: "canceled", qty: "5", limit_price: "10", filled_qty: "2", filled_avg_price: "9", side: "buy")
+        let mutation = IntentMutation(clientID: "buy", eventID: "event", sell: false, quantity: 5, order: cached)
+        let valid = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(cached)) as? [String: Any])
+        for (key, value) in [("id", "different"), ("client_order_id", "different"), ("symbol", "MSFT"), ("side", "sell"), ("qty", "6"), ("filled_qty", "1"), ("filled_qty", "2.5"), ("filled_qty", "6"), ("filled_avg_price", "NaN"), ("filled_avg_price", "0"), ("filled_avg_price", "-1"), ("status", "invented")] {
+            var malformed = valid; malformed[key] = value
+            let incoming = try JSONDecoder().decode(AlpacaOrder.self, from: JSONSerialization.data(withJSONObject: malformed))
+            XCTAssertThrowsError(try mutation.validate(incoming, symbol: "AAPL"), key + "=" + value)
+        }
+        var corrected = valid; corrected["filled_qty"] = "3"; corrected["filled_avg_price"] = "0.1666666667"
+        let fresh = try JSONDecoder().decode(AlpacaOrder.self, from: JSONSerialization.data(withJSONObject: corrected))
+        XCTAssertNoThrow(try mutation.validate(fresh, symbol: "AAPL"))
+        var missingCost = corrected; missingCost.removeValue(forKey: "filled_avg_price")
+        XCTAssertNoThrow(try mutation.validate(JSONDecoder().decode(AlpacaOrder.self, from: JSONSerialization.data(withJSONObject: missingCost)), symbol: "AAPL"))
+    }
+
 }
 
 @MainActor
@@ -256,6 +272,10 @@ final class IntentPolicyRuntimeTests: XCTestCase {
         AlpacaMockURLProtocol.handler = { request in
             if request.url?.path == "/v2/account" { return (200, Self.account) }
             if request.url?.path == "/v2/assets/AAPL" { return (200, Self.asset) }
+            if request.url?.path == "/v2/orders:by_client_order_id" {
+                let client = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first?.value ?? ""
+                return (200, try self.order(client, status: "filled", filled: "3"))
+            }
             posts += 1
             let body = try Self.body(request)
             return (200, try self.order(try XCTUnwrap(body["client_order_id"] as? String), status: "filled", filled: "3"))
@@ -284,6 +304,10 @@ final class IntentPolicyRuntimeTests: XCTestCase {
         AlpacaMockURLProtocol.handler = { request in
             if request.url?.path == "/v2/account" { return (200, Self.account) }
             if request.url?.path == "/v2/assets/AAPL" { return (200, Self.asset) }
+            if request.url?.path == "/v2/orders:by_client_order_id" {
+                let client = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first?.value ?? ""
+                return (200, try self.order(client, status: "filled", filled: "3"))
+            }
             if request.url?.path == "/v2/positions" { return (200, Data(#"[{"symbol":"AAPL","qty":"100","qty_available":"100","avg_entry_price":"10"}]"#.utf8)) }
             posts += 1; let body = try Self.body(request)
             XCTAssertEqual(body["side"] as? String, "sell"); XCTAssertEqual(body["qty"] as? String, "3")
@@ -291,6 +315,307 @@ final class IntentPolicyRuntimeTests: XCTestCase {
         }
         await exitController.process()
         XCTAssertEqual(posts, 2); XCTAssertEqual(exitController.state.trades[first.trade_id]?.owned, 0)
+    }
+
+    private func terminalState(advanced: Bool, action: String = "exit", budget: Bool = false) throws -> (IntentState, IntentEvent, IntentEvent) {
+        var state = IntentState(); state.accountID = "account"; state.pairingID = pair().fingerprint; state.pairingRole = "follower"; state.preferences.paused = false
+        var policy = IntentExecutionPolicy()
+        if budget { policy.mode = "budget"; policy.budget = "100" }
+        let first = IntentEvent.make(trade: UUID().uuidString.lowercased(), sequence: 1, action: "enter", environment: .paper, symbol: "AAPL", asset: "stock", quantity: budget ? 10 : 5, price: "10")
+        var next = first; next.sequence = 2; next.action = action; next.event_id = UUID().uuidString.lowercased(); if budget { next.limit_price = "20" }
+        var trade = IntentTrade(); try trade.accept(first); try trade.accept(next)
+        if advanced {
+            let snapshot = IntentPolicySnapshot(legacy: false, policy: policy, pairing: pair().fingerprint, role: "follower", accountID: "account", environment: .paper, symbol: "AAPL", asset: "stock")
+            let binding = IntentPolicyBinding(accountID: "account", environment: .paper, symbol: "AAPL", asset: "stock", instrumentID: "asset-id", multiplier: 1, currency: "USD")
+            trade.policySnapshot = snapshot; trade.policyBinding = binding
+            trade.entryPlans = [first.event_id: IntentEntryPlan(event: first, snapshot: snapshot, target: first.quantity, price: "10", binding: binding, baselineBought: 0, baselineSpent: "0", pricingBasis: IntentPricingBasis(IntentPreferences()))]
+        } else { trade.policySnapshot = .legacy(first) }
+        trade.mutations = [IntentMutation(clientID: "old-buy", eventID: first.event_id, sell: false, quantity: first.quantity, order: AlpacaOrder(id: "broker-id", client_order_id: "old-buy", symbol: "AAPL", status: "canceled", qty: String(first.quantity), limit_price: "10", filled_qty: "2", filled_avg_price: "9", side: "buy"))]
+        state.trades[first.trade_id] = trade; state.received = [first.event_id: first, next.event_id: next]
+        return (state, first, next)
+    }
+    private func restore(_ state: IntentState) throws -> IntentController {
+        try write(state)
+        let controller = try IntentController(file: file, session: session())
+        let api = AlpacaREST(environment: .paper, credentials: AlpacaCredentials(key: "test", secret: "test"), session: session())
+        try controller.connect(api: api, account: "account", pairing: pair(), startWorkers: false)
+        return controller
+    }
+    func testTerminalBuyUnavailableBlocksLegacyAndAdvancedExitThenRecoversOnce() async throws {
+        for advanced in [false, true] {
+            let (state, first, _) = try terminalState(advanced: advanced)
+            let controller = try restore(state); defer { controller.disconnect() }
+            var available = false; var posts = 0; var lookups = 0
+            AlpacaMockURLProtocol.handler = { request in
+                if request.url?.path == "/v2/account" { return (200, Self.account) }
+                if request.url?.path == "/v2/assets/AAPL" { return (200, Self.asset) }
+                if request.url?.path == "/v2/orders:by_client_order_id" {
+                    lookups += 1
+                    if !available { return (404, Data()) }
+                    let client = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first?.value ?? ""
+                    if client == "old-buy" { return (200, try self.order("old-buy", quantity: "5", status: "canceled", filled: "3")) }
+                    return (200, try JSONSerialization.data(withJSONObject: ["id":"exit-id", "client_order_id":client, "symbol":"AAPL", "side":"sell", "status":"filled", "qty":"3", "filled_qty":"3", "filled_avg_price":"10"]))
+                }
+                if request.url?.path == "/v2/positions" { return (200, Data(#"[{"symbol":"AAPL","qty":"100","qty_available":"100","avg_entry_price":"10"}]"#.utf8)) }
+                posts += 1; let body = try Self.body(request)
+                XCTAssertEqual(body["qty"] as? String, "3")
+                return (200, try JSONSerialization.data(withJSONObject: ["id":"exit-id", "client_order_id": try XCTUnwrap(body["client_order_id"] as? String), "symbol":"AAPL", "side":"sell", "status":"filled", "qty":"3", "filled_qty":"3", "filled_avg_price":"10"]))
+            }
+            await controller.process(); XCTAssertEqual(posts, 0)
+            XCTAssertEqual(controller.state.trades[first.trade_id]?.owned, 2)
+            available = true; await controller.process(); await controller.process()
+            XCTAssertEqual(posts, 1); XCTAssertEqual(lookups, 4)
+            XCTAssertEqual(controller.state.trades[first.trade_id]?.owned, 0)
+            try await controller.reconcileBeforeResume(); await controller.process()
+            XCTAssertEqual(lookups, 4, "Completed trade must remain idle without polling settled history")
+        }
+    }
+    func testTerminalBuyFreshQuantityAndAverageConstrainBudgetReplace() async throws {
+        let (state, first, next) = try terminalState(advanced: true, action: "replace", budget: true)
+        let controller = try restore(state); defer { controller.disconnect() }
+        var posts = 0; var available = false; var replacementClient = ""
+        AlpacaMockURLProtocol.handler = { request in
+            if request.url?.path == "/v2/account" { return (200, Self.account) }
+            if request.url?.path == "/v2/assets/AAPL" { return (200, Self.asset) }
+            if request.url?.path == "/v2/orders:by_client_order_id" {
+                let client = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "client_order_id" })?.value
+                if client == "old-buy" {
+                    if !available { return (404, Data()) }
+                    return (200, try JSONSerialization.data(withJSONObject: ["id":"broker-id", "client_order_id":"old-buy", "symbol":"AAPL", "side":"buy", "status":"canceled", "qty":"10", "filled_qty":"3", "filled_avg_price":"8"]))
+                }
+                return (200, try self.order(replacementClient))
+            }
+            posts += 1; let body = try Self.body(request); replacementClient = try XCTUnwrap(body["client_order_id"] as? String)
+            XCTAssertEqual(body["qty"] as? String, "3")
+            return (200, try self.order(replacementClient))
+        }
+        await controller.process(); XCTAssertEqual(posts, 0)
+        available = true; await controller.process(); await controller.process()
+        XCTAssertEqual(posts, 1)
+        XCTAssertEqual(controller.state.trades[first.trade_id]?.mutations[0].order?.filled_avg_price, "8")
+        XCTAssertEqual(controller.state.trades[first.trade_id]?.entryPlans?[next.event_id]?.target, 6)
+        XCTAssertEqual(controller.state.trades[first.trade_id]?.entryPlans?[next.event_id]?.baselineSpent, "24")
+    }
+    func testTerminalSellUnavailableBlocksNewSaleAndResumeUntilFreshProof() async throws {
+        var (state, first, next) = try terminalState(advanced: false)
+        state.trades[first.trade_id]!.mutations[0].order = AlpacaOrder(id: "broker-id", client_order_id: "old-buy", symbol: "AAPL", status: "filled", qty: "5", limit_price: "10", filled_qty: "5", filled_avg_price: "10", side: "buy")
+        state.trades[first.trade_id]!.mutations.append(IntentMutation(clientID: "old-sell", eventID: "prior-exit", sell: true, quantity: 3, order: AlpacaOrder(id: "old-sell-id", client_order_id: "old-sell", symbol: "AAPL", status: "canceled", qty: "3", limit_price: "10", filled_qty: "2", filled_avg_price: "10", side: "sell")))
+        let controller = try restore(state); defer { controller.disconnect() }
+        var available = false; var posts = 0
+        AlpacaMockURLProtocol.handler = { request in
+            if request.url?.path == "/v2/account" { return (200, Self.account) }
+            if request.url?.path == "/v2/orders:by_client_order_id" {
+                let client = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first?.value
+                if client == "old-buy" { return (200, try self.order("old-buy", quantity: "5", status: "filled", filled: "5")) }
+                if !available { return (404, Data()) }
+                if client != "old-sell" { return (200, try JSONSerialization.data(withJSONObject: ["id":"new-sell", "client_order_id":client ?? "", "symbol":"AAPL", "side":"sell", "status":"filled", "qty":"2", "filled_qty":"2", "filled_avg_price":"10"])) }
+                return (200, try JSONSerialization.data(withJSONObject: ["id":"old-sell-id", "client_order_id":"old-sell", "symbol":"AAPL", "side":"sell", "status":"canceled", "qty":"3", "filled_qty":"3", "filled_avg_price":"10"]))
+            }
+            if request.url?.path == "/v2/positions" { return (200, Data(#"[{"symbol":"AAPL","qty":"100","qty_available":"100","avg_entry_price":"10"}]"#.utf8)) }
+            posts += 1; let body = try Self.body(request); XCTAssertEqual(body["qty"] as? String, "2")
+            return (200, try JSONSerialization.data(withJSONObject: ["id":"new-sell", "client_order_id": try XCTUnwrap(body["client_order_id"] as? String), "symbol":"AAPL", "side":"sell", "status":"filled", "qty":"2", "filled_qty":"2", "filled_avg_price":"10"]))
+        }
+        do { try await controller.reconcileBeforeResume(); XCTFail("Missing terminal sell proof must block resume") } catch {}
+        await controller.process(); XCTAssertEqual(posts, 0)
+        available = true; try await controller.reconcileBeforeResume(); await controller.process(); await controller.process()
+        XCTAssertEqual(posts, 1); XCTAssertEqual(controller.state.trades[first.trade_id]?.completed, next.event_id)
+    }
+
+    func testMalformedTerminalProofStillAllowsSeparatelyVerifiedWorkingBuyCancel() async throws {
+        for workingProofAvailable in [false, true] {
+            var (state, first, cancel) = try terminalState(advanced: false, action: "cancel")
+            cancel.sequence = 3; state.trades[first.trade_id]!.desired = cancel
+            state.trades[first.trade_id]!.mutations.append(IntentMutation(clientID: "working-buy", eventID: "replace", sell: false, quantity: 3, order: AlpacaOrder(id: "working-id", client_order_id: "working-buy", symbol: "AAPL", status: "new", qty: "3", limit_price: "10", filled_qty: "0", filled_avg_price: nil, side: "buy")))
+            let controller = try restore(state); defer { controller.disconnect() }
+            var lookups: [String] = []; var deletes = 0; var posts = 0
+            AlpacaMockURLProtocol.handler = { request in
+                if request.url?.path == "/v2/account" { return (200, Self.account) }
+                if request.url?.path == "/v2/orders:by_client_order_id" {
+                    let client = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first?.value ?? ""
+                    lookups.append(client)
+                    if client == "old-buy" { return (200, try JSONSerialization.data(withJSONObject: ["id":"broker-id", "client_order_id":"old-buy", "symbol":"AAPL", "side":"buy", "status":"canceled", "qty":"5", "filled_qty":"2", "filled_avg_price":"-1"])) }
+                    if !workingProofAvailable { return (404, Data()) }
+                    return (200, try JSONSerialization.data(withJSONObject: ["id":"working-id", "client_order_id":"working-buy", "symbol":"AAPL", "side":"buy", "status":"new", "qty":"3", "filled_qty":"0"]))
+                }
+                if request.httpMethod == "DELETE" { deletes += 1; XCTAssertEqual(request.url?.path, "/v2/orders/working-id"); return (204, Data()) }
+                posts += 1; return (500, Data())
+            }
+            await controller.process()
+            XCTAssertEqual(lookups, ["old-buy", "working-buy"])
+            XCTAssertEqual(deletes, workingProofAvailable ? 1 : 0); XCTAssertEqual(posts, 0)
+            XCTAssertEqual(controller.state.trades[first.trade_id]?.mutations[0].order?.filled_avg_price, "9")
+            XCTAssertEqual(controller.state.trades[first.trade_id]?.mutations[1].cancelUnknown, workingProofAvailable)
+        }
+    }
+
+    func testNewRevisionSkipsOnlyExplicitLocalNoOrderDisposition() async throws {
+        for explicitRefusal in [false, true] {
+            var (state, first, _) = try terminalState(advanced: false, action: "replace")
+            if explicitRefusal {
+                state.trades[first.trade_id]!.mutations[0] = IntentMutation(clientID: "old-buy", eventID: first.event_id, sell: false, quantity: 5, notSubmitted: true)
+            } else {
+                state.trades[first.trade_id]!.mutations[0].order = AlpacaOrder(id: "old-buy", client_order_id: "old-buy", symbol: "AAPL", status: "rejected", qty: "5", limit_price: "10", filled_qty: "0", filled_avg_price: nil, side: "buy")
+            }
+            let controller = try restore(state); defer { controller.disconnect() }
+            var lookups = 0; var posts = 0
+            AlpacaMockURLProtocol.handler = { request in
+                if request.url?.path == "/v2/account" { return (200, Self.account) }
+                if request.url?.path == "/v2/orders:by_client_order_id" { lookups += 1; return (404, Data()) }
+                posts += 1; let body = try Self.body(request)
+                XCTAssertEqual(body["qty"] as? String, "5")
+                return (200, try self.order(try XCTUnwrap(body["client_order_id"] as? String), quantity: "5", status: "filled", filled: "5"))
+            }
+            await controller.process()
+            XCTAssertEqual(lookups, explicitRefusal ? 0 : 1)
+            XCTAssertEqual(posts, explicitRefusal ? 1 : 0)
+        }
+    }
+
+    func testCompletedCancelTimerAndRejectedExitStopPollingUntilNewInstruction() async throws {
+        for disposition in ["cancel", "timer", "rejected_exit", "canceled_exit"] {
+            var (state, first, next) = try terminalState(advanced: disposition == "timer", action: disposition == "cancel" ? "cancel" : "exit")
+            if disposition == "timer" {
+                next = first; state.trades[first.trade_id]!.desired = first; state.trades[first.trade_id]!.invalidated = false
+                state.received = [first.event_id: first]
+                var snapshot = state.trades[first.trade_id]!.policySnapshot!
+                snapshot.policy!.entry_timeout_seconds = 60
+                state.trades[first.trade_id]!.policySnapshot = snapshot
+                state.trades[first.trade_id]!.entryPlans![first.event_id]!.snapshot = snapshot
+                state.trades[first.trade_id]!.entryClosed = true
+            }
+            if disposition.hasSuffix("exit") {
+                state.trades[first.trade_id]!.mutations.append(IntentMutation(clientID: "failed-exit", eventID: next.event_id, sell: true, quantity: 2, order: AlpacaOrder(id: "failed-exit-id", client_order_id: "failed-exit", symbol: "AAPL", status: disposition == "rejected_exit" ? "rejected" : "canceled", qty: "2", limit_price: "10", filled_qty: "0", filled_avg_price: nil, side: "sell")))
+            }
+            let controller = try restore(state); defer { controller.disconnect() }
+            var lookups = 0; var posts = 0
+            AlpacaMockURLProtocol.handler = { request in
+                if request.url?.path == "/v2/account" { return (200, Self.account) }
+                if request.url?.path == "/v2/orders:by_client_order_id" {
+                    lookups += 1
+                    let client = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first?.value
+                    if client == "old-buy" { return (200, try self.order("old-buy", quantity: "5", status: "canceled", filled: "2")) }
+                    return (200, try JSONSerialization.data(withJSONObject: ["id":"failed-exit-id", "client_order_id":"failed-exit", "symbol":"AAPL", "side":"sell", "status":disposition == "rejected_exit" ? "rejected" : "canceled", "qty":"2", "filled_qty":"0"]))
+                }
+                posts += 1; return (500, Data())
+            }
+            try await controller.reconcileBeforeResume(); await controller.process()
+            XCTAssertEqual(controller.state.trades[first.trade_id]?.completed, next.event_id, disposition)
+            let initialLookups = lookups
+            await controller.process(); await controller.process(); try await controller.reconcileBeforeResume()
+            XCTAssertEqual(lookups, initialLookups, disposition + " must stop terminal history polling")
+            XCTAssertEqual(posts, 0)
+            XCTAssertTrue(controller.state.unresolved.contains(first.trade_id), "Tracked holdings still prevent archival")
+            var followup = controller.state; var cancel = next
+            cancel.event_id = UUID().uuidString.lowercased(); cancel.sequence += 1; cancel.action = "cancel"
+            try followup.trades[first.trade_id]!.accept(cancel); followup.received[cancel.event_id] = cancel
+            controller.disconnect()
+            let resumed = try restore(followup); defer { resumed.disconnect() }
+            await resumed.process()
+            XCTAssertGreaterThan(lookups, initialLookups, "A new instruction must obtain fresh terminal proof again")
+        }
+    }
+
+    func testResumeCancelsFreshWorkingBuyBeforeThrowingUnrelatedTerminalFailure() async throws {
+        for timed in [false, true] {
+            var (state, first, next) = try terminalState(advanced: timed, action: timed ? "replace" : "cancel")
+            if timed {
+                var snapshot = state.trades[first.trade_id]!.policySnapshot!
+                snapshot.policy!.entry_timeout_seconds = 60
+                state.trades[first.trade_id]!.policySnapshot = snapshot
+                state.trades[first.trade_id]!.entryPlans![first.event_id]!.snapshot = snapshot
+            }
+            var working = IntentMutation(clientID: "working-buy", eventID: timed ? next.event_id : "working-entry", sell: false, quantity: 3,
+                order: AlpacaOrder(id: "working-id", client_order_id: "working-buy", symbol: "AAPL", status: "new", qty: "3", limit_price: "10", filled_qty: "0", filled_avg_price: nil, side: "buy"))
+            if timed { working.acknowledgedSession = "previous-session"; working.acknowledgedUptime = 5 }
+            state.trades[first.trade_id]!.mutations.append(working)
+            let controller = try restore(state); defer { controller.disconnect() }
+            var lookups: [String] = []; var deletes = 0; var posts = 0
+            AlpacaMockURLProtocol.handler = { request in
+                if request.url?.path == "/v2/account" { return (200, Self.account) }
+                if request.url?.path == "/v2/orders:by_client_order_id" {
+                    let client = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first?.value ?? ""
+                    lookups.append(client)
+                    if client == "old-buy" { return (404, Data()) }
+                    return (200, try JSONSerialization.data(withJSONObject: ["id":"working-id", "client_order_id":"working-buy", "symbol":"AAPL", "side":"buy", "status":"new", "qty":"3", "filled_qty":"0"]))
+                }
+                if request.httpMethod == "DELETE" { deletes += 1; XCTAssertEqual(request.url?.path, "/v2/orders/working-id"); return (204, Data()) }
+                posts += 1; return (500, Data())
+            }
+            do { try await controller.reconcileBeforeResume(); XCTFail("Terminal 404 must still block resume") } catch {}
+            XCTAssertEqual(lookups, ["old-buy", "working-buy"])
+            XCTAssertEqual(deletes, 1); XCTAssertEqual(posts, 0)
+            XCTAssertEqual(controller.state.trades[first.trade_id]?.mutations[1].cancelUnknown, true)
+            if timed { XCTAssertEqual(controller.state.trades[first.trade_id]?.entryClosed, true) }
+            XCTAssertNotEqual(controller.state.trades[first.trade_id]?.completed, next.event_id)
+        }
+    }
+
+    func testTerminalBuysStopPollingUntilNewSourceInstruction() async throws {
+        for status in ["filled", "canceled", "rejected"] {
+            var (state, first, _) = try terminalState(advanced: false)
+            state.trades[first.trade_id]!.desired = first; state.trades[first.trade_id]!.invalidated = false
+            state.received = [first.event_id: first]
+            let filled = status == "filled" ? "5" : (status == "canceled" ? "2" : "0")
+            state.trades[first.trade_id]!.mutations[0].order = AlpacaOrder(id: "broker-id", client_order_id: "old-buy", symbol: "AAPL", status: status, qty: "5", limit_price: "10", filled_qty: filled, filled_avg_price: filled == "0" ? nil : "10", side: "buy")
+            let controller = try restore(state); defer { controller.disconnect() }
+            var lookups = 0; var posts = 0
+            AlpacaMockURLProtocol.handler = { request in
+                if request.url?.path == "/v2/account" { return (200, Self.account) }
+                if request.url?.path == "/v2/orders:by_client_order_id" {
+                    lookups += 1
+                    return (200, try JSONEncoder().encode(state.trades[first.trade_id]!.mutations[0].order!))
+                }
+                posts += 1; return (500, Data())
+            }
+            await controller.process()
+            XCTAssertEqual(controller.state.trades[first.trade_id]?.completed, first.event_id, status)
+            XCTAssertEqual(lookups, 1)
+            await controller.process(); await controller.process(); try await controller.reconcileBeforeResume()
+            XCTAssertEqual(lookups, 1, status + " buy must stop polling without new work")
+            var followup = controller.state; var cancel = first
+            cancel.event_id = UUID().uuidString.lowercased(); cancel.sequence = 2; cancel.action = "cancel"
+            try followup.trades[first.trade_id]!.accept(cancel); followup.received[cancel.event_id] = cancel
+            controller.disconnect()
+            let resumed = try restore(followup); defer { resumed.disconnect() }
+            await resumed.process()
+            XCTAssertEqual(lookups, 2, "A new source ID must refresh prior terminal buy proof")
+            XCTAssertEqual(posts, 0)
+        }
+    }
+
+    func testPriorHTTPRefusalUpgradeRequiresExactWriterAndDurableDiagnosticProof() throws {
+        for code in [400, 401, 403, 429, 500, 0] {
+            var (state, first, _) = try terminalState(advanced: false, action: "replace")
+            let client = "si-" + first.event_id + "-b"
+            let synthetic = AlpacaOrder(id: client, client_order_id: client, symbol: "AAPL", status: "rejected", qty: "5", limit_price: "10", filled_qty: "0", filled_avg_price: nil, side: "buy")
+            state.trades[first.trade_id]!.mutations = [IntentMutation(clientID: client, eventID: first.event_id, sell: false, quantity: 5, order: synthetic)]
+            let observation = DiagnosticObservation(stage: "receiver", observed_at: first.created_at, clock_offset_ms: nil, clock_uncertainty_ms: nil, clock_sampled_at: nil)
+            if code != 0 { state.diagnostics = [first.event_id: IntentDiagnosticRecord(event: first, observation: observation, timeline: [DiagnosticStep(at: first.created_at, stage: "broker_rejected", detail: "HTTP \(code)")])] }
+            try write(state)
+            let controller = try IntentController(file: file)
+            let upgraded = [400, 401, 403, 429].contains(code)
+            let mutation = try XCTUnwrap(controller.state.trades[first.trade_id]?.mutations.first)
+            XCTAssertEqual(mutation.notSubmitted == true, upgraded)
+            XCTAssertEqual(mutation.order == nil, upgraded)
+            XCTAssertEqual(mutation.priorHTTPRefusalOrder?.id, upgraded ? client : nil)
+            XCTAssertEqual(controller.state.diagnostics?[first.event_id]?.timeline.first?.detail, code == 0 ? nil : "HTTP \(code)")
+            let restored = try IntentController(file: file)
+            XCTAssertEqual(restored.state.diagnostics?[first.event_id]?.timeline.count, code == 0 ? nil : (upgraded ? 2 : 1))
+            if code == 400 {
+                var conflicting = state
+                conflicting.diagnostics?[first.event_id]?.timeline.append(DiagnosticStep(at: first.created_at, stage: "broker_response", detail: "client=" + client + " broker=" + client + " status=rejected"))
+                try write(conflicting)
+                XCTAssertNil(try IntentController(file: file).state.trades[first.trade_id]?.mutations.first?.notSubmitted)
+                var unknown = state
+                unknown.trades[first.trade_id]!.mutations[0].order = nil
+                try write(unknown)
+                XCTAssertNil(try IntentController(file: file).state.trades[first.trade_id]?.mutations.first?.notSubmitted)
+                var realBroker = state
+                realBroker.trades[first.trade_id]!.mutations[0].order = AlpacaOrder(id: "real-broker-id", client_order_id: client, symbol: "AAPL", status: "rejected", qty: "5", limit_price: "10", filled_qty: "0", filled_avg_price: nil, side: "buy")
+                try write(realBroker)
+                XCTAssertNil(try IntentController(file: file).state.trades[first.trade_id]?.mutations.first?.notSubmitted)
+            }
+        }
     }
 
 }

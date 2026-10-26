@@ -243,7 +243,7 @@ def test_phase5_lost_broker_post_response_restarts_without_duplicate(rig):
     assert rig.follower.engine.status()['orders'][0]['status'] == 'unknown'
     rig.restart_follower()
     rig.follower_api.lookup_hidden = True
-    assert rig.follower.engine.tick()[0]['state'] == 'working'
+    assert rig.follower.engine.tick()[0]['state'] == 'waiting_for_reconciliation'
     assert len(rig.follower_api.posts) == 1
     rig.restart_follower()
     rig.follower_api.lookup_hidden = False

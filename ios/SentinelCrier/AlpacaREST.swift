@@ -229,7 +229,7 @@ final class AlpacaREST {
         guard !id.isEmpty, id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }) else { throw AlpacaError.invalid("Invalid broker order ID.") }
         return try JSONDecoder().decode(AlpacaOrder.self, from: await request("v2/orders/" + id))
     }
-    func cancel(orderID: String, permit: OAuthEffectPermit? = nil) async throws { _ = try await request("v2/orders/" + orderID, method: "DELETE", permit: permit) }
+    func cancel(orderID: String, permit: OAuthEffectPermit? = nil, canCancel: (@MainActor () -> Bool)? = nil) async throws { _ = try await request("v2/orders/" + orderID, method: "DELETE", permit: permit, canSubmit: canCancel) }
     func fills(pageToken: String? = nil) async throws -> [AlpacaFill] {
         var query = [URLQueryItem(name: "direction", value: "desc"), URLQueryItem(name: "page_size", value: "100")]
         if let pageToken { query.append(URLQueryItem(name: "page_token", value: pageToken)) }
