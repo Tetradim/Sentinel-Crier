@@ -33,6 +33,8 @@ The implemented trading clients currently use **Alpaca**. **Webull Connect is no
 
 **Push and copy dashboard:** Saved host instructions stream to connected receivers before the host fills. Separate device reports populate the read-only **Copy dashboard** with quantities, fill averages, remaining tracked units, actual price differences and available clock/quote evidence. The hosted testing relay has the push migration and updated function deployed. Polling remains a labeled recovery path. Closed gross P&L requires complete verified evidence; net values require actual fees, and open estimates require a fresh observed bid. See [push delivery and dashboard](docs/push-dashboard.md) for privacy, availability and acceptance limits.
 
+| Broker | Current status |
+| --- | --- |
 | Alpaca | Paper/live clients for whole-share stocks and standard long single-leg options. The separate Python fill monitor also handles supported fractional stock fills. |
 | Tradier | Read-only Python polling adapter; account-specific validation is required. |
 | Webull Trading API | Experimental Python SDK observer with separate enrollment and verification requirements. |

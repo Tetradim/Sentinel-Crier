@@ -1,0 +1,9 @@
+{
+  "checks_passed": true,
+  "platform": "iphoneos",
+  "version": "0.2.0",
+  "build_number": "1",
+  "signing": "not_verified",
+  "installable_package": false,
+  "physical_acceptance": "deferred_by_owner"
+}

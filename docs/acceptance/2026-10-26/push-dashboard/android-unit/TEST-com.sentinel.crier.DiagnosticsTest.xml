@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.sentinel.crier.DiagnosticsTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-26T12:39:44" hostname="runnervmr9t6g" time="0.019">
+  <properties/>
+  <testcase name="midpointAndWallJump" classname="com.sentinel.crier.DiagnosticsTest" time="0.001"/>
+  <testcase name="futureClockAndHugePriceRejected" classname="com.sentinel.crier.DiagnosticsTest" time="0.002"/>
+  <testcase name="latencyRejectsStaleAndImpossible" classname="com.sentinel.crier.DiagnosticsTest" time="0.001"/>
+  <testcase name="missingEvidenceNeverInventsLatencyAndCsvEscapes" classname="com.sentinel.crier.DiagnosticsTest" time="0.014"/>
+  <testcase name="csvNeutralizesFormulasAndPreservesRawEvidence" classname="com.sentinel.crier.DiagnosticsTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,10 +1,10 @@
 # Remaining work after automated customer acceptance
 
-The approved customer-ease phases E–I, live-policy phase J and reconciliation phase K have automated source verification. This is acceptance of the implemented source scope, with exclusions recorded in each phase report.
+The approved customer-ease phases E–I, live-policy phase J, reconciliation phase K and push/dashboard phase L have automated source verification. This is acceptance of the implemented source scope, with exclusions recorded in each phase report.
 
 ## Owner/provider/device work still unpassed
 
-Phase L adds push delivery and the observational copy dashboard. Its [implementation plan](superpowers/plans/2026-10-26-push-dashboard.md) tracks ongoing integration, native CI and hosted deployment verification; it is not yet included in the accepted E–K evidence below. See the [usage and evidence guide](push-dashboard.md).
+Phase L's [completed plan](superpowers/plans/2026-10-26-push-dashboard.md) and [accepted evidence](acceptance/2026-10-26/push-dashboard/source-evidence.json) record push delivery, the read-only dashboard, hosted deployment and an isolated synthetic probe. See the [usage guide](push-dashboard.md). The following external work remains unpassed:
 
 - Webull Connect approval, issued integration details and real authorized integration testing.
 - Provider app registrations/credentials, real OAuth consent and activation/deployment of the separately prepared provider service.
@@ -24,4 +24,4 @@ The [current settings guide](execution-policies.md) describes available behavior
 
 ## Reconciliation hardening verified
 
-The [completed Phase K plan](superpowers/plans/2026-10-26-terminal-reconciliation.md) adds fresh terminal-order evidence at execution boundaries. It prevents unavailable or corrected cached fills from authorizing another order, while retaining independently verified cancellations and stopping resolved historical polling. The [accepted evidence](acceptance/2026-10-26/terminal-reconciliation/source-evidence.json) records full/native/platform/package verification. No approved source implementation item remains open in phases E–K; the owner/provider/device items above remain unpassed.
+The [completed Phase K plan](superpowers/plans/2026-10-26-terminal-reconciliation.md) adds fresh terminal-order evidence at execution boundaries. It prevents unavailable or corrected cached fills from authorizing another order, while retaining independently verified cancellations and stopping resolved historical polling. The [accepted evidence](acceptance/2026-10-26/terminal-reconciliation/source-evidence.json) records full/native/platform/package verification. No approved source implementation item remains open in phases E through L; the owner/provider/device items above remain unpassed.

@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.sentinel.crier.CustomerAcceptanceTest" tests="5" failures="0" errors="0" skipped="0" time="12.882" timestamp="2026-10-26T12:42:25" hostname="localhost">
+  <properties>
+    <property name="device" value="emulator-5554 - 15" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="editableFieldsHaveNativeLabelAssociationsAndHints" classname="com.sentinel.crier.CustomerAcceptanceTest" time="3.658" />
+  <testcase name="optionalGuidesDoNotChoosePurposeOrStartWorkers" classname="com.sentinel.crier.CustomerAcceptanceTest" time="6.803" />
+  <testcase name="migrationExplicitlyPinsLegacyAndCurrentMissingMarkerFailsClosed" classname="com.sentinel.crier.LivePolicyPersistenceTest" time="0.232" />
+  <testcase name="receiptSnapshotAndAtomicReconciliationEvidenceSurviveReopen" classname="com.sentinel.crier.LivePolicyPersistenceTest" time="0.643" />
+  <testcase name="downgradeEvidenceIsRetainedAndDoesNotMigrateAsLegacy" classname="com.sentinel.crier.LivePolicyPersistenceTest" time="0.129" />
+</testsuite>

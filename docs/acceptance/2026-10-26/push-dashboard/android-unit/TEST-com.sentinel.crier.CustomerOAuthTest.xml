@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.sentinel.crier.CustomerOAuthTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-10-26T12:39:44" hostname="runnervmr9t6g" time="0.065">
+  <properties/>
+  <testcase name="inactiveReturnWaitsWithoutConsumingAndProcessRestartHasNoInbox" classname="com.sentinel.crier.CustomerOAuthTest" time="0.001"/>
+  <testcase name="brokerAdapterUsesBearerAndRejectsReadOnlyConsent" classname="com.sentinel.crier.CustomerOAuthTest" time="0.002"/>
+  <testcase name="loginConsentRedeemInstallRestartLogout" classname="com.sentinel.crier.CustomerOAuthTest" time="0.015"/>
+  <testcase name="ambiguousRedemptionConsumesReceiptAndExplicitRefreshPinsOwner" classname="com.sentinel.crier.CustomerOAuthTest" time="0.004"/>
+  <testcase name="installRejectsActiveWrongOwnerEnvironmentAccountAndIdentity" classname="com.sentinel.crier.CustomerOAuthTest" time="0.006"/>
+  <testcase name="workersFenceLoginAndLogoutAndFailedRefreshKeepsOriginalSessionOwner" classname="com.sentinel.crier.CustomerOAuthTest" time="0.003"/>
+  <testcase name="exactServiceProvenanceFencesSameUuidAcrossProjectsAndMissingMetadata" classname="com.sentinel.crier.CustomerOAuthTest" time="0.003"/>
+  <testcase name="alertsInstallRestartDestinationGuardAndLogoutRetainUncertainEvidence" classname="com.sentinel.crier.CustomerOAuthTest" time="0.025"/>
+  <testcase name="authenticationModeNeverMixesHeadersAndTrustIsExact" classname="com.sentinel.crier.CustomerOAuthTest" time="0.001"/>
+  <testcase name="destinationOwnershipIsCheckedBeforeSendingIndependentlyOfManualBrokerKeys" classname="com.sentinel.crier.CustomerOAuthTest" time="0.0"/>
+  <testcase name="ordinaryDestinationSaveCannotStripOAuthProvenance" classname="com.sentinel.crier.CustomerOAuthTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "scope": "isolated synthetic paper channel; no broker or Discord consumers",
+  "tested_at": "2026-10-26T12:14:54.550623+00:00",
+  "service": "https://afvumgzbfqyrugjqrteu.supabase.co/functions/v1/crier",
+  "push_delivered": true,
+  "durable_cursor_match": true,
+  "device_report_pnl": "2.00",
+  "revoked_receiver_denied": true,
+  "measured_publish_round_trip_and_delivery_ms": 1281.0,
+  "timing_note": "One synthetic client/service sample; not cross-device, cross-state or broker execution latency."
+}

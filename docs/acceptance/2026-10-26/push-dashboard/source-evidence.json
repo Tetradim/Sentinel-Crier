@@ -1,0 +1,298 @@
+{
+  "phase": "L",
+  "status": "Implemented source scope and isolated hosted push verified; external acceptance deferred",
+  "source_commit": "a7ee75c2c723ad35d9bd1404e1587a8a723e0268",
+  "collected_at_utc": "2026-10-26T12:48:58.095922+00:00",
+  "ci_runs": [
+    {
+      "conclusion": "success",
+      "databaseId": 40322456376,
+      "headSha": "b62ad533f2965eee6570ed604802035a413c9f73",
+      "name": "Windows release",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40322456376"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40322454650,
+      "headSha": "b62ad533f2965eee6570ed604802035a413c9f73",
+      "name": "Windows desktop",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40322454650"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40322454621,
+      "headSha": "b62ad533f2965eee6570ed604802035a413c9f73",
+      "name": "Backend tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40322454621"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40324090351,
+      "headSha": "a7ee75c2c723ad35d9bd1404e1587a8a723e0268",
+      "name": "Android build and intent tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40324090351"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40321643798,
+      "headSha": "c757a2841aeaa8c592dc11fae7f04b34f5018433",
+      "name": "iOS build",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40321643798"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40324090364,
+      "headSha": "a7ee75c2c723ad35d9bd1404e1587a8a723e0268",
+      "name": "Crier live-trading safety checks",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40324090364"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40324090348,
+      "headSha": "a7ee75c2c723ad35d9bd1404e1587a8a723e0268",
+      "name": "Customer acceptance",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40324090348"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40321282484,
+      "headSha": "8ec28bfa39fc6a0c5bc27ab35c18582472dcd84d",
+      "name": "Supabase relay tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40321282484"
+    }
+  ],
+  "component_reuse": [
+    {
+      "component": "ios",
+      "path": "ios",
+      "verified_commit": "c757a2841aeaa8c592dc11fae7f04b34f5018433",
+      "accepted_object": "695682370aebb2b6eeaa728c991196dd4409f405",
+      "verified_object": "695682370aebb2b6eeaa728c991196dd4409f405"
+    },
+    {
+      "component": "ios",
+      "path": "tests/fixtures/copy-dashboard.json",
+      "verified_commit": "c757a2841aeaa8c592dc11fae7f04b34f5018433",
+      "accepted_object": "11d4072db992106e036da6b773dd2440166ea1b1",
+      "verified_object": "11d4072db992106e036da6b773dd2440166ea1b1"
+    },
+    {
+      "component": "supabase",
+      "path": "supabase",
+      "verified_commit": "8ec28bfa39fc6a0c5bc27ab35c18582472dcd84d",
+      "accepted_object": "63ffe3d53a2436a864ebdcfd94d7e22e6f96d169",
+      "verified_object": "63ffe3d53a2436a864ebdcfd94d7e22e6f96d169"
+    },
+    {
+      "component": "supabase",
+      "path": ".github/workflows/supabase-tests.yml",
+      "verified_commit": "8ec28bfa39fc6a0c5bc27ab35c18582472dcd84d",
+      "accepted_object": "fd8e4c0a71ac17e56f0d8e6db614d53d6035dbb1",
+      "verified_object": "fd8e4c0a71ac17e56f0d8e6db614d53d6035dbb1"
+    },
+    {
+      "component": "windows_python",
+      "path": "crier",
+      "verified_commit": "b62ad533f2965eee6570ed604802035a413c9f73",
+      "accepted_object": "788a6807b77ab309000f3c08217a5594fdaf721c",
+      "verified_object": "788a6807b77ab309000f3c08217a5594fdaf721c"
+    },
+    {
+      "component": "windows_python",
+      "path": "desktop",
+      "verified_commit": "b62ad533f2965eee6570ed604802035a413c9f73",
+      "accepted_object": "b8c6c857dc7abd7ecfcafd2f6caac1747ba6f651",
+      "verified_object": "b8c6c857dc7abd7ecfcafd2f6caac1747ba6f651"
+    },
+    {
+      "component": "windows_python",
+      "path": "scripts",
+      "verified_commit": "b62ad533f2965eee6570ed604802035a413c9f73",
+      "accepted_object": "c6a63a4dac32ddc8d77d35a0d2d5827f314d9c1d",
+      "verified_object": "c6a63a4dac32ddc8d77d35a0d2d5827f314d9c1d"
+    },
+    {
+      "component": "windows_python",
+      "path": "tests",
+      "verified_commit": "b62ad533f2965eee6570ed604802035a413c9f73",
+      "accepted_object": "7cdf10594be81e03ce379ed2c41c7660e60ad090",
+      "verified_object": "7cdf10594be81e03ce379ed2c41c7660e60ad090"
+    },
+    {
+      "component": "windows_python",
+      "path": "pyproject.toml",
+      "verified_commit": "b62ad533f2965eee6570ed604802035a413c9f73",
+      "accepted_object": "084636e2d6f1fdac228e6b96d5ec801cd2793798",
+      "verified_object": "084636e2d6f1fdac228e6b96d5ec801cd2793798"
+    },
+    {
+      "component": "android",
+      "path": "android",
+      "verified_commit": "a7ee75c2c723ad35d9bd1404e1587a8a723e0268",
+      "accepted_object": "db02379b160f9e5a9fe25c8e626cd43ce3810734",
+      "verified_object": "db02379b160f9e5a9fe25c8e626cd43ce3810734"
+    },
+    {
+      "component": "android",
+      "path": "tests/fixtures/copy-dashboard.json",
+      "verified_commit": "a7ee75c2c723ad35d9bd1404e1587a8a723e0268",
+      "accepted_object": "11d4072db992106e036da6b773dd2440166ea1b1",
+      "verified_object": "11d4072db992106e036da6b773dd2440166ea1b1"
+    }
+  ],
+  "test_counts": {
+    "python_full": {
+      "tests": 1025,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 1
+    },
+    "android_unit": {
+      "tests": 162,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    },
+    "android_ui": {
+      "tests": 5,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "ios_native_tests": 157,
+  "ios_ui_tests": 1,
+  "deno_tests": 13,
+  "local_push_burst_events": 50,
+  "hosted_deployment": {
+    "migration": "20261026104201_push_dashboard.sql",
+    "function": "crier",
+    "source_commit": "8ec28bfa39fc6a0c5bc27ab35c18582472dcd84d",
+    "probe": "hosted-synthetic-probe.json"
+  },
+  "copied_report_sources": {
+    "python-full.xml": "local Windows full OAuth/test environment at b62ad53; unchanged Python/test Git objects at accepted source",
+    "ios-unsigned-archive-validation.json": 40321643798,
+    "windows-installer-acceptance.json": 40322456376,
+    "windows-journey-report.json": 40324090348,
+    "android-unit": 40324090351,
+    "android-ui": 40324090348
+  },
+  "review": {
+    "manual_integration_review": true,
+    "independent_agent": "Unavailable: selected model at capacity"
+  },
+  "real_broker_orders": 0,
+  "real_discord_messages": 0,
+  "physical_acceptance": false,
+  "copied_reports": [
+    {
+      "path": "android-ui/TEST-emulator-5554 - 15-_app-.xml",
+      "sha256": "5b54b89f95173d72c1add028efe2f77ab9f4c9f725feba1fe686c35016f3e8b1"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.BrokerLifecycleFenceTest.xml",
+      "sha256": "194805164e9738d5e9501c76563c8106472d80b848236836dd8e1f1cdd85c9f4"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.CheckedBrokerTest.xml",
+      "sha256": "e90c35f586df657c614a8a8251066595879f07bd681cbbd5497181fb6c177658"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.ComponentHealthTest.xml",
+      "sha256": "5827d316d55b0fc4e5a2b1b4321a2a5ba1fcbf322bbf00fda90d5da0ba31c4f2"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.CustomerOAuthTest.xml",
+      "sha256": "d55e8052d39ac7c06bcea93e94904acb2b255863e688004e345fb89717952873"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.DiagnosticsTest.xml",
+      "sha256": "5959725c2bda68294b4a387a71acefa17b55080fe0fae74fe96671274c975469"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.EngineTest.xml",
+      "sha256": "8d5658b99c1dcf4d903650df8365bb4499eedd76e6bb79ebabd631d0879f73ae"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.EntryClockTest.xml",
+      "sha256": "9ff1515f826fce4c6eb3a4164c5b124bc28c4113036391d43e2d7aa5815cee10"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.ExecutionStartGateTest.xml",
+      "sha256": "639bc1aa41191be2d760922a7cfbe763ae05e199453cc78d1e1b8f63d26af4cc"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.GuidedAlertsTest.xml",
+      "sha256": "4de10a0a46f96fa1136426ea1f9387f01f78d65925200a9c9bca4b3d1811a09c"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.HealthPersistenceTest.xml",
+      "sha256": "7d1da33d4759fdb1fa422d5c0ef3a89aad5c7af057603a3ca63010c4e986b05a"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.LivePolicyTest.xml",
+      "sha256": "cd85c83b10107579c57007351c81df5f39495b5e699ac011594717b0c1fe8503"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.LiveRuntimeTest.xml",
+      "sha256": "c42d054a364f678c1243a33f9b11187c45ae635dda1c2341ae694c61bcbd2e7e"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.OAuthReturnTest.xml",
+      "sha256": "bd40e662f88e8f3754465c2ed6233bb9a80091c5bd3c5c09e61a0679e822109c"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.Phase2FlowTest.xml",
+      "sha256": "0f1b1cc323167ded8ebcda77237c9b629c37535cea15efebf575ae9073349044"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.PolicyTest.xml",
+      "sha256": "0dff5e2b76882ccd9fcd63cc1a8f6f1d126b36b3fd4e05b45affb1f73a1908ed"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.PracticeGuideTest.xml",
+      "sha256": "19e3452fae8e07be313dc3114fc6ee4a6d07e28e3e7bb8cd98c24a7ada85deb9"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.PushDashboardTest.xml",
+      "sha256": "564bf883e399e1c2ed245eb948a8f4683843789ed9631e8f54702e33ebcc8c41"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.SetupChoicesTest.xml",
+      "sha256": "597fb1b94d27b4cbbd992dce52b5315e9e9cf85d28731d94490984059441cffe"
+    },
+    {
+      "path": "android-unit/TEST-com.sentinel.crier.TerminalReconciliationTest.xml",
+      "sha256": "c5c9ca400454bbce2bc4d1b1b8f2cf79582028388bd2df1361c93b65be565901"
+    },
+    {
+      "path": "hosted-synthetic-probe.json",
+      "sha256": "c3406f022b7bbbe261db30d3ad6b89601d5e1a6f77cb6db91806c3972ef19578"
+    },
+    {
+      "path": "ios-unsigned-archive-validation.json",
+      "sha256": "201228a6073991ed5d9dad86995a976810f8ea453c17f24afc4658bde5e13a3d"
+    },
+    {
+      "path": "python-full.xml",
+      "sha256": "fe5ec4b9cea7fc41aab0893e0c311e6a10163a49b664122af486e1d60f184f73"
+    },
+    {
+      "path": "windows-installer-acceptance.json",
+      "sha256": "609b87e19c78896371f6d9b9a79cb6bc35c38de71e627a78f633d9432e2344ac"
+    },
+    {
+      "path": "windows-journey-report.json",
+      "sha256": "3a197f4ca4d4d8f12fdf091cd2bebb1f8d6b9a3b0c2e5ad1ef12acbe2e69de72"
+    }
+  ]
+}
