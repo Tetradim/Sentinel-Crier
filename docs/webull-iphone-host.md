@@ -31,6 +31,7 @@ Start actual integration acceptance with Webull sandbox and Alpaca paper. Select
 - Unknown source submission outcomes remain pending reconciliation by the saved client ID. Restart/reconnect does not automatically POST the order again.
 - Foreground automatic reconciliation reads at most one pending source order per five-second tick. Settled history is refreshed explicitly, including at mutation boundaries, rather than consuming broker quota indefinitely. These observations are separate from immediate intent publication.
 - Replacement and sale reconcile prior orders and racing fills first. Source sales are bounded by tracked ownership and current available holdings; the approved server adapter must also prevent short creation and oversubscribed working sales.
+- Exit review is available before the periodic fill display catches up. Confirmation performs fresh source reconciliation and still requires verified owned quantity; a stale zero on the screen is not itself a reason to delay that check.
 - Publication retains ordering and original timestamps. Reconnect must not create a fresh entry instruction from an expired one.
 
 Keep the iPhone app foregrounded while hosting this route. iOS suspension can stop publication/reconciliation. Keep Windows awake and connected. The new source view does not add an unattended watchdog, guaranteed execution latency or broker-native protective stops.

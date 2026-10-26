@@ -89,7 +89,9 @@ struct WebullHostView: View {
                         if ["enter", "replace"].contains(trade.desired.action) {
                             Button("Review revised entry target") { review("replace", trade: trade) }.disabled(!acknowledged)
                         }
-                        Button("Review bounded exit") { review("exit", trade: trade) }.disabled(!acknowledged || trade.owned == 0)
+                        // Exit performs a fresh source reconciliation. Do not make
+                        // the customer wait for the periodic fill-display tick.
+                        Button("Review bounded exit") { review("exit", trade: trade) }.disabled(!acknowledged)
                     }
                 }
             }
