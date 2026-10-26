@@ -91,7 +91,7 @@ Keep entry instruction expiry and account/funding caps. An entry rejected for in
 
 | Bot | Useful code | What it does not establish |
 | --- | --- | --- |
-| Pulse | `backend/brokers/registry.py:10,140,155`, async port `brokers/base.py:111,121`, and `broker_manager.py:262,321` provide adapter discovery and isolated fan-out results. | Registry labels do not prove acceptance. Common order model lacks full option identity/open-close/multiplier/funding fields; its Tradier adapter is equity-shaped. |
+| Pulse | `backend/brokers/registry.py:10,140,155`, async port `brokers/base.py:111,121`, and `broker_manager.py:262,321` provide adapter discovery and isolated fan-out results. | Pulse is stock-only; its equity-shaped order model/Tradier path is appropriate to that scope. Crier options reuse would require contract identity/open-close/multiplier/funding fields. Registry labels alone do not establish acceptance. |
 | Echo | `backend/broker_clients/__init__.py` contains Alpaca and Tradier option-aware paths and fill reconciliation. | The Webull class at `:1004` explicitly reports not implemented; a broker name/factory row is not an executable Webull integration. Other adapters need their own current capability review. |
 | Iron | `src/sentinel_iron/brokers/routes.py:19,26` has a route bundle/factory; catalog separates executable from documentation-only routes. | Its inspected adapters are futures-oriented, including IBKR `FUT` and tastytrade `Future`; do not treat them as US stock/option adapters. |
 | Chain | `src/sentinel_chain/live_execution.py:79,121` explicitly blocks unsupported live policies; CCXT port is reusable crypto infrastructure. | Inspected live mapping targets Bitunix futures. Paper bracket/trailing features are not live US-options capability. |
@@ -104,7 +104,9 @@ Do **not** import Pulse's manager idempotency unchanged: `broker_manager.py:107�
 
 Crier already represents both stocks and options in its canonical protocol; this work is about independent enablement, funding and policies, not simply renaming an options-only field.
 
-No complete, atomically conserved stock-versus-option allocation ledger was found in the inspected Sentinel code. Echo `backend/risk.py:175–244` is option-contract sizing (`entry premium × 100`), not a generic stock/options allocator. Its estimated-loss calculation includes a minimum-one-contract floor; do not import that as a strict budget guarantee. Pulse's capital helpers subtract working buys and other allocations, but observation-query failures can return zero and the calculation is not an atomic reservation ledger.
+No complete, atomically conserved stock-versus-option allocation ledger was found in the inspected Sentinel code. Echo `backend/risk.py:175–244` is option-contract sizing (`entry premium × 100`), not a generic stock/options allocator. Its estimated-loss calculation includes a minimum-one-contract floor; do not import that as a strict budget guarantee. Pulse's capital helpers subtract working buys and other allocations; observation-query failures can return zero. That warrants tracing error handling, card budgets and concurrent execution before concluding that Pulse can overspend. A capacity helper alone does not establish or disprove system-wide reservation guarantees.
+
+Owner clarification: Pulse intentionally reuses assigned stock-card capital over repeated price/percentage-triggered buy/sell cycles. Unlimited cycles do not mean unlimited simultaneous funds. Its stock-only model and lack of options pools are not defects. Crier's proposed shared stock/options ledger is an additional requirement, not a correction to Pulse's purpose. See [future scope](future-scope.md) for an optional recurring-card adaptation and the separate identity/recovery concerns.
 
 Proposed controls:
 
@@ -132,7 +134,7 @@ Illustration only: from a $1,000 new-entry budget, $400 stocks + $400 options + 
 1. Complete verification of the R.1–R.3 repairs, retaining the current trading authority and defaults.
 2. Design D.2 authority, quote/floor persistence, owned exit reservation and the common host/protective-exit coordinator before importing any stop/trailing worker.
 3. Adapt Echo's pure coordinated policy and its freshness/ratchet/fill tests, using Crier-specific decimal/tick/account bindings.
-4. Add separate stock/options controls and a shared reservation ledger; evaluate Pulse capital helpers only after fail-closed and atomicity changes.
+4. Add separate stock/options controls and a shared reservation ledger; trace Pulse's complete card-budget/concurrency/error path before adapting its capital helpers. Its stock-only recurring allocation model is valid for its own purpose.
 5. Add optional fallback only after cancel/late-fill/unknown-submission tests prove one remaining quantity and one destination order authority.
 6. Resume D.1 multi-host/multi-account/cross-broker routing only when deliberately selected later. Provider approvals, Apple signing and real/physical acceptance remain separate dependencies.
 

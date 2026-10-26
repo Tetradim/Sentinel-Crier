@@ -18,6 +18,8 @@ These items have not been silently marked passed, and no new mandatory paper-com
 
 ## Deferred future enhancements
 
+The [future-scope register](future-scope.md) expands D.1/D.2 with candidate controls, recurring stock-card ideas, accounting requirements and research/acceptance work. It does not activate those features.
+
 - **D.1 — Multiple Hosts, Connections, and Cross-Broker Copying:** one app with multiple simultaneous host subscriptions and brokerage sessions; explicit host-to-account routing, including Dave on Alpaca to Carol on Webull, and different hosts assigned to Tradier, Webull and Alpaca accounts. Preserve per-host ownership, shared-account reservations, scoped idempotency, account/environment isolation and loop prevention. Research covers direct OAuth/API connections, broker stream limits and optional middleware. [Research, dependencies and future work](deferred/multi-host-cross-broker.md). Deferred by owner request; not implemented or activated, and outside the completed E–L phase scopes.
 - **D.2 — Independent Trading Policies and Stock/Option Allocation:** requested inventory of optional independent entry/exit authority, Echo-style coordinated trailing/stops/profit stages, cancel/reconcile/market fallback, and separate stock/options funding pools. [Sentinel source inventory and candidate controls](sentinel-feature-inventory.md). Proposals only; no independent strategy or fallback was enabled by the inventory. D.1 remains separately deferred.
 

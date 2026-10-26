@@ -1,82 +1,89 @@
 # Sentinel Crier
 
-**Trade alerts and optional cross-device order mirroring for iPhone, Android and Windows.**
+**Trade inside Crier, share orders between paired devices, and publish trade alerts to Discord.**
 
-Crier can publish customizable Discord messages about trades and share order instructions directly between paired devices. Discord is optional for device-to-device mirroring: each receiver connects to the relay and executes through its own brokerage account.
+Crier is an open-source app for iPhone, Android and Windows. A host originates stock or option orders inside Crier; paired receivers follow through their own brokerage accounts. Discord publishing is a separate, optional workflow. Copying does not require another bot to parse Discord messages.
 
-The implemented trading clients currently use **Alpaca**. **Webull Connect is not available in released clients**; its server components have passed offline integration tests, while approval and actual broker integration remain pending.
+The current native trading integration is **Alpaca**, with paper and live environments. Webull Connect remains pending approval and integration. Automated checks have passed; signed iPhone distribution and real-device/broker acceptance remain unfinished.
 
-## Three ways to use Crier
+## Choose a workflow
 
-| Workflow | What happens |
+| Mode | What it does |
 | --- | --- |
-| Monitor and publish | Observe supported brokerage execution records, preserve a local history and publish confirmed-fill alerts to Discord. |
-| Trade inside Crier | Use the native client to enter and manage supported Alpaca orders. The iPhone app connects directly to Alpaca and does not require the Python application or a PC for its own account operations. |
-| Host / Receive | Orders entered inside Crier publish enter/replace/cancel/exit instructions to paired receivers before waiting for the host's fill. Each receiver applies its own execution settings and tracks its own broker result. |
+| Alerts only | Observe supported account fills and publish customizable Discord alerts without enabling copy trading. |
+| Trade in Crier | Enter and manage supported Alpaca orders directly from the app. |
+| Host | Share enter, replace, cancel and exit instructions with privately paired receivers. |
+| Receive | Follow the host through your own Alpaca account with your selected sizing, pricing and exit settings. |
 
-**An order instruction, a submitted order and a confirmed fill are different events.** Crier preserves those distinctions in alerts and diagnostics. Manual observations remain labeled as user-confirmed evidence.
+Native trading supports **whole-share stocks and standard long single-leg options**. The separate Python observer also handles eligible fractional stock fills. Independent signal entries, protective stops, trailing strategies and automatic limit-to-market fallback remain future proposals.
 
-## Current platform and broker scope
+## How copying works
 
-| Component | Current status |
+1. Configure each device's own brokerage account and environment.
+2. The host creates a private invitation; the receiver accepts it. Invitations are single-use and expire after ten minutes.
+3. The receiver reviews its execution settings and explicitly enables new entries. They start paused.
+4. An order entered inside Crier publishes its instruction without waiting for the host's fill.
+5. Each device reconciles its own broker orders and reports its own results to the Copy dashboard.
+
+Any supported platform can take the Host or Receive role. Devices can use different networks. The apps include a [Supabase testing relay](crier/connection-service.json), so customers do not need a home server, open router ports or their own Supabase project. The current pairing flow uses scoped device tokens.
+
+**Push delivery is implemented.** An authenticated stream delivers durable instructions; database notifications wake the hosted service after writes commit. Bounded polling is the labeled recovery path. Reconnect replays saved records while durable identities suppress duplicate submissions. See [push delivery and the dashboard](docs/push-dashboard.md).
+
+The relay transports instructions and observations; it does not execute trades or hold broker API keys. Credentials remain on the executing device through Windows DPAPI, iOS Keychain or Android's encrypted Keystore-backed vault. The relay operator can see instruction contents. The separately prepared provider OAuth service has different credential custody and is not activated; see [provider connections](docs/provider-connections.md).
+
+An instruction, a submitted order and a fill are different events. Networks, broker checks, liquidity and operating-system suspension affect execution. Crier does not guarantee delivery time or identical fill prices.
+
+## Execution controls
+
+| Control | Current behavior |
 | --- | --- |
-| iPhone | Native Alpaca client, Discord alerts, Host / Receive and diagnostics. Simulator and unsigned hardware archive checks passed. Installable distribution still requires Apple enrollment/signing. |
-| Android | Native Alpaca client, Discord configuration, Host / Receive, recovery and diagnostics. Signed candidate APK/AAB builds produced; physical acceptance remains deferred. |
-| Windows | Alpaca desktop client, Host / Receive, Discord configuration and diagnostics. Installer/portable candidates produced; installer lifecycle tested in CI. Publisher signing is absent. |
-| Python console | Local monitor/publisher, manual receipt review, alert preview/history and optional intent execution. |
+| Entry size | Source quantity, fixed units, ratio or per-trade budget. Host quantities are not scaled. |
+| Price | Exact limit, bounded limit or explicitly selected market pricing. Initial market selection is different from automatic fallback. |
+| Limits | Source quantity cap, separate local target cap, optional entry notional cap and submission-age limit. |
+| Exit size | Requested units, proportional source-intent exits or close remaining tracked units. |
+| Entry timeout | Optionally cancel acknowledged working entries after reconciliation; acquired holdings are not automatically sold. |
+| Pause | Block new entries while preserving authorized cancellation/exit handling. It does not liquidate positions. |
 
-**Provider OAuth:** The separate Supabase service and Windows/iOS/Android customer sign-in, return handling and credential installation are implemented. Activation still needs deployment, registered Alpaca/Discord applications and real consent acceptance. API-key/webhook setup remains available. See [provider connection status](docs/provider-connections.md).
+Policies apply to new trades; settings changes do not silently rewrite open trades. Durable identities, account/environment checks, fresh broker evidence and tracked ownership constrain execution. Unknown submissions reconcile before another order is attempted. Cancel requests are not proof of cancellation; partial fills remain holdings. A host cancel invalidates an unfilled entry remainder, while a host exit requests sale of tracked holdings.
 
-**Windows health:** The Health tab separates broker access, fill monitoring, relay traffic, execution-worker and Discord evidence. It retains last successes across restarts while requiring fresh connection checks. See [desktop operation](desktop/README.md#component-health).
+The current per-trade budget is **not** a recurring stock-card allocation or shared stock/options funding pool. See [execution settings](docs/execution-policies.md) and the [intent protocol](docs/protocol/intent-v1.md).
 
-**Mobile health:** Android offers Connection health and recovery for the selected journey; iOS exposes it from Home. Both retain scoped history, reject late callbacks from stopped connections, and provide recovery navigation without additional network probes. See [Android operation](android/README.md#connection-health-and-recovery) and [iOS operation](ios/README.md#connection-health).
+## Discord alerts and diagnostics
 
-**Push and copy dashboard:** Saved host instructions stream to connected receivers before the host fills. Separate device reports populate the read-only **Copy dashboard** with quantities, fill averages, remaining tracked units, actual price differences and available clock/quote evidence. The hosted testing relay has the push migration and updated function deployed. Polling remains a labeled recovery path. Closed gross P&L requires complete verified evidence; net values require actual fees, and open estimates require a fresh observed bid. See [push delivery and dashboard](docs/push-dashboard.md) for privacy, availability and acceptance limits.
+Alerts offer configurable fields and card/plain-text formats. iOS and the Python publisher also support Homebrew-style layouts. Instrument, side, quantity, fill price, timestamp and provenance appear when supported and available. Manual receipts remain user-confirmed evidence rather than broker-verified fills.
 
-| Broker | Current status |
+Choose **Alerts only** on iPhone, **Alerts** on Android, or **Start here → Send my fills to Discord** on Windows. Configure the destination, inspect a preview and explicitly enable publishing. These routes need no pairing and do not activate trading workers. Reconnect/restart requires fresh publishing permission. See [monitor/publisher operation](docs/monitor-publisher.md).
+
+The read-only **Copy dashboard** shows instructions, device results, quantities, fill averages and remaining units. Actual host/receiver price comparisons, eligible P&L calculations, clock-adjusted delivery estimates and JSON/CSV exports require appropriate evidence. Missing prices or fees are not invented. See [execution diagnostics](docs/execution-diagnostics.md) and [dashboard calculation and privacy limits](docs/push-dashboard.md).
+
+## Platforms and installation
+
+| Platform | Implementation | Distribution and operating limits |
+| --- | --- | --- |
+| iPhone | Native Alpaca trading, alerts, Host/Receive, dashboard and health/recovery. Account operations do not require a PC or Python server. | Simulator and unsigned hardware archive verified. Apple enrollment/signing is required for installable distribution. Suspension can stop networking. |
+| Android | Native Alpaca trading, alerts, Host/Receive, dashboard and health/recovery. | Signed candidate APK/AAB builds produced. Physical/background acceptance remains deferred. |
+| Windows | Alpaca desktop app, alerts, Host/Receive, dashboard, health, optional tray and sign-in startup. | Installer/portable candidates produced; installer lifecycle tested. Publisher signing is absent. Keep the PC awake. Sign-in startup begins disconnected. |
+| Python | Local monitor/publisher console, manual receipt review and separately configured intent execution. | Python 3.11+; optional local or hosted connection service. |
+
+- [iPhone build](ios/BUILD.md) · [distribution checklist](docs/iphone-release-checklist.md)
+- [Android setup](android/README.md) · [release packages](docs/android-release.md)
+- [Windows setup](desktop/README.md) · [installer and updates](docs/windows-release.md)
+- [Customer setup, paper practice and recovery](docs/customer-acceptance.md)
+
+The current iPhone target has no ReplayKit extension and does not continuously observe other brokerage apps' screens. Submission-time mirroring applies to orders placed **inside Crier**. Supported fill monitoring can observe activity originating elsewhere later; it cannot infer that other app's original button press instantly. Mobile background execution remains constrained by the operating system.
+
+## Broker availability
+
+| Broker | Scope today |
 | --- | --- |
-| Alpaca | Paper/live clients for whole-share stocks and standard long single-leg options. The separate Python fill monitor also handles supported fractional stock fills. |
-| Tradier | Read-only Python polling adapter; account-specific validation is required. |
-| Webull Trading API | Experimental Python SDK observer with separate enrollment and verification requirements. |
-| Webull Connect | Undeployed server libraries and candidate SQL: authorization, encrypted token custody, exchange/refresh coordination, revocation fencing, key rotation and cleanup. No working native Connect login or order adapter yet. |
+| Alpaca | Implemented paper/live native trading and Python monitoring/execution paths. Real account/device acceptance is separately tracked. |
+| Tradier | Read-only Python polling adapter requiring account-specific validation; no native Tradier copy executor. |
+| Webull Trading API | Experimental Python SDK observer with separate access and verification requirements. |
+| Webull Connect | Candidate server authorization/token-custody components with offline evidence. Approval, deployed authorized integration, native login and order adapter remain unfinished. |
 
-Crier does not provide automatic background observation of arbitrary brokerage screens. The current iPhone target has no ReplayKit extension. Submission-time mirroring applies to orders entered **inside Crier**; observing a fill placed through another app does not reveal that app's original submission instantly.
+Multiple hosts, simultaneous broker-account routing and copying across different brokers remain [deferred D.1](docs/deferred/multi-host-cross-broker.md). A donor bot's adapter name does not establish working support in Crier.
 
-## Start with a native client
-
-Build and installation instructions:
-
-- [iPhone](ios/BUILD.md) · [iPhone distribution checklist](docs/iphone-release-checklist.md)
-- [Android](android/README.md) · [Android release packages](docs/android-release.md)
-- [Windows](desktop/README.md) · [Windows installer and updates](docs/windows-release.md)
-
-**Alerts without mirroring:** choose **Alerts only** in iPhone setup, **Alerts** on Android, or **Start here → Send my fills to Discord** on Windows. Verify Alpaca read access, configure the Discord destination and format, inspect a preview, optionally request a labeled synthetic test, then explicitly enable publishing. These routes need no Host/Receive pairing or relay and do not activate trading workers. Saved settings are reusable; reconnect/restart requires fresh publishing permission. See the platform guides above for baseline, polling, destination-history and foreground limits. Real account and Discord acceptance remains deferred.
-
-For Host / Receive:
-
-1. Open Connections and configure the device's own **Alpaca paper account**.
-2. Choose **Host** on the originating device and create a private invitation.
-3. Choose **Receive** on the other device and accept the invitation. Invitations expire after ten minutes and are single-use.
-4. Check the role, account, environment and pricing/quantity limits. Receivers start with new entries paused; explicitly enable them when ready.
-5. Place an order inside Crier on the host. Inspect each receiver's activity and broker result independently.
-
-The clients bundle a **Supabase testing relay** through [the shared service configuration](crier/connection-service.json). Devices can communicate across different networks without opening customer router ports. The deployed relay uses durable bounded HTTP polling, not Supabase Realtime push, and offers no guaranteed trading latency or availability. Operators can configure a separate service using [remote connection setup](docs/remote-connect-setup.md) and [Supabase deployment](docs/supabase-setup.md).
-
-The current relay transports instructions and diagnostic observations. It does not execute orders or hold broker API credentials. Its operator can see instruction contents. Broker credentials stay on the executing device; Windows uses DPAPI, iOS uses Keychain and Android uses its encrypted Keystore-backed vault.
-
-Keep the receiving app running. iOS suspension can stop networking; Android background-service limits can interrupt work; Windows must remain awake. A persistent connection or overlay is not an all-day execution guarantee.
-
-Windows offers optional tray mode and current-user sign-in startup in **Start here → Windows background options**. Both are off by default. Sign-in always starts disconnected; the tray can show Crier, pause new entries, or quit. See the [Windows guide](desktop/README.md#tray-and-windows-sign-in-options).
-
-The source quantity cap rejects larger instructions; it does not choose an order size. Optional follower policies add fixed, ratio and budget sizing, local quantity/notional limits, proportional source-intent or close-tracked exits, and acknowledged-entry timeouts. Policies apply to new trades and save with entries paused. The [execution settings guide](docs/execution-policies.md) explains defaults, accounting, evidence requirements and cancellation behavior.
-
-An optional paper-practice guide is available in Windows Start here/F1, Android setup and iPhone Home. Reading it performs no account or trading action and never gates live use. See [customer setup, recovery and acceptance](docs/customer-acceptance.md) for installation artifacts, support and the real-device checks still deferred.
-
-Automated customer acceptance results and the [remaining-work list](docs/remaining-work.md) separate verified source behavior, deferred real trials and proposed execution features.
-
-## Run the Python monitor and console
-
-Requires **Python 3.11+**. From PowerShell:
+## Run the Python console
 
 ```powershell
 git clone https://github.com/Tetradim/Sentinel-Crier.git
@@ -87,9 +94,9 @@ python -m pip install -e .
 python -m crier serve
 ```
 
-On macOS/Linux, activate with `source .venv/bin/activate`. Open **http://127.0.0.1:8765** and use the private token generated in `data/access-token`. The default launch selects no broker and keeps Discord delivery disabled.
+On macOS/Linux, activate with `source .venv/bin/activate`. Open **http://127.0.0.1:8765** using the private token generated in `data/access-token`. The default launch selects no broker and leaves Discord delivery disabled.
 
-To observe Alpaca paper fills, set process environment variables before starting:
+For Alpaca paper fill monitoring, set process environment variables before starting:
 
 ```powershell
 $env:ALPACA_ENV = "paper"
@@ -98,78 +105,27 @@ $env:APCA_API_SECRET_KEY = "YOUR_PAPER_SECRET"
 python -m crier serve --monitor alpaca
 ```
 
-The first complete poll establishes a baseline without publishing historical fills. Subsequent fills are journaled and queued. The CLI reads process environment variables; it does **not** automatically load `.env`. Docker Compose loads `.env` separately. See [Alpaca monitoring](docs/alpaca-setup.md) and [configuration examples](.env.example).
+The first complete poll establishes a baseline without publishing historical fills. Later fills are journaled and queued. The CLI does not automatically load `.env`; Docker Compose loads it separately. See [Alpaca setup](docs/alpaca-setup.md) and [.env examples](.env.example).
 
-The normal fill observer is read-only. The Python application also includes a separately configured intent device that can submit/cancel orders. Its broker credentials and execution settings are independent of the monitor; see [intent setup](docs/intent-mirroring.md).
+For Python publishing, set `DISCORD_WEBHOOK_URL`, `CRIER_PUBLISHER_VERIFIED=true` and `CRIER_DELIVERY_ENABLED=true` before restarting. Review the destination and queue first: enabling delivery can publish queued records. Inspect uncertain deliveries before explicitly retrying because Discord may already have received them. The fill observer is read-only; [optional intent execution](docs/intent-mirroring.md) has separate credentials and permissions.
 
-## Discord alerts
+## Verification and project status
 
-Clients provide preview, destination setup and platform-specific templates/fields. Formats include cards and plain text; iOS and the Python publisher also support Homebrew-style layouts. Alerts can show the instrument, side, quantity, execution price, timestamp and provenance when available.
-
-For Python delivery, configure these variables and restart only after reviewing the destination and queued records:
-
-```powershell
-$env:DISCORD_WEBHOOK_URL = "YOUR_PRIVATE_DISCORD_WEBHOOK"
-$env:CRIER_PUBLISHER_VERIFIED = "true"
-$env:CRIER_DELIVERY_ENABLED = "true"
-python -m crier serve --monitor alpaca
-```
-
-Enabling delivery can send previously queued records. Durable outboxes retain delivery evidence and uncertain outcomes; inspect an uncertain delivery before explicitly retrying, because Discord may already have received it. Manual receipts require review and remain identified as user-confirmed rather than broker-verified. See [monitor/publisher operation](docs/monitor-publisher.md).
-
-## Mirroring and recovery
-
-| Instruction | Meaning |
-| --- | --- |
-| Enter | Create a tracked trade instruction. |
-| Replace | Reconcile/cancel the prior entry remainder before attempting the revised target. |
-| Cancel | Invalidate the unfilled entry remainder; acquired holdings remain. |
-| Exit | Attempt to sell holdings attributable to the tracked trade, bounded by available quantity. |
-| Pause | Block new entries; existing orders and positions remain at the broker. |
-
-Durable journals and client order IDs support restart reconciliation. Uncertain submissions are not blindly reposted. Cancellation requests are reconciled against fresh broker status; a request alone is not proof of cancellation. Revoking a receiver stops future transport and does not liquidate its account.
-
-Start with separate paper accounts. Mirroring can place real orders when live execution is enabled, and account-specific fills/prices can differ. Preserve journals and pairing state when recovering an unresolved order.
-
-[Execution diagnostics](docs/execution-diagnostics.md) include persistent timelines, sender/receiver events, reconciliation evidence, near-event Alpaca quote observations, premium comparisons, clock-adjusted delivery estimates and JSON/CSV export. Estimates are not guarantees of brokerage acknowledgement or fill latency.
-
-## Development and verification
-
-Python tests:
+Reporting-repair source `a7b332b` passed **1,033 Python tests**, with one optional SDK skip, **165 Android unit tests** and **160 iOS native tests**, plus UI/build and Windows installer checks. Seven successful CI runs and report hashes are recorded in [accepted evidence](docs/acceptance/2026-10-26/reporting-recovery/README.md). These counts describe that revision, not physical or real-broker acceptance.
 
 ```powershell
 python -m pip install -e ".[test]"
 python -m pytest -q
 ```
 
-Candidate server tests require **Node 24** and **Deno 2.9.6**:
+Platform guides describe native builds. [Webull server operations](docs/webull-server-operations.md) and its [capability report](docs/acceptance/2026-10-24/webull-offline-acceptance.json) cover the separate offline candidate. For your own relay, see [remote connections](docs/remote-connect-setup.md) and [Supabase setup](docs/supabase-setup.md).
 
-```powershell
-npm ci --prefix supabase/tests
-npm test --prefix supabase/tests
-npm exec --yes --package deno@2.9.6 -- deno test supabase/webull-connect supabase/functions/crier/gateway_test.ts
-node supabase/tests/offline-acceptance.mjs > webull-offline-acceptance.json
-```
+External dependencies include Apple signing/enrollment, Webull approval/integration, provider registration/activation, physical cross-network and broker-UI acceptance, real Discord delivery and production relay operation. Automated acceptance does not mark those complete.
 
-Latest server implementation evidence, source `6788b4c`:
-
-- **542 Python tests** passed locally.
-- **55 Deno tests**, **six SQL suites**, type checks and lint passed.
-- **Nine integrated scenarios** exercised the coordinator, RPC adapter, actual SQL and encryption with synthetic authentication/transport.
-- [PostgreSQL 17 CI](https://github.com/Tetradim/Sentinel-Crier/actions/runs/40119328343) passed authorization, refresh, revocation, rotation and cleanup concurrency checks.
-
-The [capability report](docs/acceptance/2026-10-24/webull-offline-acceptance.json) distinguishes implemented/synthetically integrated features from deployment and broker acceptance. Candidate Webull SQL remains **outside deployment migrations**. The tests do not place broker orders or send Discord messages. Native build evidence remains tied to its separately recorded source commits.
-
-## Completion status and documentation
-
-Phases A–D of the [autonomous implementation plan](docs/autonomous-completion-plan.md) are complete for their declared offline server scope. The [customer ease-of-use phases E–I](docs/customer-ease-plan.md) extend that work with clearer controls, guided onboarding and customer acceptance. The whole Webull product and physical release acceptance remain unfinished.
-
-Remaining gates include an authenticated HTTP gateway and approved signed Webull transport, native Connect flows and order adapter, Webull approval/sandbox validation, Apple distribution requirements, finalized privacy/contact information and real-device/paper-account/Discord acceptance. These are tracked in the [full completion roadmap](docs/project-completion-roadmap.md).
-
-- [Webull Connect status](docs/webull-connect.md) · [Candidate server composition and recovery](docs/webull-server-operations.md)
-- [Cross-device paper acceptance](docs/intent-paper-acceptance.md) · [Phase 5 evidence](docs/phase5-results-2026-10-24.md)
-- [Release status and deferrals](docs/phase4-status.md) · [Native data handling](docs/native-data-handling.md)
-- [Intent protocol](docs/protocol/intent-v1.md) · [Source/reuse references](docs/source-references.md)
+- [Remaining work and phase status](docs/remaining-work.md)
+- [Future scope: policies, funding and routing](docs/future-scope.md)
+- [Sentinel source inventory](docs/sentinel-feature-inventory.md)
+- [Native data handling](docs/native-data-handling.md)
 - [Support and bug reports](https://github.com/Tetradim/Sentinel-Crier/issues)
 
 **License:** [MIT](LICENSE).
