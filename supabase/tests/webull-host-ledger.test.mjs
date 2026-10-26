@@ -56,3 +56,28 @@ test('ledger rejects contradictory fills and changed broker identity',async()=>{
     await assert.rejects(()=>rpc(db,'save',{owner,id:order.client_order_id,revision:2,receipt:receipt('rejected',1),action:'lookup'}));
   } finally {await db.close();}
 });
+test('fresh lookup recovers expired cancel lease while old completion cannot settle new attempt',async()=>{
+  const db=await database();
+  try {
+    await rpc(db,'reserve',{owner,order,fingerprint:JSON.stringify(order)});
+    await rpc(db,'save',{owner,id:order.client_order_id,revision:1,receipt:receipt(),action:'submit'});
+    const first=await rpc(db,'claim_cancel',{owner,id:order.client_order_id,revision:2});
+    await db.exec("update webull_host_private.orders set cancel_started_at=clock_timestamp()-interval '61 seconds'");
+    await rpc(db,'save',{owner,id:order.client_order_id,revision:first.revision,receipt:receipt(),action:'lookup'});
+    const current=await rpc(db,'read',{owner,id:order.client_order_id});
+    const second=await rpc(db,'claim_cancel',{owner,id:order.client_order_id,revision:current.revision});
+    assert.equal(second.cancel_pending,true);
+    assert.equal(await rpc(db,'settle_cancel',{owner,id:order.client_order_id,cancelRevision:first.cancel_revision}),false);
+    assert.equal((await rpc(db,'read',{owner,id:order.client_order_id})).cancel_pending,true);
+  } finally {await db.close();}
+});
+test('customer and anonymous roles cannot invoke privileged ledger RPCs',async()=>{
+  const db=await database();
+  try {
+    for(const role of ['anon','authenticated']) {
+      await db.exec('set role '+role);
+      await assert.rejects(()=>rpc(db,'read',{owner,id:order.client_order_id}),/permission denied/);
+      await db.exec('reset role');
+    }
+  } finally {await db.close();}
+});

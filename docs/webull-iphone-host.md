@@ -29,6 +29,7 @@ Start actual integration acceptance with Webull sandbox and Alpaca paper. Select
 - Stock symbols and option contracts must map exactly. Standard long single-leg options only; no guessed expiration, strike, right or deliverable. Broker approval/metadata determine actual availability.
 - A rejected source buy creates an invalidating cancel instruction. That cancels the receiver's unfilled remainder; it does not automatically liquidate receiver holdings already acquired. The receiver can fill before the source rejects.
 - Unknown source submission outcomes remain pending reconciliation by the saved client ID. Restart/reconnect does not automatically POST the order again.
+- Foreground automatic reconciliation reads at most one pending source order per five-second tick. Settled history is refreshed explicitly, including at mutation boundaries, rather than consuming broker quota indefinitely. These observations are separate from immediate intent publication.
 - Replacement and sale reconcile prior orders and racing fills first. Source sales are bounded by tracked ownership and current available holdings; the approved server adapter must also prevent short creation and oversubscribed working sales.
 - Publication retains ordering and original timestamps. Reconnect must not create a fresh entry instruction from an expired one.
 

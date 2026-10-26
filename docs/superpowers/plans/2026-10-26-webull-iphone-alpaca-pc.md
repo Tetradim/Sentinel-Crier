@@ -7,12 +7,21 @@
 **Tech stack:** Swift/SwiftUI, TypeScript/Deno, existing PostgreSQL/Supabase authorization primitives, Python receiver regression tests.
 
 - [x] Trace current broker, authorization, relay and native entry boundaries; record approved scope.
-- [ ] Write server behavioral tests for principal/account binding, contract mapping, one-time submissions, partial/unknown status and cancellation.
-- [ ] Implement gateway/adapter with official transport requirements and explicit unavailable state until configured/approved.
-- [ ] Write native host tests for durable publication, separate source/destination environments, rejection/cancellation and restart behavior.
-- [ ] Implement Webull host screen, service authorization, paper-receiver pairing and durable order lifecycle.
-- [ ] Verify canonical Webull-host instructions execute through the existing Windows/Python Alpaca-paper path without source credentials.
+- [x] Write server behavioral tests for principal/account binding, canonical instruments, one-time submissions, partial/unknown status and cancellation.
+- [x] Implement the gateway, signed Connect transport, service-role RPC ledger and explicit unavailable state. The concrete approved resource/token-custody Provider remains unfinished below.
+- [x] Write native host tests for durable publication, separate source/destination environments, rejection/cancellation and restart behavior.
+- [x] Implement the candidate Webull host screen, service authorization interface, paper-receiver pairing and durable order lifecycle.
+- [x] Verify canonical Webull-host instructions execute through the existing Windows/Python Alpaca-paper path without source credentials using intercepted HTTP.
 - [ ] Review changed execution boundaries; run affected suites and iOS CI where available.
 - [ ] Update configuration/status docs, record exact automated results and unresolved provider/device dependencies; commit/push main.
 
 No real order placement, provider enrollment or activation is performed by synthetic tests. New strategies and general multiple-host routing remain outside this slice.
+
+## Outstanding integration work
+
+- Webull approval and issued account/resource/permission details.
+- Concrete Provider composition: authorization coordinator and callback/cookie flow, encrypted token custody/refresh, approved resource schemas, exact contract discovery and long-only stock/option submission semantics. This is further implementation, not merely supplying credentials to the candidate.
+- Protected service configuration, per-customer request limits, operator deployment and native default gateway configuration after activation.
+- Real Webull sandbox → Alpaca-paper cross-network acceptance, Apple signing and physical iPhone/Windows behavior.
+
+Review corrected a permanent cancellation latch and competing view-instance journal writers. Additional regressions reject contradictory receipt identity/fills and prevent failed fresh broker lookups from returning cached terminal evidence as success. The production native view now uses one shared journal owner. Source fill averages are retained separately from limit prices.

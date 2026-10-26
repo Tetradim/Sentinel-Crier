@@ -116,7 +116,7 @@ final class WebullHostTransportTests: XCTestCase {
         let sourceStarted = expectation(description: "Source POST pending")
         let relayReceived = expectation(description: "Paper instruction sent before source response")
         let lock = NSLock()
-        var source: WebullHostHTTPStub?; var sourceID = ""; var posts = 0
+        var source: WebullHostHTTPStub?; var sourceID = ""; var posts = 0; var lookups = 0
         WebullHostHTTPStub.handler = { stub in
             switch stub.request.url!.path {
             case "/v1/capabilities": stub.send(["available": true, "environments": ["production"], "stocks": ["AAPL"], "options": true])
@@ -131,7 +131,7 @@ final class WebullHostTransportTests: XCTestCase {
                 XCTAssertNil(event["account_id"]); XCTAssertNil(event["access_token"])
                 relayReceived.fulfill(); stub.send(["ok": true])
             default:
-                lock.lock(); let id = sourceID; lock.unlock()
+                lock.lock(); let id = sourceID; lookups += 1; lock.unlock()
                 stub.send(["client_order_id": id, "broker_order_id": "source-broker", "status": "filled", "filled_quantity": 2, "average_fill_price": "1.25"])
             }
         }
@@ -155,6 +155,10 @@ final class WebullHostTransportTests: XCTestCase {
         await restarted.connect(service: "https://webull.test", environment: "production", customer: customer)
         await restarted.reconcile(customer: customer)
         XCTAssertEqual(restarted.state.trades.values.first?.orders.first?.status, "filled")
+        lock.lock(); let observedLookups = lookups; lock.unlock()
+        await restarted.reconcile(customer: customer, automatic: true)
+        lock.lock(); let afterAutomatic = lookups; lock.unlock()
+        XCTAssertEqual(afterAutomatic, observedLookups, "Automatic ticks must not poll settled order history forever")
         lock.lock(); let count = posts; lock.unlock()
         XCTAssertEqual(count, 1)
     }

@@ -69,6 +69,7 @@ struct WebullHostAPI {
     private var blocked = false
     private var publishing = false
     private var active = false
+    private var pollCursor = 0
     private var generation = UUID()
     func clearConnection() { generation = UUID(); api = nil; connection = nil; capabilities = nil }
     func setActive(_ value: Bool) { active = value; if !value { clearConnection() } }
@@ -185,11 +186,26 @@ struct WebullHostAPI {
             try commit { try $0.accept(trade: id, receipt: receipt) }
         }
     }
-    func reconcile(customer: CustomerSession?) async {
+    func reconcile(customer: CustomerSession?, automatic: Bool = false) async {
         guard !busy, api != nil else { return }; busy = true; defer { busy = false }
         do {
             let customer = try identity(customer)
-            for id in state.trades.keys.sorted() { try await reconcileTrade(id, customer: customer) }
+            if automatic {
+                // At most one pending-order read per five-second foreground tick.
+                // Closed history is refreshed explicitly at mutation boundaries,
+                // not forever in the background against Webull's user quota.
+                let pending = state.trades.keys.sorted().flatMap { id in
+                    (state.trades[id]?.orders ?? []).filter { !$0.terminal }.map { (id, $0.clientID) }
+                }
+                if !pending.isEmpty, let api {
+                    let selected = pending[pollCursor % pending.count]; pollCursor = (pollCursor + 1) % pending.count
+                    guard let trade = state.trades[selected.0] else { return }
+                    let receipt: WebullHostReceipt = try await api.call("orders/" + selected.1, customer: customer, query: context(trade))
+                    try commit { try $0.accept(trade: selected.0, receipt: receipt) }
+                }
+            } else {
+                for id in state.trades.keys.sorted() { try await reconcileTrade(id, customer: customer) }
+            }
             message = "Source receipts reconciled; no order was resubmitted."
         } catch { message = "Reconciliation pending: \(error.localizedDescription)" }
         await publish()

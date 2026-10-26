@@ -105,7 +105,7 @@ struct WebullHostView: View {
             guard scenePhase == .active else { return }
             while !Task.isCancelled {
                 await host.publish()
-                await host.reconcile(customer: connections.customer)
+                await host.reconcile(customer: connections.customer, automatic: true)
                 do { try await Task.sleep(nanoseconds: 5_000_000_000) } catch { return }
             }
         }

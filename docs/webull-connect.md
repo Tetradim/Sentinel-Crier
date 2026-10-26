@@ -2,6 +2,8 @@
 
 October 24, 2026: Phase 6 work has started after completing available Phase 5 acceptance work. The owner has approved the implementation plan and explicitly confirmed that Webull's response is still pending. Do not submit another application. Webull login and trading are not available in released Crier clients.
 
+October 26 update: a [candidate in-Crier iPhone Webull Host → Windows Alpaca-paper route](webull-iphone-host.md) now includes a native screen/journal and authenticated server gateway/ledger. The approved resource adapter, token-custody composition, deployment and actual sandbox acceptance remain unfinished; the candidate does not activate Webull access.
+
 ## Implemented groundwork
 
 `crier/webull_connect_sessions.py` is an isolated server-side authorization-session primitive. It creates independent random state and browser-binding secrets, stores only their SHA-256 hashes, and binds redemption to an authenticated customer identity, sandbox/production environment and configured HTTPS callback. Sessions expire after five minutes; matching redemption deletes the session in one transaction. Invalid attempts leave the legitimate session intact. Concurrent callbacks cannot both succeed. A gateway must use a new session after any failed or uncertain code exchange.
