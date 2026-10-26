@@ -42,6 +42,15 @@ final class WebullHostTests: XCTestCase {
         XCTAssertThrowsError(try WebullHostRules.exitQuantity(requested: 1, tracked: 0, held: 20))
         XCTAssertThrowsError(try WebullHostRules.exitQuantity(requested: 1, tracked: 3, held: -1))
     }
+    func testActualFillAverageIsRetainedSeparatelyFromLimitAndNotInvented() throws {
+        var order = WebullHostOrder(clientID: "id", quantity: 2, price: "1.30", sell: false)
+        try order.accept(WebullHostReceipt(client_order_id: "id", status: "partially_filled", filled_quantity: 1, average_fill_price: "1.24"))
+        XCTAssertEqual(order.averageFillPrice, "1.24")
+        XCTAssertEqual(order.price, "1.30")
+        try order.accept(WebullHostReceipt(client_order_id: "id", status: "filled", filled_quantity: 2))
+        XCTAssertNil(order.averageFillPrice)
+        XCTAssertNotNil(order.lastObservedAt)
+    }
     func testRejectedBuyQueuesOneCancelAfterOriginalEntry() throws {
         var state = WebullHostState()
         let id = try state.enter(symbol: "AAPL", asset: "stock", quantity: 1, price: "1", environment: "sandbox", account: "a", stocks: ["AAPL"])
@@ -56,6 +65,12 @@ final class WebullHostTests: XCTestCase {
         var state = WebullHostState()
         _ = try state.enter(symbol: "AAPL", asset: "stock", quantity: 1, price: "1", environment: "sandbox", account: "a", stocks: ["AAPL"])
         state.history = []; state.outgoing = []
+        XCTAssertThrowsError(try state.validate())
+    }
+    func testSourceAndRelayInstrumentCannotDivergeInRecoveredJournal() throws {
+        var state = WebullHostState()
+        let id = try state.enter(symbol: "AAPL", asset: "stock", quantity: 1, price: "1", environment: "sandbox", account: "a", stocks: ["AAPL"])
+        state.trades[id]?.symbol = "SPY"
         XCTAssertThrowsError(try state.validate())
     }
     @MainActor func testProductionViewUsesOneJournalOwner() {

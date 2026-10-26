@@ -81,6 +81,7 @@ struct WebullHostView: View {
                         Text("Source filled ownership: \(trade.owned)")
                         ForEach(trade.orders) { order in
                             Text("\(order.sell ? "SELL" : "BUY") \(order.quantity) · \(order.status) · filled \(order.filled)\(order.cancelRequested ? " · cancellation attempted" : "")").font(.caption)
+                            Text("Limit $\(order.price) · fill average \(order.averageFillPrice.map { "$" + $0 } ?? "unavailable")").font(.caption)
                             if order.status == "unknown" { Text("Unknown outcome: reconcile this client ID; never submit it again.").font(.caption).foregroundStyle(.orange) }
                             Text(order.clientID).font(.caption2).textSelection(.enabled)
                         }

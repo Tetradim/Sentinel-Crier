@@ -387,21 +387,28 @@ export function createGateway(
       receipt.filled_quantity < row.receipt.filled_quantity ||
       (["filled", "canceled", "rejected"].includes(row.receipt.status) &&
         receipt.status !== row.receipt.status)
-    ) return row.receipt;
+    ) {
+      if (action === "lookup") fail(503, "contradictory_broker_evidence");
+      return row.receipt;
+    }
     if (
       row.receipt.broker_order_id && receipt.broker_order_id &&
       receipt.broker_order_id !== row.receipt.broker_order_id
-    ) return row.receipt;
+    ) {
+      if (action === "lookup") fail(503, "contradictory_broker_evidence");
+      return row.receipt;
+    }
     if (row.receipt.broker_order_id && !receipt.broker_order_id) {
       receipt = { ...receipt, broker_order_id: row.receipt.broker_order_id };
     }
-    await ledger.save(
+    const saved = await ledger.save(
       row.owner,
       row.order.client_order_id,
       row.revision,
       receipt,
       action,
     );
+    if (!saved && action === "lookup") fail(503, "reconciliation_raced");
     const latest = await ledger.read(row.owner, row.order.client_order_id);
     if (!latest) fail(503, "ledger_unavailable");
     return latest.receipt;
@@ -576,6 +583,8 @@ export function createGateway(
             await update(row, receipt, match[2] ? "cancel" : "lookup"),
           );
         } catch {
+          // Cached terminal evidence is not a successful fresh broker read.
+          if (!match[2]) fail(503, "broker_reconciliation_unavailable");
           return reply(row.receipt);
         } finally {
           if (cancelRevision !== null) {

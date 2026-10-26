@@ -511,10 +511,25 @@ Deno.test("broker identity cannot change during reconciliation", async () => {
     status: "filled",
     filled_quantity: 2,
   }));
-  const receipt = await (await f.request(
+  const response = await f.request(
     "/orders/" + order.client_order_id +
       "?environment=sandbox&account_id=account-a",
-  )).json();
-  eq(receipt.status, "accepted");
-  eq(receipt.broker_order_id, "broker-a");
+  );
+  eq(response.status, 503);
+  const stored = await (await f.request("/orders", order)).json();
+  eq(stored.status, "accepted");
+  eq(stored.broker_order_id, "broker-a");
+});
+
+Deno.test("lookup failure cannot masquerade as fresh cached terminal evidence", async () => {
+  const f = fixture();
+  await f.request("/orders", order);
+  const path = "/orders/" + order.client_order_id +
+    "?environment=sandbox&account_id=account-a";
+  await f.request(path);
+  f.setLookup(async () => {
+    throw Error("broker offline");
+  });
+  eq((await f.request(path)).status, 503);
+  eq(f.posts, 1);
 });

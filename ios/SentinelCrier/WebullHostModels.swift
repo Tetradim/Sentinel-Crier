@@ -37,6 +37,8 @@ struct WebullHostOrder: Codable, Identifiable {
     var status = "unknown"
     var filled = 0
     var brokerID: String?
+    var averageFillPrice: String? = nil
+    var lastObservedAt: Date? = nil
     var cancelRequested = false
     var id: String { clientID }
     var terminal: Bool { ["filled", "canceled", "rejected"].contains(status) }
@@ -49,7 +51,10 @@ struct WebullHostOrder: Codable, Identifiable {
               brokerID == nil || receipt.broker_order_id == brokerID,
               !terminal || receipt.status == status else { throw AlpacaError.invalid("Contradictory Webull receipt. Reconcile manually before continuing.") }
         if let average = receipt.average_fill_price { _ = try IntentBrokerDecimal.price(average) }
+        if let average = receipt.average_fill_price { averageFillPrice = average }
+        else if filled != receipt.filled_quantity { averageFillPrice = nil }
         status = receipt.status; filled = receipt.filled_quantity; brokerID = receipt.broker_order_id ?? brokerID
+        lastObservedAt = Date()
     }
 }
 struct WebullHostTrade: Codable, Identifiable {
@@ -111,6 +116,8 @@ struct WebullHostState: Codable {
             let events = history.filter { $0.trade_id == id }
             guard !events.isEmpty, events.last == trade.desired, events.map(\.sequence) == Array(1...events.count) else { throw AlpacaError.invalid("Webull instruction sequence has a gap.") }
             guard id == trade.id, trade.desired.trade_id == id, trade.desired.environment == .paper,
+                  trade.symbol == trade.desired.symbol, trade.asset == trade.desired.asset,
+                  events.allSatisfy({ $0.symbol == trade.symbol && $0.asset == trade.asset }),
                   ["sandbox", "production"].contains(trade.environment), !trade.account.isEmpty,
                   trade.orders.allSatisfy({ order in (1...1000).contains(order.quantity) && (0...order.quantity).contains(order.filled) && ["accepted", "partially_filled", "filled", "canceled", "rejected", "unknown"].contains(order.status) && history.contains(where: { event in event.event_id == order.eventID && event.trade_id == id }) }) else { throw AlpacaError.invalid("Webull journal identity is inconsistent.") }
         }
