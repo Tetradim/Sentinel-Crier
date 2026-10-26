@@ -7,7 +7,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 import uvicorn
-from crier.push_client import frames
+from crier.push_client import frames, pages
 from crier.intent_device import IntentDevice
 from crier.intent_relay import IntentRelay, sync_router
 from test_intent_device import Engine
@@ -21,6 +21,22 @@ def test_parser_bounds_utf8_and_unknown_frames():
         assert [item async for item in frames(httpx.Response(200,content=b'event: extension\ndata: not json\n\n'))]==[]
         with pytest.raises(ValueError):
             _=[item async for item in frames(httpx.Response(200,content=b'data: '+b'a'*1048576))]
+    asyncio.run(run())
+
+
+def test_empty_stream_uses_bounded_poll_recovery():
+    async def run():
+        stop=asyncio.Event(); requests=[]; transports=[]
+        def respond(request):
+            requests.append(request.url.path)
+            if request.url.path.endswith('/stream'): return httpx.Response(200,headers={'content-type':'text/event-stream'},content=b'')
+            return httpx.Response(200,json={'events':[],'cursor':0})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+            pair=dict(url='https://example.test',token='x'*40,role='follower')
+            async for page in pages(client,pair,lambda:0,stop,lambda _:None,transports.append):
+                assert page['events']==[]; stop.set(); break
+        assert requests==['/api/sync/stream','/api/sync/events']
+        assert transports==['connecting','poll']
     asyncio.run(run())
 
 

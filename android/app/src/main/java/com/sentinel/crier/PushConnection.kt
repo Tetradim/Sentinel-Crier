@@ -50,7 +50,9 @@ class PushConnection(private val open:(URI)->HttpURLConnection={ it.toURL().open
    c.setRequestProperty("Accept","text/event-stream"); headers.forEach { (k,v)->c.setRequestProperty(k,v) }
    check(!closed && active()); if(c.responseCode !in 200..299) throw HttpError(c.responseCode)
    require(c.contentType?.substringBefore(';')?.trim()=="text/event-stream") { "Streaming unavailable" }
-   c.inputStream.use { EventStreamParser.read(it,{!closed && active()},receive) }
+   val started=System.nanoTime(); var greeted=false
+   c.inputStream.use { EventStreamParser.read(it,{!closed && active()}) { event,body -> if(event=="ready") greeted=true; receive(event,body) } }
+   check(greeted && System.nanoTime()-started>=1000000000L) { "Stream ended before a stable connection" }
   } finally { c.disconnect(); connection=null }
  }
 }

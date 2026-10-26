@@ -24,6 +24,6 @@ Snapshots are bounded: 50 latest tracked trades and up to 200 members, statuses 
 
 ## Deployment and acceptance
 
-The source includes migration `20261026104201_push_dashboard.sql` and an updated Crier Edge Function. Hosted push requires both to be deployed. Keep the service-role key exclusively in the service runtime. Native clients continue using their scoped pairing tokens.
+The testing Supabase project has migration `20261026104201_push_dashboard.sql` and the updated Crier Edge Function deployed. An isolated synthetic channel verified streamed delivery, matching durable cursors, reported-price arithmetic and receiver revocation without broker orders or Discord posts. Initial subscription probes returned 503 before a later probe succeeded; recovery remains explicit rather than promising an always-available stream. Keep the service-role key exclusively in the service runtime. Native clients continue using their scoped pairing tokens.
 
 See the [implementation plan](superpowers/plans/2026-10-26-push-dashboard.md) for current verification and deployment status. Physical-device, real broker-UI and cross-network acceptance remain separate from automated source tests.

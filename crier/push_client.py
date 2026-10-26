@@ -31,6 +31,7 @@ async def pages(client,pair,cursor,stop,on_dashboard,on_transport):
     while not stop.is_set():
         try:
             on_transport('connecting')
+            started=asyncio.get_running_loop().time(); greeted=False
             async with client.stream('GET',base+'/stream',params={'after':cursor()},headers=headers,timeout=httpx.Timeout(20,read=25)) as response:
                 response.raise_for_status()
                 if 'text/event-stream' not in response.headers.get('content-type',''): raise ValueError('Invalid stream response')
@@ -38,11 +39,14 @@ async def pages(client,pair,cursor,stop,on_dashboard,on_transport):
                     if stop.is_set(): return
                     if kind=='ready':
                         if value!={'version':1,'transport':'push'}: raise ValueError('Invalid stream greeting')
+                        greeted=True
                         on_transport('push')
                     elif kind=='events' and pair['role']=='follower': yield value
                     elif kind=='dashboard': on_dashboard(value)
                     elif kind=='heartbeat':
                         if type(value.get('server_time_ms')) not in (int,float): raise ValueError('Invalid heartbeat')
+            if not greeted or asyncio.get_running_loop().time()-started<1:
+                raise ValueError('Stream ended before a stable connection')
             continue
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code in (401,403): raise
