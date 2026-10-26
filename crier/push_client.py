@@ -16,7 +16,8 @@ async def frames(response):
             if size>1048576: raise ValueError('Stream frame too large')
             text=line.rstrip(b'\r').decode('utf-8',errors='strict')
             if not text:
-                if data: yield name,json.loads('\n'.join(data))
+                if data and name in ('ready','events','dashboard','heartbeat'):
+                    yield name,json.loads('\n'.join(data))
                 data=[]; name='message'; size=0
             elif text.startswith('event:'): name=text[6:].lstrip(' ')
             elif text.startswith('data:'): data.append(text[5:].lstrip(' '))

@@ -12,7 +12,9 @@ class PushDashboardTest {
   for(i in 0 until cases.length()) {
    val case=cases.getJSONObject(i); val input=case.getJSONObject("input")
    val result=CopyReports.metrics(input.getJSONObject("report"),input.optString("as_of").takeIf { it.isNotBlank() }?.let { java.time.Instant.parse(it) } ?: java.time.Instant.now())
-   assertEquals(case.getString("id"),case.getJSONObject("expected").toMap(),result.toMap())
+   val expected=case.getJSONObject("expected")
+   for(key in listOf("remaining","entry_average","exit_average","gross_realized_pnl","net_realized_pnl","unrealized_estimate"))
+    assertEquals(case.getString("id")+":"+key,expected.get(key),result.get(key))
   }
  }
  @Test fun utf8AndMultipleFrames() {

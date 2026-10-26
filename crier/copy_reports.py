@@ -113,7 +113,7 @@ class CopyReporter:
             except TimeoutError: pass
 
     async def run(self,stop):
-        metadata=asyncio.create_task(self.metadata_loop(stop)); presence_at=0
+        metadata=asyncio.create_task(self.metadata_loop(stop)); presence_at=0; presence_state=None
         try:
             async with httpx.AsyncClient(timeout=10,follow_redirects=False,trust_env=False) as client:
                 while not stop.is_set():
@@ -122,10 +122,11 @@ class CopyReporter:
                         try:
                             for report in self.collect(): self.queue(scope,'status:'+report['event_id'],report)
                             now=asyncio.get_running_loop().time()
-                            if now>=presence_at:
+                            current_presence=(scope,device.transport,device.engine.load_settings()['enabled'])
+                            if now>=presence_at or current_presence!=presence_state:
                                 self.queue(scope,'presence',dict(version=1,observed_at=datetime.now(timezone.utc).isoformat(),platform='windows',
                                     transport=device.transport,entries_enabled=device.engine.load_settings()['enabled']))
-                                presence_at=now+15
+                                presence_at=now+15; presence_state=current_presence
                             with device.db() as db:
                                 rows=db.execute('SELECT slot,payload FROM copy_outbox WHERE pair=? AND pending=1 ORDER BY slot LIMIT 100',(scope,)).fetchall()
                             for row in rows:

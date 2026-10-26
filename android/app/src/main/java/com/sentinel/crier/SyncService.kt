@@ -23,7 +23,7 @@ class SyncService: Service() {
  private var started=false
  private val pool=Executors.newFixedThreadPool(7)
  @Volatile private var running=true
- private var push:PushConnection?=null
+ @Volatile private var push:PushConnection?=null
  @Volatile private var transport="connecting"
  private var health:ComponentHealth?=null
  private var healthTicket:ComponentHealth.Ticket?=null

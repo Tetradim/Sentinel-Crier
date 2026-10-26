@@ -18,6 +18,7 @@ def test_parser_bounds_utf8_and_unknown_frames():
     async def run():
         response=httpx.Response(200,content='event: ready\r\ndata: {"text":"é"}\r\n\r\n'.encode())
         assert [item async for item in frames(response)]==[('ready',{'text':'é'})]
+        assert [item async for item in frames(httpx.Response(200,content=b'event: extension\ndata: not json\n\n'))]==[]
         with pytest.raises(ValueError):
             _=[item async for item in frames(httpx.Response(200,content=b'data: '+b'a'*1048576))]
     asyncio.run(run())
