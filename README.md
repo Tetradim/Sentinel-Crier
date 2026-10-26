@@ -67,6 +67,8 @@ The source quantity cap rejects larger instructions; it does not choose an order
 
 An optional paper-practice guide is available in Windows Start here/F1, Android setup and iPhone Home. Reading it performs no account or trading action and never gates live use. See [customer setup, recovery and acceptance](docs/customer-acceptance.md) for installation artifacts, support and the real-device checks still deferred.
 
+Automated customer acceptance results and the [remaining-work list](docs/remaining-work.md) separate verified source behavior, deferred real trials and proposed execution features.
+
 ## Run the Python monitor and console
 
 Requires **Python 3.11+**. From PowerShell:

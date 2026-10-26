@@ -20,6 +20,8 @@ The guide is optional and read-only. It never connects an account, creates an in
 
 For Alerts, verify the paper account, save the intended Discord destination, preview, optionally request a labeled synthetic test, and enable publishing explicitly. Wait for observing status before making a new supported paper fill. The first activity fetch establishes a suppressed baseline; an old fill is not evidence of first success.
 
+For a mobile Alerts trial, using the brokerage on another device lets Crier remain in the foreground. Switching apps pauses foreground monitoring. After returning, check readiness: Android Alerts requires reconnecting after its foreground session stops; iPhone Crier reconciles a connected account and requires explicit publishing permission again. Confirm that state before expecting a pending fill to be posted.
+
 For Trade/share and Follow, use the bundled testing relay through Host/Receive invitations. Customers do not need a home server or router port. Verify each account/environment and role, review the [current execution settings](execution-policies.md), then enable entries deliberately. Submission-time mirroring applies to orders entered inside Crier. Inspect actual broker records on both devices; a relay acknowledgement is not a fill. The bundled relay has no guaranteed trading latency or availability.
 
 ## Recovery without losing evidence

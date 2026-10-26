@@ -1,0 +1,301 @@
+{
+  "phase": "I",
+  "status": "Automated acceptance source scope verified; real customer/provider/device acceptance remains unpassed",
+  "collected_at_utc": "2026-10-26T01:44:08.913107+00:00",
+  "app_source_commit": "150ac97bb7c77804632ae042e8f1b50c1cd0aebc",
+  "test_harness_commit": "95ceb8842d531d2f8bf5bd74d4d1536617980f4f",
+  "test_harness_fix_changes_no_app_source": true,
+  "app_scope_paths": [
+    "crier",
+    "android",
+    "ios",
+    "desktop",
+    "pyproject.toml",
+    ".github/workflows",
+    "scripts/customer_acceptance.py"
+  ],
+  "ci_runs": [
+    {
+      "conclusion": "success",
+      "databaseId": 40254514869,
+      "headSha": "150ac97bb7c77804632ae042e8f1b50c1cd0aebc",
+      "name": "Customer acceptance",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40254514869"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40254519354,
+      "headSha": "150ac97bb7c77804632ae042e8f1b50c1cd0aebc",
+      "name": "Android build and intent tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40254519354"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40254523090,
+      "headSha": "150ac97bb7c77804632ae042e8f1b50c1cd0aebc",
+      "name": "iOS build",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40254523090"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40254528219,
+      "headSha": "150ac97bb7c77804632ae042e8f1b50c1cd0aebc",
+      "name": "Crier live-trading safety checks",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40254528219"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40254536311,
+      "headSha": "150ac97bb7c77804632ae042e8f1b50c1cd0aebc",
+      "name": "Windows release",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40254536311"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40254533033,
+      "headSha": "150ac97bb7c77804632ae042e8f1b50c1cd0aebc",
+      "name": "Provider connection preparation",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40254533033"
+    }
+  ],
+  "local_python": {
+    "passed": 941,
+    "skipped": 1,
+    "source_snapshot": "95ceb8842d531d2f8bf5bd74d4d1536617980f4f",
+    "optional_skip": "Webull SDK absent"
+  },
+  "focused_python_tests": 19,
+  "local_android_tests": 108,
+  "initial_local_validation_not_accepted": {
+    "passed": 919,
+    "skipped": 23,
+    "reason": "22 unexpected desktop UI skips from repeated Tcl initialization; shared interpreter and Windows fail-on-initialization fix verified in final full run"
+  },
+  "python_matrix": [
+    {
+      "path": "matrix/provider-preparation-ubuntu-latest-3.11/provider-preparation.xml",
+      "tests": 942,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 34
+    },
+    {
+      "path": "matrix/provider-preparation-ubuntu-latest-3.12/provider-preparation.xml",
+      "tests": 942,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 34
+    },
+    {
+      "path": "matrix/provider-preparation-windows-latest-3.11/provider-preparation.xml",
+      "tests": 942,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    }
+  ],
+  "backend": [
+    {
+      "path": "behavior/python.xml",
+      "tests": 875,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 36
+    }
+  ],
+  "android": [
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.ComponentHealthTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.CustomerOAuthTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.DiagnosticsTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.EngineTest.xml",
+      "tests": 25,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.EntryClockTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.ExecutionStartGateTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.GuidedAlertsTest.xml",
+      "tests": 24,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.HealthPersistenceTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.OAuthReturnTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.Phase2FlowTest.xml",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.PolicyTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.PracticeGuideTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "android/test-results/testDebugUnitTest/TEST-com.sentinel.crier.SetupChoicesTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "ios_unit": {
+    "tests": 124,
+    "failures": 0,
+    "source_commit": "150ac97bb7c77804632ae042e8f1b50c1cd0aebc"
+  },
+  "android_ui": {
+    "results": [
+      {
+        "path": "customer/customer-acceptance-android-ui/outputs/androidTest-results/connected/debug/TEST-emulator-5554 - 15-_app-.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    ],
+    "font_scale": 1.3,
+    "source_commit": "150ac97bb7c77804632ae042e8f1b50c1cd0aebc",
+    "scope": "Optional guide navigation for all purposes and native editable-field label/hint associations"
+  },
+  "ios_ui": {
+    "tests": 1,
+    "failures": 0,
+    "journeys": 3,
+    "source_commit": "150ac97bb7c77804632ae042e8f1b50c1cd0aebc",
+    "scope": "Fresh simulator app guide navigation, screenshots and return Home; no account connection"
+  },
+  "windows_release_python": {
+    "passed": 872,
+    "skipped": 3
+  },
+  "remote_ui_artifacts": [
+    {
+      "id": 12622153020,
+      "name": "customer-acceptance-ios-ui",
+      "size_in_bytes": 1399404,
+      "digest": "sha256:0eb78ee549bf6970f7e9f58e07a67f1d1e0ae6040d8f9566838b49744bfc3a7f",
+      "expired": false
+    },
+    {
+      "id": 12621678128,
+      "name": "customer-acceptance-android-ui",
+      "size_in_bytes": 58838,
+      "digest": "sha256:72c82f9862f8687d6fcae9b164939ec3bbf3a9e54bbab9c576e091f98e4f1094",
+      "expired": false
+    },
+    {
+      "id": 12621652700,
+      "name": "customer-acceptance-windows",
+      "size_in_bytes": 1134,
+      "digest": "sha256:7d96df9c9e98dc92ff08d2abe0c2c7da98b6e358edd045d1fb318cdb2a6c7b6d",
+      "expired": false
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "ios-unsigned-archive-validation.json",
+      "sha256": "201228a6073991ed5d9dad86995a976810f8ea453c17f24afc4658bde5e13a3d"
+    },
+    {
+      "path": "windows-installer-acceptance.json",
+      "sha256": "b0ade061605e3bd072ef831403594eb8c562411c150a080198fbe37f1424e8c0"
+    },
+    {
+      "path": "windows-journey-report.json",
+      "sha256": "c838dd6ad4aca503a3cbd5f75727161b06346eda7e3be496edc0c80d34d52359"
+    },
+    {
+      "path": "ios-practice-alerts.png",
+      "sha256": "be44200c4003a0823fca1f2ad2f7e5b4c1f7037f0a2e7e0acf087aec54f094ab"
+    }
+  ],
+  "guide_git_blob_sha256": "d151129b007873d6493efb733547c36b685bd6de35bc6bee2f1f0bb4ed909bb9",
+  "scope": [
+    "Shared static optional guide, no authority or completion fields",
+    "Windows F1/support and read-only keyboard traversal",
+    "Android native labelFor/hint association and enlarged-font emulator checks",
+    "Real desktop session, activity parser, publisher/outbox, exact option symbol/label/quantity/premium, acknowledgement and reconnect with intercepted HTTP",
+    "Uncertain acknowledgement preservation and no mandatory paper-practice gate",
+    "Source-bound offline timing report with real customer timing explicitly unmeasured"
+  ],
+  "real_customer_first_success": "not_measured",
+  "real_broker_orders": 0,
+  "real_discord_messages": 0,
+  "physical_acceptance": false,
+  "deployed": false,
+  "remaining": [
+    "Signed iPhone installation and owner/provider activation",
+    "Real broker/Discord, cross-network and customer first-success trials",
+    "Physical lifecycle and actual assistive-technology validation",
+    "H.5 proposed live sizing/notional/exit/timer modes remain design-only"
+  ],
+  "representative_screenshot": {
+    "path": "ios-practice-alerts.png",
+    "source_commit": "150ac97bb7c77804632ae042e8f1b50c1cd0aebc",
+    "scope": "First Alerts guide viewport in the simulator; not full-page rendering, assistive-technology or physical-device acceptance"
+  }
+}
