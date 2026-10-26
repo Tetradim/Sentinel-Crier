@@ -1,0 +1,25 @@
+{
+  "reviewed_commit": "9626e4d7058bebc1ee988911b2d50cd0f689e224",
+  "scope": "Synthetic local broker and temporary databases; no real broker orders or Discord messages",
+  "focused_existing_tests": {
+    "passed": 130,
+    "failed": 0
+  },
+  "probes": {
+    "expired_entry": {
+      "executor_state": "skipped",
+      "dashboard_state": "received",
+      "dashboard_reason": null,
+      "broker_posts": 0
+    },
+    "metadata_recovery": {
+      "completed_intervals": 2,
+      "metadata_calls": 1,
+      "cached_after_recovery": false
+    },
+    "telemetry_db_lock": {
+      "heartbeat_due_seconds": 0.05,
+      "heartbeat_actual_seconds": 16.531
+    }
+  }
+}
