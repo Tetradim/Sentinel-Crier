@@ -198,6 +198,23 @@ def test_missing_prior_buy_plan_blocks_replacement_but_allows_exit(tmp_path):
     assert broker.sent[-1]['side']=='sell' and broker.sent[-1]['qty']=='3'
 
 
+def test_corrupt_saved_enabled_flag_cannot_bypass_final_pause_gate(tmp_path):
+    import json
+    engine,broker=configured(tmp_path,{'mode':'fixed','fixed_quantity':3})
+    engine.accept(event())
+    original=broker.submit_checked
+    def corrupt(request,check):
+        with engine._db() as db:
+            settings=json.loads(db.execute('SELECT data FROM intent_settings').fetchone()[0])
+            settings['enabled']='false'
+            db.execute('UPDATE intent_settings SET data=?',(json.dumps(settings),))
+        return original(request,check)
+    broker.submit_checked=corrupt
+    assert engine.tick()[0]['state']=='superseded'
+    assert not broker.sent
+    with engine._db() as db: assert db.execute('SELECT status FROM intent_orders').fetchone()[0]=='skipped'
+
+
 def test_close_tracked_exit_ignores_requested_units_but_bounds_holdings(tmp_path):
     engine,broker=configured(tmp_path,{'mode':'fixed','fixed_quantity':5,'exit_mode':'close_tracked'})
     instruction=event(); engine.accept(instruction); engine.tick()

@@ -48,8 +48,10 @@ class LivePolicyPersistenceTest {
     assertEquals(3,j.policy(trade).getJSONObject("policy").getInt("fixed_quantity"))
     j.unknown("test-client",trade,1,"buy")
     val response=JSONObject().put("id","broker").put("client_order_id","test-client").put("symbol","SPY").put("side","buy").put("qty","3").put("status","partially_filled").put("filled_qty","1").put("filled_avg_price","1.25")
+    // POST responses use update directly: cost and quantity commit together, without a timer anchor.
+    j.update("test-client",response)
+    assertEquals("1.25",JSONObject(j.meta("fill:test-client")).getString("average")); assertEquals("partially_filled",j.orders(trade).single().state); assertEquals("",j.meta("timer:test-client"))
     j.updateObserved("test-client",response,"acknowledged")
-    assertEquals("1.25",JSONObject(j.meta("fill:test-client")).getString("average"))
     response.put("filled_qty","2").remove("filled_avg_price"); j.updateObserved("test-client",response,"acknowledged")
     assertEquals("",j.meta("fill:test-client"))
    }

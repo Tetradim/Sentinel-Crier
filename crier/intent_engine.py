@@ -103,7 +103,8 @@ class IntentEngine(PolicyJournal):
 
     def load_settings(self):
         with self._db() as db: row=db.execute('SELECT data FROM intent_settings WHERE id=1').fetchone()
-        return dict(DEFAULTS, **(json.loads(row[0]) if row else {}))
+        saved=dict(DEFAULTS, **(json.loads(row[0]) if row else {}))
+        return self._validate_settings(saved,{})
     def save_settings(self, settings):
         with self._db() as db:
             db.execute('BEGIN IMMEDIATE')
@@ -319,7 +320,11 @@ class IntentEngine(PolicyJournal):
             with self._db() as db:
                 latest=db.execute('SELECT * FROM intent_trades WHERE id=?',(tid,)).fetchone()
             if latest['data']!=row['data']: return False
-            current=self.load_settings()
+            try:
+                current=self.load_settings()
+            except (ValueError,TypeError,ArithmeticError,KeyError):
+                refusal['reason']='invalid_local_settings'
+                return False
             if snapshot:
                 try:
                     pinned=self.policy_for(tid,e,account)

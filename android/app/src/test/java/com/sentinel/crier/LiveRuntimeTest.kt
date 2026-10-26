@@ -67,6 +67,22 @@ class LiveRuntimeTest {
   val unsupported=object:BrokerPort by b { override fun binding(event:JSONObject):JSONObject=throw IllegalArgumentException("unsupported") }
   assertThrows(IllegalArgumentException::class.java) { Engine(store,good,unsupported) { false }.step(e) }; assertTrue(store.base.os.isEmpty())
  }
+ @Test fun immediateFilledPostPersistsCostForBudgetReplaceWithoutStartingTimer() {
+  val c=config("""{"mode":"budget","budget":"10","entry_timeout_seconds":60}"""); val s=Store(); val first=event(); s.receive(c,first); val checked=Checked()
+  val broker=object:BrokerPort by checked {
+   override fun submitPlanned(event:JSONObject,client:String,quantity:Int,sell:Boolean,plan:JSONObject,canSubmit:()->Boolean):JSONObject {
+    val response=checked.submitPlanned(event,client,quantity,sell,plan,canSubmit)
+    return if(event.getInt("sequence")==1) response.put("status","filled").put("filled_qty",quantity.toString()).put("filled_avg_price","0.40") else response
+   }
+  }
+  Engine(s,c,broker) { false }.step(first)
+  val initial=s.base.os.single(); assertEquals("filled",initial.state); assertEquals(10,initial.filled)
+  assertEquals("0.40",JSONObject(s.meta("fill:${initial.client}")).getString("average")); assertEquals("",s.meta("timer:${initial.client}"))
+  checked.fake.remote=null // A terminal POST response must provide sufficient evidence without a later lookup.
+  val replacement=event(2,"replace").put("limit_price","2"); s.receive(c,replacement)
+  Engine(s,c,broker) { false }.step(replacement)
+  val plan=JSONObject(s.meta("plan:trade:2")); assertEquals(13,plan.getInt("target")); assertEquals("4.00",plan.getString("baseline_spent")); assertEquals(3,checked.fake.quantity); assertEquals(2,checked.fake.posts)
+ }
  @Test fun replaceBudgetUsesAllPurchaseCostsAndSalesNeverReplenishIt() {
   val c=config("""{"mode":"budget","budget":"10"}"""); val s=Store(); val first=event(); s.receive(c,first); s.seed("buy",4,average="1"); s.seed("sell",2,seq=2)
   val replacement=event(3,"replace").put("limit_price","2"); s.receive(c,replacement); val b=Checked()
