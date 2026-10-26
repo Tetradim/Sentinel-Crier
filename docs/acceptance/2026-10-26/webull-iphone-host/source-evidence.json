@@ -1,0 +1,75 @@
+{
+  "source_commit": "420a07b670ed601697305eba3284a4fadafc7adc",
+  "collected_at_utc": "2026-10-26T23:48:38.582020+00:00",
+  "scope": "candidate native host and gateway/ledger only; not an operational Webull integration",
+  "ci_runs": [
+    {
+      "conclusion": "success",
+      "headSha": "5ce2002bc7d731f27040a4ddeca3882dfb94a5a8",
+      "name": "Webull iPhone host contracts",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40421125791"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "5ce2002bc7d731f27040a4ddeca3882dfb94a5a8",
+      "name": "Crier live-trading safety checks",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40421125775"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "420a07b670ed601697305eba3284a4fadafc7adc",
+      "name": "iOS build",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40421771755"
+    }
+  ],
+  "tests": {
+    "python_passed": 1036,
+    "python_skipped": 1,
+    "deno_gateway_and_service": 22,
+    "sql_pglite": 5,
+    "ios_native": 172
+  },
+  "native_test_source": "5ce2002bc7d731f27040a4ddeca3882dfb94a5a8",
+  "native_followup": "420a07b changes only exit-review UI availability and route documentation; its simulator build and unsigned hardware archive passed. Tested host controller/models/tests are byte-identical.",
+  "matched_components": [
+    {
+      "path": "ios/SentinelCrier/WebullHostController.swift",
+      "sha256_git_blob_content": "d452ba592b0c533fae21c7aa81b9cd258c460b140ffac4f0b60ae472bf4495a6"
+    },
+    {
+      "path": "ios/SentinelCrier/WebullHostModels.swift",
+      "sha256_git_blob_content": "4d0efd55217709f977ec1348a8c0456aa0abd4918cf282a800805808a77a4b0b"
+    },
+    {
+      "path": "ios/SentinelCrier/WebullHostTests.swift",
+      "sha256_git_blob_content": "a51e63c90ddacfc1910b3bd6a7562ea4dd107dddc3004cf8d5dd9cdcd988f710"
+    },
+    {
+      "path": "tests/test_webull_host_receiver.py",
+      "sha256_git_blob_content": "6f62c3768fdb69b280ec3075e1e1b138019c940291125d82fd15fceff31d4919"
+    }
+  ],
+  "matching_source_trees": [
+    "crier",
+    "supabase/webull-host"
+  ],
+  "real_broker_orders": 0,
+  "real_discord_messages": 0,
+  "webull_provider_binding_complete": false,
+  "webull_service_deployed": false,
+  "webull_approved": false,
+  "apple_signed_distribution": false,
+  "physical_acceptance": false,
+  "review_repairs": [
+    "attempt-scoped cancellation with fresh-read rearming and expired-lease recovery",
+    "shared native journal owner across navigation",
+    "fresh broker lookup failure never returned as cached terminal success",
+    "stable broker identity and nonregressing fills",
+    "source and relay instrument identity validation",
+    "actual source averages separate from limit prices",
+    "bounded automatic pending-order polling"
+  ]
+}

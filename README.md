@@ -29,7 +29,7 @@ Any supported platform can take the Host or Receive role. Devices can use differ
 
 **Push delivery is implemented.** An authenticated stream delivers durable instructions; database notifications wake the hosted service after writes commit. Bounded polling is the labeled recovery path. Reconnect replays saved records while durable identities suppress duplicate submissions. See [push delivery and the dashboard](docs/push-dashboard.md).
 
-The relay transports instructions and observations; it does not execute trades or hold broker API keys. Credentials remain on the executing device through Windows DPAPI, iOS Keychain or Android's encrypted Keystore-backed vault. The relay operator can see instruction contents. The separately prepared provider OAuth service has different credential custody and is not activated; see [provider connections](docs/provider-connections.md).
+The relay transports instructions and observations; it does not execute trades or hold broker API keys. Current Alpaca credentials remain on the executing device through Windows DPAPI, iOS Keychain or Android's encrypted Keystore-backed vault. The relay operator can see instruction contents. The candidate Webull route uses a separate server gateway for application secrets and customer OAuth token custody; that binding is unfinished. The separately prepared provider OAuth service also has different credential custody and is not activated; see [provider connections](docs/provider-connections.md).
 
 An instruction, a submitted order and a fill are different events. Networks, broker checks, liquidity and operating-system suspension affect execution. Crier does not guarantee delivery time or identical fill prices.
 
@@ -112,6 +112,8 @@ For Python publishing, set `DISCORD_WEBHOOK_URL`, `CRIER_PUBLISHER_VERIFIED=true
 ## Verification and project status
 
 Reporting-repair source `a7b332b` passed **1,033 Python tests**, with one optional SDK skip, **165 Android unit tests** and **160 iOS native tests**, plus UI/build and Windows installer checks. Seven successful CI runs and report hashes are recorded in [accepted evidence](docs/acceptance/2026-10-26/reporting-recovery/README.md). These counts describe that revision, not physical or real-broker acceptance.
+
+The subsequent [Webull-host candidate verification](docs/acceptance/2026-10-26/webull-iphone-host/README.md) records **1,036 Python tests**, **22 Deno tests**, **five SQL tests** and **172 iOS tests**, with source-specific build evidence. It does not establish real Webull integration or activation.
 
 ```powershell
 python -m pip install -e ".[test]"

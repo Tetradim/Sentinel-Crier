@@ -22,6 +22,8 @@ The gateway implementation is in `supabase/webull-host/`; its integration notes 
 
 Start actual integration acceptance with Webull sandbox and Alpaca paper. Selecting production can place real Webull orders once the provider service is active; the paper destination does not make the source order a paper trade.
 
+If Windows already has a different saved channel, resolve its orders and use the existing archive/change-connection flow before accepting this new invitation. Preserve unresolved journals rather than deleting them to bypass an account/channel pin.
+
 ## Submission and recovery semantics
 
 - Confirmation durably records the source order identity and receiver instruction before source submission. The receiver instruction is published without waiting for a Webull fill.
@@ -40,4 +42,4 @@ Keep the iPhone app foregrounded while hosting this route. iOS suspension can st
 
 Native tests exercise source/destination separation, journal recovery, receipt validation, cancellation ordering and exit quantities. Gateway tests use synthetic principals/provider responses; receiver tests use the real Alpaca adapter against intercepted HTTP. These tests make no real orders or Discord posts.
 
-The [implementation plan](superpowers/plans/2026-10-26-webull-iphone-alpaca-pc.md) records completed checks and remaining provider integration work. General multiple-host subscriptions and arbitrary cross-broker routing remain [deferred D.1](deferred/multi-host-cross-broker.md); this candidate is a single Webull-host-to-Alpaca-paper route.
+The [candidate verification](acceptance/2026-10-26/webull-iphone-host/README.md) and [implementation plan](superpowers/plans/2026-10-26-webull-iphone-alpaca-pc.md) record completed checks and remaining provider integration work. General multiple-host subscriptions and arbitrary cross-broker routing remain [deferred D.1](deferred/multi-host-cross-broker.md); this candidate is a single Webull-host-to-Alpaca-paper route.
