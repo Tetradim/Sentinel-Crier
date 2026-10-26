@@ -4,6 +4,8 @@ The approved customer-ease phases E–I, live-policy phase J and reconciliation 
 
 ## Owner/provider/device work still unpassed
 
+Phase L adds push delivery and the observational copy dashboard. Its [implementation plan](superpowers/plans/2026-10-26-push-dashboard.md) tracks ongoing integration, native CI and hosted deployment verification; it is not yet included in the accepted E–K evidence below. See the [usage and evidence guide](push-dashboard.md).
+
 - Webull Connect approval, issued integration details and real authorized integration testing.
 - Provider app registrations/credentials, real OAuth consent and activation/deployment of the separately prepared provider service.
 - Apple enrollment/signing and an installable signed iPhone/TestFlight candidate. An unsigned archive is not an installation package.

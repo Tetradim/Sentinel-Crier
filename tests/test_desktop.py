@@ -130,6 +130,13 @@ def test_ios_wire_event_reaches_desktop_broker_without_waiting_for_fill(tmp_path
         relay = IntentRelay(tmp_path/'relay.sqlite3')
         app = FastAPI()
         app.include_router(sync_router(relay, lambda: None), prefix=prefix)
+        @app.middleware('http')
+        async def polling_recovery(request,call_next):
+            # httpx ASGITransport buffers streams; real socket push is tested separately.
+            if request.url.path.endswith('/stream'):
+                from starlette.responses import Response
+                return Response(status_code=404)
+            return await call_next(request)
         channel = relay.create('iPhone to desktop', 'paper')
         pairing = dict(PAIR, url=PAIR['url']+prefix, token=channel['follower_token'])
         client_type = httpx.AsyncClient

@@ -54,7 +54,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -c "SET crier.test_dsn = 'host=127.0.0.1 port=5432 dbname=crier_test user=postgres password=local-test-only';" -f supabase/tests/integration/webull_operations_concurrency.sql
       - name: Edge gateway tests and type checks
         run: |
-          npm exec --yes --package deno@2.9.6 -- deno test supabase/functions/crier/gateway_test.ts
+          npm exec --yes --package deno@2.9.6 -- deno test supabase/functions/crier/gateway_test.ts supabase/functions/crier/stream_test.ts
           npm exec --yes --package deno@2.9.6 -- deno check supabase/functions/crier/index.ts
           npm exec --yes --package deno@2.9.6 -- deno lint supabase/functions/crier
       - name: Offline Webull Connect contract checks (no broker calls)

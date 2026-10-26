@@ -35,6 +35,7 @@ struct IntentConnectionForm: View {
     }
     var body: some View {
         Section("Remote connection") {
+            Text("Host and Receive share tracked instructions and device-reported fills with the channel host; receivers see host and self only. Balances, unrelated holdings and credentials stay private.").font(.caption)
             Button("Host") { connect(host: true) }.disabled(model.busy || working)
             SecureField("Invitation link or code (first connection)", text: $invitation)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -94,6 +95,7 @@ struct IntentSettingsView: View {
     @State private var message = ""
     var body: some View {
         VStack(alignment: .leading) {
+            NavigationLink("Copy dashboard") { CopyDashboardView(controller: controller) }
             Toggle("Pause new follower entries", isOn: $preferences.paused)
             Picker("Follower pricing", selection: $preferences.mode) {
                 Text("Exact source limit").tag("exact_limit")

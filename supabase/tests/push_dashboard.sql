@@ -1,0 +1,41 @@
+BEGIN;
+DO $$
+DECLARE h text; f text; late text; code text; e jsonb; s jsonb; p jsonb; r jsonb; actor text;
+BEGIN
+ h:=public.crier_dispatch('POST','/api/connect/host','','{"name":"Push"}','{}','push-test')->'body'->>'token';
+ code:=public.crier_dispatch('POST','/api/connect/invite',h,'{}','{}','push-test')->'body'->>'code';
+ f:=public.crier_dispatch('POST','/api/connect/receive','',jsonb_build_object('code',code),'{}','push-test')->'body'->>'token';
+ e:='{"version":1,"event_id":"aaaaaaaa-1111-4111-8111-111111111111","trade_id":"bbbbbbbb-2222-4222-8222-222222222222","sequence":1,"action":"enter","environment":"paper","symbol":"AAPL","asset":"stock","quantity":1,"limit_price":"1.25","created_at":"2026-10-23T12:00:00Z","expires_at":"2026-10-23T12:00:20Z"}';
+ ASSERT public.crier_dispatch('POST','/api/sync/events',h,e)->>'status'='200';
+ s:=jsonb_build_object('version',1,'event_id',e->>'event_id','revision',1,'observed_at','2026-10-26T12:00:00Z','state','received','bought',0,'sold',0);
+ r:=public.crier_dispatch('POST','/api/sync/status',f,s); ASSERT r->>'status'='200',r::text;
+ r:=public.crier_dispatch('POST','/api/sync/status',f,s); ASSERT r->>'status'='200',r::text;
+ ASSERT public.crier_dispatch('POST','/api/sync/status',f,s||'{"state":"working"}')->>'status'='409';
+ ASSERT public.crier_dispatch('POST','/api/sync/status',f,s||'{"revision":2,"bought":1,"buy_premium":"1.25","currency":"USD","multiplier":1}')->>'status'='200';
+ ASSERT public.crier_dispatch('POST','/api/sync/status',f,s||'{"revision":3}')->>'status'='409';
+ ASSERT public.crier_dispatch('POST','/api/sync/status',f,s||'{"revision":3,"actor":"host"}')->>'status'='422';
+ ASSERT public.crier_dispatch('POST','/api/sync/status',f,s||'{"revision":3,"bought":true}')->>'status'='422';
+ ASSERT public.crier_dispatch('POST','/api/sync/status',f,s||'{"revision":3,"bought":1,"buy_premium":"0"}')->>'status'='422';
+ ASSERT public.crier_dispatch('POST','/api/sync/status',f,s||'{"revision":3,"currency":"USD","multiplier":100}')->>'status'='422';
+ p:='{"version":1,"revision":1,"observed_at":"2026-10-26T12:00:00Z","platform":"android","transport":"push","entries_enabled":false}';
+ ASSERT public.crier_dispatch('POST','/api/sync/presence',f,p)->>'status'='200';
+ ASSERT public.crier_dispatch('POST','/api/sync/presence',f,p)->>'status'='200';
+ ASSERT public.crier_dispatch('POST','/api/sync/presence',f,p||'{"transport":"poll"}')->>'status'='409';
+ r:=public.crier_dispatch('GET','/api/sync/dashboard',f); ASSERT r->>'status'='200';
+ ASSERT jsonb_array_length(r->'body'->'events')=1; ASSERT jsonb_array_length(r->'body'->'statuses')=1;
+ actor:=r->'body'->>'actor'; ASSERT actor<>'host';
+ ASSERT public.crier_dispatch('GET','/api/sync/dashboard',f,'{}','{"actor":"host"}')->>'status'='422';
+ code:=public.crier_dispatch('POST','/api/connect/invite',h,'{}','{}','push-test')->'body'->>'code';
+ late:=public.crier_dispatch('POST','/api/connect/receive','',jsonb_build_object('code',code),'{}','push-test')->'body'->>'token';
+ ASSERT public.crier_dispatch('POST','/api/sync/status',late,s)->>'status'='404';
+ r:=public.crier_dispatch('GET','/api/sync/dashboard',late); ASSERT r->'body'->'events'='[]'; ASSERT r->'body'->'statuses'='[]';
+ ASSERT public.crier_dispatch('POST','/api/connect/receivers/'||actor||'/revoke',h,'{}','{}','push-test')->>'status'='200';
+ ASSERT public.crier_dispatch('GET','/api/sync/dashboard',f)->>'status'='401';
+ ASSERT public.crier_dispatch('POST','/api/sync/presence',f,p||'{"revision":2}')->>'status'='401';
+ r:=public.crier_dispatch('GET','/api/sync/dashboard',h); ASSERT jsonb_array_length(r->'body'->'statuses')=1;
+ ASSERT EXISTS(SELECT 1 FROM jsonb_array_elements(r->'body'->'members') m WHERE m->>'actor'=actor AND m->>'revoked'='true');
+ ASSERT NOT has_table_privilege('service_role','crier_private.status_reports','SELECT');
+ ASSERT NOT has_function_privilege('anon','public.crier_stream_scope(text)','EXECUTE');
+END $$;
+ROLLBACK;
+

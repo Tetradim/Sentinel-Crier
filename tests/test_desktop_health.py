@@ -56,7 +56,8 @@ def test_relay_health_uses_actual_poll_outcome_without_extra_requests(tmp_path,m
     async def run():
         stop=asyncio.Event(); observed=[]; calls=[]
         async def respond(request):
-            calls.append(request); stop.set()
+            if request.url.path.endswith(('/stream','/dashboard')): return httpx.Response(404)
+            calls.append(request); asyncio.get_running_loop().call_later(.001,stop.set)
             return httpx.Response(status,json={'events':[]})
         original=httpx.AsyncClient
         monkeypatch.setattr(intent_device.httpx,'AsyncClient',lambda **kw:original(transport=httpx.MockTransport(respond),**kw))

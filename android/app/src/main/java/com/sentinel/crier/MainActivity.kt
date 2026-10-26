@@ -66,6 +66,18 @@ class MainActivity:Activity() {
   button("Trade / share · place and mirror orders") { chooseJourney("trade") }
   button("Follow · receive a trader’s orders") { chooseJourney("follow") }
   button("Connection health and recovery") { showHealth() }
+  panel.addView(TextView(this).apply { text="Host / Receive shares tracked instruction status and actual fills with the channel host. Receivers see host and their own reports. Unrelated holdings, balances and broker credentials are excluded." })
+  button("Copy dashboard · read only") {
+   val saved=Vault(this).read(); val lifecycle=lifecycleRevision
+   background {
+    val snapshot=Network.request("${saved.getString("url").trimEnd('/')}/api/sync/dashboard",headers=mapOf("Authorization" to "Bearer ${saved.getString("token")}"))
+    runOnUiThread { if(!isDestroyed && foreground && lifecycle==lifecycleRevision && Settings.sameIdentity(saved,Vault(this).read())) {
+     CopyDashboardCache.accept(saved,snapshot)
+     val view=TextView(this).apply { text=CopyDashboardCache.describe(snapshot); setPadding(24,24,24,24); textSize=16f; setTextIsSelectable(true) }
+     android.app.AlertDialog.Builder(this).setTitle("Copy dashboard · read only").setView(ScrollView(this).apply { addView(view) }).setPositiveButton("Close",null).show()
+    } }; "Dashboard checked"
+   }
+  }
   button("Optional paper practice / support") { showPracticeGuide() }
   if(journey=="alerts") { alertsSetup(); return }
   if(journey.isBlank()) { status.text="Choose Alerts, Trade / share, or Follow. No connection or delivery starts from this screen."; return }

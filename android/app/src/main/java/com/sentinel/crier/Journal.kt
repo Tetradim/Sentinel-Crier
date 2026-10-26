@@ -65,7 +65,7 @@ class Journal(private val contextForPolicy: Context,name:String=Settings.journal
    if(skipEntry && e.getString("action") in setOf("enter","replace")) db.execSQL("UPDATE events SET done=1 WHERE id=?",arrayOf(id))
    if(cursor!=null) setMeta("cursor",cursor.toString())
    db.setTransactionSuccessful()
-  } finally { db.endTransaction() }
+  } finally { db.endTransaction() }; JournalWakes.execution.wake(); JournalWakes.outbox.wake(); JournalWakes.telemetry.wake()
  }
  @Synchronized override fun create(action: String,symbol: String,asset: String,quantity: Int,price: String,environment: String,tradeId: String): JSONObject {
   val seq = revision(tradeId).first + 1
@@ -75,16 +75,17 @@ class Journal(private val contextForPolicy: Context,name:String=Settings.journal
  }
  @Synchronized override fun revision(trade: String): Pair<Int,Boolean> = readableDatabase.rawQuery("SELECT seq,invalid FROM trades WHERE id=?",arrayOf(trade)).use { if(it.moveToFirst()) Pair(it.getInt(0),it.getInt(1)==1) else Pair(0,false) }
  @Synchronized fun events(outbox: Boolean): List<JSONObject> = readableDatabase.rawQuery(if(outbox) "SELECT payload FROM events WHERE outgoing=1 AND sent=0 ORDER BY rowid" else "SELECT payload FROM events WHERE done=0 ORDER BY rowid",null).use { c -> buildList { while(c.moveToNext()) add(JSONObject(c.getString(0))) } }
- @Synchronized override fun mark(id: String, outbox: Boolean) { writableDatabase.execSQL("UPDATE events SET ${if(outbox) "sent" else "done"}=1 WHERE id=?",arrayOf(id)); evidence(id,if(outbox) "outbox_complete" else "execution_complete") }
+ @Synchronized override fun mark(id: String, outbox: Boolean) { writableDatabase.execSQL("UPDATE events SET ${if(outbox) "sent" else "done"}=1 WHERE id=?",arrayOf(id)); evidence(id,if(outbox) "outbox_complete" else "execution_complete"); JournalWakes.telemetry.wake() }
  data class Order(val client:String,val sequence:Int,val side:String,val state:String,val broker:String,val filled:Int)
  @Synchronized override fun orders(trade: String): List<Order> = readableDatabase.rawQuery("SELECT client,seq,side,state,broker,filled FROM orders WHERE trade=?",arrayOf(trade)).use { c -> buildList { while(c.moveToNext()) add(Order(c.getString(0),c.getInt(1),c.getString(2),c.getString(3),c.getString(4),c.getInt(5))) } }
- @Synchronized override fun unknown(client:String,trade:String,seq:Int,side:String) { writableDatabase.execSQL("INSERT INTO orders(client,trade,seq,side,state) VALUES(?,?,?,?,'unknown')",arrayOf<Any>(client,trade,seq,side)); orderEvidence(client,"submit_attempt",side) }
- @Synchronized override fun state(client:String,state:String) { writableDatabase.execSQL("UPDATE orders SET state=? WHERE client=?",arrayOf(state,client)); orderEvidence(client,"order_state",state) }
+ @Synchronized override fun unknown(client:String,trade:String,seq:Int,side:String) { writableDatabase.execSQL("INSERT INTO orders(client,trade,seq,side,state) VALUES(?,?,?,?,'unknown')",arrayOf<Any>(client,trade,seq,side)); orderEvidence(client,"submit_attempt",side); JournalWakes.telemetry.wake() }
+ @Synchronized override fun state(client:String,state:String) { writableDatabase.execSQL("UPDATE orders SET state=? WHERE client=?",arrayOf(state,client)); orderEvidence(client,"order_state",state); JournalWakes.telemetry.wake() }
  @Synchronized override fun updateObserved(client:String,o:JSONObject,timer:String?) { val db=writableDatabase; db.beginTransaction(); try { update(client,o); if(timer!=null) setMeta("timer:$client",timer); db.setTransactionSuccessful() } finally { db.endTransaction() } }
  @Synchronized override fun update(client:String,o:JSONObject) {
   val db=writableDatabase; db.beginTransaction()
   try {
    db.execSQL("UPDATE orders SET state=?,broker=?,filled=? WHERE client=?",arrayOf(o.getString("status"),o.getString("id"),o.optString("filled_qty","0").toBigDecimal().toInt(),client))
+   setMeta("brokerObserved:$client",Instant.now().toString())
    val fill=o.optString("filled_qty","0").toBigDecimal().toInt()
    if(fill>0 && !o.isNull("filled_avg_price") && o.has("filled_avg_price")) setMeta("fill:$client",JSONObject().put("filled",fill).put("average",o.getString("filled_avg_price")).toString()) else if(fill>0) setMeta("fill:$client", "")
    val detail=JSONObject().put("client_order_id",client).put("id",o.getString("id")).put("status",o.getString("status")).put("filled_qty",o.optString("filled_qty","0")).put("filled_avg_price",o.opt("filled_avg_price") ?: JSONObject.NULL).put("created_at",o.opt("created_at") ?: JSONObject.NULL).put("filled_at",o.opt("filled_at") ?: JSONObject.NULL).toString()
@@ -94,6 +95,15 @@ class Journal(private val contextForPolicy: Context,name:String=Settings.journal
     val e=JSONObject(c.getString(0)); val record=Discord.brokerFill(e,o,c.getString(1))
     enqueueAlert("fill:$client:${filled.stripTrailingZeros().toPlainString()}",record)
    } }
+   db.setTransactionSuccessful()
+  } finally { db.endTransaction() }; JournalWakes.telemetry.wake()
+ }
+ @Synchronized fun queueCopy(key:String,signature:String,base:JSONObject) {
+  val db=writableDatabase; db.beginTransaction()
+  try {
+   val revision=(meta("$key:revision").toLongOrNull() ?: 0)+1; require(revision<=9007199254740991L)
+   base.put("revision",revision).put("observed_at",Instant.now().toString())
+   setMeta("$key:pending",base.toString()); setMeta("$key:revision",revision.toString()); setMeta("$key:signature",signature)
    db.setTransactionSuccessful()
   } finally { db.endTransaction() }
  }

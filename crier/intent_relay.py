@@ -13,6 +13,9 @@ from pydantic import BaseModel, Field
 from typing import Literal
 from .intent_protocol import IntentEvent
 from .diagnostic_protocol import DiagnosticRequest
+from . import copy_relay
+from .copy_dashboard import PresenceReport, StatusReport
+from starlette.responses import StreamingResponse
 
 class IntentRelay:
     def __init__(self,path):
@@ -28,6 +31,7 @@ class IntentRelay:
             ''')
             if 'start_cursor' not in {row['name'] for row in db.execute('PRAGMA table_info(receivers)')}:
                 db.execute('ALTER TABLE receivers ADD COLUMN start_cursor INTEGER DEFAULT 0')
+            copy_relay.initialize(db)
     @contextmanager
     def db(self):
         db=sqlite3.connect(self.path,timeout=15); db.row_factory=sqlite3.Row
@@ -122,10 +126,71 @@ class ChannelRequest(BaseModel):
     environment: Literal['paper','live']='paper'
 
 def sync_router(relay,auth):
-    router=APIRouter(prefix='/api/sync'); changed=asyncio.Condition()
+    router=APIRouter(prefix='/api/sync'); changed=asyncio.Condition(); generation=0
     def token(authorization):
         if not authorization.startswith('Bearer '): raise HTTPException(401,'Pair first')
         return authorization[7:]
+    @router.post('/status')
+    @router.post('/presence')
+    async def save_copy(request:Request,authorization:str=Header(default='')):
+        nonlocal generation
+        presence=request.url.path.endswith('/presence')
+        raw=bytearray()
+        async for chunk in request.stream():
+            raw.extend(chunk)
+            if len(raw)>8192: raise HTTPException(413,'Report too large')
+        try: value=(PresenceReport if presence else StatusReport).model_validate_json(raw)
+        except ValueError: raise HTTPException(422,'Invalid device report') from None
+        try:
+            async with changed:
+                result=copy_relay.save(relay,token(authorization),value,presence=presence)
+                generation+=1; changed.notify_all()
+                return result
+        except PermissionError: raise HTTPException(401,'Pairing invalid or revoked') from None
+        except LookupError: raise HTTPException(404,'Event unavailable') from None
+        except ValueError: raise HTTPException(409,'Report evidence conflicts') from None
+
+    @router.get('/dashboard')
+    def dashboard(response:Response,authorization:str=Header(default='')):
+        response.headers['Cache-Control']='no-store'
+        try: return copy_relay.snapshot(relay,token(authorization))
+        except PermissionError: raise HTTPException(401,'Pairing invalid or revoked') from None
+
+    @router.get('/stream')
+    async def stream(request:Request,after:int=Query(default=0,ge=0),authorization:str=Header(default='')):
+        secret=token(authorization)
+        try:
+            with relay.db() as db: _,actor,_=relay.diagnostic_identity(db,secret)
+        except PermissionError: raise HTTPException(401,'Pairing invalid or revoked') from None
+        def frame(name,value):
+            data=('event: '+name+'\ndata: '+json.dumps(value,separators=(',',':'))+'\n\n').encode()
+            if len(data)>1048576: raise ValueError('Snapshot exceeds stream bound')
+            return data
+        async def generate():
+            cursor=after; started=time.monotonic()
+            yield frame('ready',{'version':1,'transport':'push'})
+            while time.monotonic()-started<90 and not await request.is_disconnected():
+                try:
+                    async with changed:
+                        observed=generation
+                        pages=[]
+                        if actor!='host':
+                            page=relay.read(secret,cursor)
+                            if page['events']:
+                                pages.append(frame('events',page)); cursor=page['cursor']
+                        view=frame('dashboard',copy_relay.snapshot(relay,secret))
+                    # Never hold the publication lock while a slow network consumer drains.
+                    for page in pages: yield page
+                    yield view
+                    if pages: continue
+                    heartbeat=False
+                    async with changed:
+                        if generation==observed:
+                            try: await asyncio.wait_for(changed.wait(),15)
+                            except TimeoutError: heartbeat=True
+                    if heartbeat: yield frame('heartbeat',{'server_time_ms':time.time()*1000})
+                except (PermissionError,ValueError): return
+        return StreamingResponse(generate(),media_type='text/event-stream',headers={'Cache-Control':'no-store','X-Accel-Buffering':'no'})
     @router.get('/clock')
     def clock(response:Response, authorization:str=Header(default='')):
         response.headers['Cache-Control'] = 'no-store'
@@ -138,6 +203,7 @@ def sync_router(relay,auth):
 
     @router.post('/diagnostics')
     async def save_diagnostic(request:Request, authorization:str=Header(default='')):
+        nonlocal generation
         raw = bytearray()
         async for chunk in request.stream():
             raw.extend(chunk)
@@ -150,7 +216,10 @@ def sync_router(relay,auth):
             # in FastAPI's default validation response.
             raise HTTPException(422, 'Invalid diagnostic observation') from None
         try:
-            return relay.save_diagnostic(token(authorization), value)
+            async with changed:
+                result=relay.save_diagnostic(token(authorization), value)
+                generation+=1; changed.notify_all()
+                return result
         except PermissionError as exc:
             raise HTTPException(401, str(exc))
         except LookupError as exc:
@@ -173,14 +242,16 @@ def sync_router(relay,auth):
     def channels(): return relay.channels()
     @router.post('/revoke/{identity}',dependencies=[Depends(auth)])
     async def revoke(identity:str):
+        nonlocal generation
         async with changed:
-            relay.revoke(identity); changed.notify_all()
+            relay.revoke(identity); generation+=1; changed.notify_all()
         return {'revoked':True}
     @router.post('/events')
     async def publish(value:IntentEvent,authorization:str=Header(default='')):
+        nonlocal generation
         try:
             async with changed:
-                result=relay.publish(token(authorization),value); changed.notify_all(); return result
+                result=relay.publish(token(authorization),value); generation+=1; changed.notify_all(); return result
         except PermissionError as exc: raise HTTPException(401,str(exc))
         except ValueError as exc: raise HTTPException(409,str(exc))
     @router.get('/events')

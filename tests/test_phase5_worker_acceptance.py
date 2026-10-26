@@ -38,6 +38,8 @@ class LocalWorkerRelay(httpx.AsyncBaseTransport):
         self.delivered = []
 
     async def handle_async_request(self, request):
+        if request.url.path.endswith('/stream'): return httpx.Response(404)
+        if request.url.path.endswith('/dashboard'): return httpx.Response(404)
         if request.method == 'GET':
             # Exercise real relay long polling, with bounded shutdown latency.
             request.url = request.url.copy_set_param('wait', '0.05')

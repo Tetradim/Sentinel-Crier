@@ -90,13 +90,16 @@ class OneResponse(httpx.AsyncBaseTransport):
         self.responses = []
 
     async def handle_async_request(self, request):
+        # ASGITransport buffers an entire streaming response. These acceptance
+        # cases exercise durable polling recovery; socket SSE has separate tests.
+        if request.url.path.endswith(('/stream','/dashboard')): return httpx.Response(404)
         # Empty polling must also finish immediately if a test regresses delivery.
         if request.method == 'GET':
             request.url = request.url.copy_set_param('wait', '0')
         response = await self.transport.handle_async_request(request)
         await response.aread()
         self.responses.append(response)
-        self.stop.set()
+        asyncio.get_running_loop().call_later(.001,self.stop.set)
         return response
 
 

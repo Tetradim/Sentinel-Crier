@@ -1,4 +1,6 @@
+import { createPushStream, type WakeSource } from './stream.ts';
 type Options = {
+  wakeSource?: WakeSource;
   url: string;
   serviceKey: string;
   fetch?: typeof fetch;
@@ -44,6 +46,8 @@ function knownRoute(method: string, path: string): boolean {
       "/api/connect/receivers",
       "/api/sync/events",
       "/api/sync/clock",
+      "/api/sync/dashboard",
+      "/api/sync/stream",
       "/api/sync/diagnostics",
     ].includes(path);
   }
@@ -53,6 +57,8 @@ function knownRoute(method: string, path: string): boolean {
       "/api/connect/invite",
       "/api/connect/receive",
       "/api/sync/events",
+      "/api/sync/status",
+      "/api/sync/presence",
       "/api/sync/diagnostics",
     ].includes(path) ||
       /^\/api\/connect\/receivers\/[0-9a-f-]{36}\/revoke$/.test(path);
@@ -150,6 +156,28 @@ export function createHandler(
           enumerable: true,
           configurable: true,
         });
+      }
+      if (method === 'GET' && path === '/api/sync/stream') {
+        if (Object.keys(query).some(k => k !== 'after') || !/^[0-9]{1,19}$/.test(query.after ?? '0') || BigInt(query.after ?? '0') > 9223372036854775807n) {
+          throw new RequestError(422, 'Invalid cursor');
+        }
+        if (!options.url || !options.serviceKey) throw new Error('Missing server configuration');
+        const rpc = async (path: string, query: Record<string, string> = {}, scope = false) => {
+          const response = await fetchRpc(options.url.replace(/\/$/, '') + '/rest/v1/rpc/' + (scope ? 'crier_stream_scope' : 'crier_dispatch'), {
+            method: 'POST', headers: { 'Content-Type': 'application/json', apikey: options.serviceKey, authorization: 'Bearer ' + options.serviceKey },
+            body: JSON.stringify(scope ? { p_token: token } : { p_method: 'GET', p_path: path, p_token: token, p_body: {}, p_query: query, p_peer: 'global' }),
+            signal: AbortSignal.any([request.signal, AbortSignal.timeout(8_000)]),
+          });
+          if (!response.ok) throw new Error('RPC unavailable');
+          const result = await response.json();
+          if (!result || !Number.isInteger(result.status) || !Object.hasOwn(result, 'body')) throw new Error('Invalid RPC response');
+          return result;
+        };
+        const scope = await rpc('', {}, true);
+        if (scope.status !== 200) return json(scope.body, scope.status);
+        if (!options.wakeSource) return json({ detail: 'Push unavailable; use polling' }, 503);
+        if (typeof scope.body?.channel_id !== 'string' || !['host','follower'].includes(scope.body?.role)) throw new Error('Invalid stream scope');
+        return await createPushStream({ rpc, source: options.wakeSource, channel: scope.body.channel_id, role: scope.body.role, after: query.after ?? '0', signal: request.signal });
       }
       const polling = method === "GET" && path === "/api/sync/events";
       const wait = polling ? Number(query.wait ?? "20") : 0;

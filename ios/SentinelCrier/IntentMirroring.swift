@@ -451,6 +451,18 @@ struct IntentPairing: Codable {
 @MainActor final class IntentController: ObservableObject {
     @Published private(set) var state: IntentState
     @Published private(set) var message = "Intent mirroring disconnected."
+    @Published private(set) var copyDashboard: CopyDashboard?
+    @Published private(set) var copyTransport = "connecting"
+    private var copyJournal = CopyTelemetryJournal()
+    private var copyReporter: Task<Void, Never>?
+    private var copyReportingEnabled = false
+    private var reporting = false; private var reportPending = false
+    private var processPending = false
+    private var copyGeneration = UUID()
+    private var brokerObserved: [String: String] = [:]
+    private var copyBindings: [String: IntentPolicyBinding] = [:]
+    private var copyMetadataTasks: [String: Task<Void, Never>] = [:]
+    private var copyFile: URL { file.appendingPathExtension("reports") }
     var onHealth: NativeHealthObserver?
     private let file: URL
     private let now: () -> Date
@@ -513,6 +525,7 @@ struct IntentPairing: Codable {
         var next = state; try change(&next)
         try JSONEncoder().encode(next).write(to: file, options: [.atomic, .completeFileProtection])
         state = next
+        if connected { Task { await reportCopyStatus() } }
     }
     func settings(_ p: IntentPreferences) throws {
         _ = try p.price("1", sell: false); try p.execution_policy?.validate(market: p.mode == "market")
@@ -536,15 +549,22 @@ struct IntentPairing: Codable {
         diagnosticSession = UUID()
         receiver?.cancel(); worker?.cancel(); transmitter?.cancel()
         diagnosticWorker?.cancel()
+        copyReportingEnabled = startWorkers
+        copyGeneration = UUID(); copyDashboard = nil; copyTransport = "connecting"
+        copyReporter?.cancel()
+        for task in copyMetadataTasks.values { task.cancel() }; copyMetadataTasks = [:]; copyBindings = [:]; brokerObserved = [:]
+        copyJournal = (try? JSONDecoder().decode(CopyTelemetryJournal.self, from: Data(contentsOf: copyFile))) ?? CopyTelemetryJournal()
+        if copyJournal.pair != pair.fingerprint { copyJournal = CopyTelemetryJournal(pair: pair.fingerprint) }
         guard startWorkers else { return }
-        if pair.role == "follower" { receiver = Task { await receiveLoop() } }
+        receiver = Task { await receiveLoop() }
+        copyReporter = Task { while !Task.isCancelled { await reportCopyStatus(presence: true); try? await Task.sleep(nanoseconds: 15_000_000_000) } }
         transmitter = Task { while !Task.isCancelled { await publish(); try? await Task.sleep(nanoseconds: 500_000_000) } }
         worker = Task { while !Task.isCancelled { await process(); try? await Task.sleep(nanoseconds: 2_000_000_000) } }
         diagnosticWorker?.cancel()
         diagnosticWorker = Task { while !Task.isCancelled { await syncDiagnostics(); try? await Task.sleep(nanoseconds: 5_000_000_000) } }
         message = "\(pair.role.capitalized) connected. Keep Crier open for delivery."
     }
-    func disconnect() { message = "Disconnected; execution journals retained."; diagnosticSession = UUID(); diagnosticWorker?.cancel(); diagnosticWorker = nil; diagnosticClock = nil; receiver?.cancel(); worker?.cancel(); transmitter?.cancel(); receiver = nil; worker = nil; transmitter = nil; api?.invalidate(); api = nil; pair = nil }
+    func disconnect() { copyReportingEnabled = false; copyGeneration = UUID(); copyReporter?.cancel(); copyReporter = nil; for task in copyMetadataTasks.values { task.cancel() }; copyMetadataTasks = [:]; copyBindings = [:]; brokerObserved = [:]; copyDashboard = nil; copyTransport = "connecting"; processPending = false; message = "Disconnected; execution journals retained."; diagnosticSession = UUID(); diagnosticWorker?.cancel(); diagnosticWorker = nil; diagnosticClock = nil; receiver?.cancel(); worker?.cancel(); transmitter?.cancel(); receiver = nil; worker = nil; transmitter = nil; api?.invalidate(); api = nil; pair = nil }
     func archiveResolvedChannel() throws {
         guard !processing, !publishing, api == nil else { throw AlpacaError.invalid("Disconnect before changing channel.") }
         guard state.unresolved.isEmpty, state.outgoing.isEmpty else { throw AlpacaError.invalid("Resolve tracked holdings, pending orders and relay outbox before changing channel. Reconnect to the original account to recover.") }
@@ -569,7 +589,9 @@ struct IntentPairing: Codable {
         var request = URLRequest(url: URL(string: pair.url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/api/sync/" + resource + query)!)
         request.httpMethod = body == nil ? "GET" : "POST"; request.httpBody = body; request.timeoutInterval = 30
         request.setValue("Bearer " + pair.token, forHTTPHeaderField: "Authorization"); request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let generation = copyGeneration
         let (data, response) = try await session.data(for: request)
+        guard generation == copyGeneration, self.pair?.fingerprint == pair.fingerprint, !Task.isCancelled else { throw CancellationError() }
         guard let response = response as? HTTPURLResponse else { throw AlpacaError.invalid("Relay returned an invalid response.") }
         if [401, 403].contains(response.statusCode) {
             disconnect()
@@ -623,17 +645,71 @@ struct IntentPairing: Codable {
         message = "Receiver connected â€¢ cursor \(state.cursor) â€¢ \(state.quarantine?.count ?? 0) quarantined"
     }
     private func receiveLoop() async {
-        while !Task.isCancelled {
-            let observed = onHealth
-            do {
-                try await receiveOnce()
-                Task { await process() }
-            } catch {
-                if Task.isCancelled { return }
-                observed?(.relayReceive, .degraded, .connectionFailed)
-                message = "Reconnect needed: " + error.localizedDescription
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+        let generation = copyGeneration
+        while !Task.isCancelled, generation == copyGeneration, let pair {
+            do { try await receiveStream(pair: pair, generation: generation) }
+            catch {
+                guard !Task.isCancelled, generation == copyGeneration else { return }
+                copyTransport = "poll"
+                // Bounded long polling is the recovery transport. Retry streaming after
+                // a completed durable catch-up, never on a normal push timer.
+                do {
+                    if pair.role == "follower" { try await receiveOnce(); await process() }
+                    else { try? await Task.sleep(nanoseconds: 2_000_000_000) }
+                    let data = try await relay(resource: "dashboard")
+                    let snapshot = try JSONDecoder().decode(CopyDashboard.self, from: data)
+                    try snapshot.validate(pair: pair)
+                    guard generation == copyGeneration else { return }; copyDashboard = snapshot
+                } catch {
+                    guard !Task.isCancelled, generation == copyGeneration else { return }
+                    onHealth?(.relayReceive, .degraded, .connectionFailed)
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                }
             }
+        }
+    }
+    private func receiveStream(pair: IntentPairing, generation: UUID) async throws {
+        var request = URLRequest(url: pair.url.appendingPathComponent("api/sync/stream"))
+        var url = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!
+        url.queryItems = [URLQueryItem(name: "after", value: String(state.cursor))]; request.url = url.url
+        request.setValue("Bearer " + pair.token, forHTTPHeaderField: "Authorization")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept"); request.timeoutInterval = 100
+        let (bytes, response) = try await session.bytes(for: request)
+        guard generation == copyGeneration, !Task.isCancelled else { throw CancellationError() }
+        guard let http = response as? HTTPURLResponse else { throw AlpacaError.invalid("Invalid stream response.") }
+        if [401,403].contains(http.statusCode) { disconnect(); throw AlpacaError.http(http.statusCode) }
+        guard http.statusCode == 200, http.value(forHTTPHeaderField: "Content-Type")?.lowercased().hasPrefix("text/event-stream") == true else { throw AlpacaError.invalid("Stream unavailable.") }
+        var parser = CopySSEParser()
+        for try await byte in bytes {
+            guard generation == copyGeneration, !Task.isCancelled else { throw CancellationError() }
+            if let frame = try parser.append(byte) { try acceptCopyFrame(frame, pair: pair) }
+        }
+        throw AlpacaError.invalid("Stream rotated or disconnected.")
+    }
+    func acceptCopyFrame(_ frame: CopySSEParser.Frame, pair: IntentPairing) throws {
+        guard self.pair?.fingerprint == pair.fingerprint, connected else { throw CancellationError() }
+        switch frame.name {
+        case "ready":
+            struct Ready: Decodable { var version: Int; var transport: String }
+            let ready = try JSONDecoder().decode(Ready.self, from: frame.data)
+            guard ready.version == 1, ready.transport == "push" else { throw AlpacaError.invalid("Invalid stream ready.") }
+            copyTransport = "push"; Task { await reportCopyStatus(presence: true) }
+        case "events":
+            // A host observes the channel but never ingests remote execution intents.
+            guard pair.role == "follower" else { return }
+            var accepted: [IntentEvent] = []
+            try commit { accepted = try $0.ingestPage(frame.data, environment: pair.environment) }
+            for event in accepted { beginDiagnostic(event, stage: "receiver", observed: Date()) }
+            if !accepted.isEmpty { Task { await process() } }
+            onHealth?(.relayReceive, .healthy, .checked)
+        case "dashboard":
+            let snapshot = try JSONDecoder().decode(CopyDashboard.self, from: frame.data)
+            try snapshot.validate(pair: pair); copyDashboard = snapshot
+        case "heartbeat":
+            struct Heartbeat: Decodable { var server_time_ms: Double }
+            let value = try JSONDecoder().decode(Heartbeat.self, from: frame.data)
+            guard value.server_time_ms.isFinite else { throw AlpacaError.invalid("Invalid heartbeat.") }
+        default: break
         }
     }
     func reconcileBeforeResume() async throws {
@@ -687,7 +763,15 @@ struct IntentPairing: Codable {
     }
 
     func process() async {
-        guard !processing, let api else { return }; processing = true; defer { processing = false }
+        if processing { processPending = true; return }
+        guard let api else { return }; processing = true
+        let generation = copyGeneration
+        defer {
+            processing = false
+            if processPending, generation == copyGeneration, connected {
+                processPending = false; Task { await process() }
+            }
+        }
         let observed = onHealth; var needsReconciliation = false
         for id in Array(state.trades.keys) {
             do { try Task.checkCancellation(); try await execute(id, api: api, observe: observed) }
@@ -795,6 +879,7 @@ struct IntentPairing: Codable {
         }
     }
     private func recordReconciliation(id: String, index: Int, order: AlpacaOrder) throws {
+        brokerObserved[id] = IntentDiagnosticRecord.timestamp()
         let uptime = monotonic(); let session = timerSession
         try commit { state in
             let prior = state.trades[id]!.mutations[index]
@@ -1048,5 +1133,86 @@ struct IntentPairing: Codable {
             }
             if hosting { _ = try host(symbol: e.symbol, asset: e.asset, quantity: e.quantity, price: e.limit_price, tradeID: id, action: "cancel") }
         }
+    }
+}
+
+// Observational transport has its own durable revisions and outbox. It cannot
+// create trading events or call broker mutations.
+extension IntentController {
+    private func saveCopyJournal() throws {
+        try JSONEncoder().encode(copyJournal).write(to: copyFile, options: [.atomic, .completeFileProtection])
+    }
+    private func copyReport(_ trade: IntentTrade, event: IntentEvent) -> CopyStatus {
+        func premium(sell: Bool) -> String? {
+            do {
+                var total = Decimal(0)
+                for mutation in trade.mutations where mutation.sell == sell {
+                    guard let order = mutation.order else { continue }
+                    try mutation.validate(order, symbol: event.symbol)
+                    guard let filled = Decimal(string: order.filled_qty) else { return nil }
+                    if filled > 0 {
+                        guard let average = CopyMoney.decimal(order.filled_avg_price), average > 0 else { return nil }
+                        total = try IntentBrokerDecimal.add(total, IntentBrokerDecimal.multiply(filled, average))
+                    }
+                }
+                return NSDecimalNumber(decimal: total).stringValue
+            } catch { return nil }
+        }
+        let binding = trade.policyBinding ?? copyBindings[event.trade_id]
+        let verified = binding.map { $0.accountID == state.accountID && $0.environment == event.environment && $0.symbol == event.symbol && $0.asset == event.asset && $0.currency == "USD" && $0.multiplier == (event.asset == "option" ? 100 : 1) } == true
+        var status = "received"; var reason: String?
+        if trade.mutations.contains(where: { $0.notSubmitted != true && ($0.order == nil || $0.cancelUnknown) }) { status = "unknown"; reason = "reconciliation_required" }
+        else if trade.mutations.contains(where: { $0.order?.status == "pending_cancel" }) { status = "cancel_pending" }
+        else if trade.bought > 0 && trade.bought == trade.totalSold { status = "closed" }
+        else if trade.mutations.contains(where: { $0.order.map { !terminal($0) } ?? false }) { status = trade.bought > 0 ? "partially_filled" : "working" }
+        else if trade.bought > 0 { status = "filled" }
+        else if trade.mutations.contains(where: { $0.notSubmitted == true }) { status = "not_submitted"; reason = "not_submitted" }
+        else if trade.invalidated { status = "canceled" }
+        else if trade.entrySkipped == true || (!hosting && state.preferences.paused) { status = "blocked"; reason = "entries_paused" }
+        else if trade.completed == event.event_id { status = "not_submitted"; reason = "not_submitted" }
+        return CopyStatus(event_id: event.event_id, revision: 1, observed_at: "", broker_observed_at: brokerObserved[event.trade_id], state: status,
+                          target_quantity: trade.entryPlans?[event.event_id]?.target ?? (hosting || trade.policySnapshot?.policy == nil ? event.quantity : nil),
+                          bought: trade.bought, sold: trade.totalSold, buy_premium: premium(sell: false), sell_premium: premium(sell: true),
+                          currency: verified ? "USD" : nil, multiplier: verified ? binding?.multiplier : nil, fees: nil, quote: state.diagnostics?[event.event_id]?.observation.quote, reason: reason)
+    }
+    private func reportCopyStatus(presence: Bool = false) async {
+        if reporting { reportPending = true; return }
+        guard copyReportingEnabled, let pair, let api else { return }
+        reporting = true; let generation = copyGeneration
+        defer { reporting = false; if reportPending, generation == copyGeneration { reportPending = false; Task { await reportCopyStatus(presence: true) } } }
+        do {
+            for (id, trade) in state.trades {
+                guard let event = trade.desired else { continue }
+                if trade.policyBinding == nil, copyBindings[id] == nil, copyMetadataTasks[id] == nil {
+                    copyMetadataTasks[id] = Task {
+                        let binding = try? await api.policyBinding(symbol: event.symbol, option: event.asset == "option", accountID: state.accountID)
+                        guard generation == copyGeneration, !Task.isCancelled else { return }
+                        if let binding { copyBindings[id] = binding; await reportCopyStatus() }
+                    }
+                }
+                var report = copyReport(trade, event: event)
+                let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
+                let signature = String(decoding: try encoder.encode(report), as: UTF8.self)
+                if copyJournal.signatures[id] != signature {
+                    report.revision = try copyJournal.next(); report.observed_at = IntentDiagnosticRecord.timestamp()
+                    try report.validate(asset: event.asset)
+                    copyJournal.outbox[id] = report; copyJournal.signatures[id] = signature; try saveCopyJournal()
+                }
+            }
+            // Presence remains independent of whether the relay accepts a report.
+            if presence {
+                let revision = try copyJournal.next(); try saveCopyJournal()
+                let body = CopyPresence(revision: revision, observed_at: IntentDiagnosticRecord.timestamp(), transport: copyTransport, entries_enabled: hosting || !state.preferences.paused)
+                _ = try? await relay(body: JSONEncoder().encode(body), resource: "presence")
+            }
+            for (id, report) in copyJournal.outbox {
+                guard generation == copyGeneration, !Task.isCancelled else { return }
+                do {
+                    _ = try await relay(body: JSONEncoder().encode(report), resource: "status")
+                    guard generation == copyGeneration else { return }
+                    if copyJournal.outbox[id]?.revision == report.revision { copyJournal.outbox.removeValue(forKey: id); try saveCopyJournal() }
+                } catch { /* Retain the same revision for idempotent retry. */ }
+            }
+        } catch { /* Telemetry failure never quarantines or changes execution. */ }
     }
 }

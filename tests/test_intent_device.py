@@ -76,6 +76,8 @@ def test_receiver_quarantines_bad_event_and_processes_next(tmp_path,monkeypatch)
         # Model actual network scheduling so an empty long-poll response cannot
         # starve the test's stop task when MockTransport returns immediately.
         await asyncio.sleep(.001)
+        if request.url.path.endswith('/stream'): return httpx.Response(404)
+        if request.url.path.endswith('/dashboard'): return httpx.Response(404)
         calls+=1
         if calls>1: return httpx.Response(200,json={'events':[]})
         return httpx.Response(200,json={'events':[{'cursor':1,'event':{'version':99}},

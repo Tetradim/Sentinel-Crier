@@ -19,6 +19,8 @@ from .intent_engine import IntentEngine
 from .diagnostics_client import DiagnosticsClient
 from .trade_diagnostics import trade_report, export_trade_json, export_trade_csv
 from .component_health import emit
+from .push_client import pages
+from .copy_reports import CopyReporter
 
 class IntentDevice:
     def __init__(self,folder,broker=None,*,observe=None):
@@ -34,6 +36,8 @@ class IntentDevice:
             CREATE TABLE IF NOT EXISTS quarantined_events(pair TEXT,cursor INTEGER,payload TEXT,error TEXT,PRIMARY KEY(pair,cursor));
             CREATE TABLE IF NOT EXISTS device_trace(id INTEGER PRIMARY KEY AUTOINCREMENT,timestamp TEXT,monotonic_ns INTEGER,trade_id TEXT,stage TEXT,details TEXT);''')
         self.diagnostics=DiagnosticsClient(self)
+        self.transport="connecting"; self.dashboard=None
+        self.reporter=CopyReporter(self)
         secret=self.folder/'intent-pairing.secret'
         if secret.exists():
             self.pair=json.loads(load_secret(secret)); self._engine()
@@ -103,7 +107,7 @@ class IntentDevice:
             quarantined=db.execute('SELECT COUNT(*) FROM quarantined_events WHERE pair=?',(self.fingerprint,)).fetchone()[0]
         return {'pair':{k:v for k,v in (self.pair or {}).items() if k!='token'},'configured':self.engine is not None,
                 'message':self.message,'execution':self.engine.status() if self.engine else None,
-                'delivery':delivery,'quarantined_events':quarantined}
+                'delivery':delivery,'quarantined_events':quarantined,'transport':self.transport,'dashboard':self.dashboard}
     def retry_rejected(self):
         if not self.pair or self.pair['role']!='host': raise ValueError('Host pairing required')
         with self.db() as db:
@@ -196,46 +200,62 @@ class IntentDevice:
     async def receive_loop(self,stop):
         async with httpx.AsyncClient(timeout=26,follow_redirects=False,trust_env=False) as client:
             while not stop.is_set():
-                if not self.pair or self.pair['role']!='follower' or not self.engine:
+                if not self.pair or not self.engine:
                     try: await asyncio.wait_for(stop.wait(),.5)
                     except TimeoutError: pass
                     continue
                 pair=dict(self.pair); fingerprint=self.fingerprint; engine=self.engine
-                with self.db() as db: row=db.execute('SELECT cursor FROM cursors WHERE pair=?',(fingerprint,)).fetchone()
+                def cursor():
+                    with self.db() as db:
+                        row=db.execute('SELECT cursor FROM cursors WHERE pair=?',(fingerprint,)).fetchone()
+                        return row[0] if row else 0
+                def dashboard(value):
+                    if fingerprint!=self.fingerprint: return
+                    if value.get('version')!=1 or value.get('environment')!=pair['environment'] or value.get('role')!=pair['role']:
+                        raise ValueError('Dashboard scope mismatch')
+                    for key,bound in (('events',50),('members',200),('statuses',200),('diagnostics',200)):
+                        if type(value.get(key)) is not list or len(value[key])>bound: raise ValueError('Invalid dashboard bounds')
+                    self.dashboard=value
+                def transport(value):
+                    if fingerprint==self.fingerprint: self.transport=value
                 try:
-                    response=await client.get(pair['url'].rstrip('/')+'/api/sync/events',params={'after':row[0] if row else 0,'wait':20},headers={'Authorization':'Bearer '+pair['token']})
-                    response.raise_for_status()
-                    if fingerprint!=self.fingerprint: continue
-                    quarantined=False
-                    for item in response.json()['events']:
-                        try:
-                            event=IntentEvent.model_validate(item.get('event'))
-                            if event.environment!=pair['environment']: raise ValueError('Pair environment mismatch')
-                            engine.accept(event)
-                        except (ValidationError, ValueError, TypeError) as exc:
-                            # Validation/identity conflicts reject only this event.
-                            # Storage errors still halt consumption for safe retry.
-                            with self.db() as db:
-                                db.execute('BEGIN IMMEDIATE')
-                                db.execute('INSERT OR IGNORE INTO quarantined_events VALUES (?,?,?,?)',
-                                           (fingerprint,item['cursor'],json.dumps(item.get('event'),default=str),type(exc).__name__))
-                                db.execute('INSERT OR REPLACE INTO cursors VALUES (?,?)',(fingerprint,item['cursor']))
-                            quarantined=True
-                            continue
-                        self._trace(event.trade_id,'receiver_instruction_arrived',event_id=event.event_id,sequence=event.sequence,relay_cursor=item['cursor'],sender_created_at=event.created_at.isoformat(),reference_limit_price=str(event.limit_price),quote_status='not_captured')
-                        try: self.diagnostics.observe(event,'receiver')
-                        except Exception: pass
-                        self._trace(event.trade_id,'receiver_instruction_stored',event_id=event.event_id,relay_cursor=item['cursor'])
-                        self.changed.set()
-                        with self.db() as db: db.execute('INSERT OR REPLACE INTO cursors VALUES (?,?)',(fingerprint,item['cursor']))
-                    self.message='Following; invalid relay event quarantined for inspection' if quarantined else 'Following; connected'
-                    emit(self.observe,'relay_receive','degraded' if quarantined else 'healthy','invalid_events' if quarantined else 'checked')
+                    async for payload in pages(client,pair,cursor,stop,dashboard,transport):
+                        if fingerprint!=self.fingerprint or stop.is_set(): break
+                        quarantined=False
+                        for item in payload['events']:
+                            if type(item.get('cursor')) is not int or item['cursor']<=0: raise ValueError('Invalid event cursor')
+                            if item['cursor']<=cursor(): continue
+                            try:
+                                event=IntentEvent.model_validate(item.get('event'))
+                                if event.environment!=pair['environment']: raise ValueError('Pair environment mismatch')
+                                engine.accept(event)
+                            except (ValidationError, ValueError, TypeError) as exc:
+                                # Validation/identity conflicts reject only this event.
+                                # Storage errors still halt consumption for safe retry.
+                                with self.db() as db:
+                                    db.execute('BEGIN IMMEDIATE')
+                                    db.execute('INSERT OR IGNORE INTO quarantined_events VALUES (?,?,?,?)',
+                                               (fingerprint,item['cursor'],json.dumps(item.get('event'),default=str),type(exc).__name__))
+                                    db.execute('INSERT OR REPLACE INTO cursors VALUES (?,?)',(fingerprint,item['cursor']))
+                                quarantined=True
+                                continue
+                            self._trace(event.trade_id,'receiver_instruction_arrived',event_id=event.event_id,sequence=event.sequence,relay_cursor=item['cursor'],sender_created_at=event.created_at.isoformat(),reference_limit_price=str(event.limit_price),quote_status='not_captured')
+                            try: self.diagnostics.observe(event,'receiver')
+                            except Exception: pass
+                            self._trace(event.trade_id,'receiver_instruction_stored',event_id=event.event_id,relay_cursor=item['cursor'])
+                            self.changed.set()
+                            with self.db() as db: db.execute('INSERT OR REPLACE INTO cursors VALUES (?,?)',(fingerprint,item['cursor']))
+                        self.message='Following; invalid relay event quarantined for inspection' if quarantined else 'Following; connected'
+                        emit(self.observe,'relay_receive','degraded' if quarantined else 'healthy','invalid_events' if quarantined else 'checked')
                 except Exception as exc:
                     auth=isinstance(exc,httpx.HTTPStatusError) and exc.response.status_code in (401,403)
                     emit(self.observe,'relay_receive','blocked' if auth else 'degraded','authentication_failed' if auth else 'connection_failed')
                     self.message='Receiver disconnected; reconnecting without replaying expired entries'
                     try: await asyncio.wait_for(stop.wait(),1)
                     except TimeoutError: pass
+    async def reports_loop(self,stop):
+        await self.reporter.run(stop)
+
     async def diagnostics_loop(self,stop):
         await self.diagnostics.run(stop)
 
@@ -245,6 +265,8 @@ class IntentDevice:
             if self.engine:
                 try:
                     results=await asyncio.to_thread(self.engine.tick)
+                    self.reporter.results={r["trade_id"]:r for r in results if 'trade_id' in r}
+                    self.reporter.changed.set()
                     reconciliation=any(r.get('state') in ('reconcile_required','waiting_for_reconciliation') or r.get('reconciliation_required') is True for r in results)
                     emit(self.observe,'execution','blocked' if reconciliation else 'healthy','reconciliation_required' if reconciliation else 'checked')
                     if self.pair and self.pair['role']=='host':

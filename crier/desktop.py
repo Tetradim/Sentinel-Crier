@@ -55,6 +55,11 @@ class DesktopApp:
         setup = ttk.Frame(tabs, padding=14)
         pricing = ttk.Frame(tabs, padding=14)
         tabs.add(self.activity, text='Trading & activity')
+        copy_tab=ttk.Frame(tabs,padding=14)
+        tabs.add(copy_tab,text='Copy dashboard')
+        ttk.Label(copy_tab,text='Sharing a channel shares tracked trade quantities, fills and connection status with its host. This view cannot place orders.',wraplength=1000).pack(anchor='w')
+        self.copy_dashboard=tk.Text(copy_tab,wrap='word',state='disabled')
+        self.copy_dashboard.pack(fill='both',expand=True,pady=8)
         tabs.add(setup, text='Host / Receive')
         tabs.add(pricing, text='Pricing')
         delivery = ttk.Frame(tabs, padding=14)
@@ -821,6 +826,12 @@ class DesktopApp:
 
     def render(self, state):
         self.latest = state
+        from .copy_dashboard import dashboard_text
+        try: copy_text=dashboard_text(state.get('dashboard') if state.get('connected') else None)
+        except (ValueError,KeyError,TypeError): copy_text='Dashboard evidence is unavailable. Trading controls are independent.'
+        self.copy_dashboard.configure(state='normal')
+        self.copy_dashboard.delete('1.0','end'); self.copy_dashboard.insert('1.0',copy_text)
+        self.copy_dashboard.configure(state='disabled')
         self.render_health(state.get('health',[]),state.get('health_error',False))
         if self.connected != state['connected']:
             self.clear_delivery_list('alerts')

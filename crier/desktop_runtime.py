@@ -494,6 +494,7 @@ class DesktopSession:
                               asyncio.create_task(device.receive_loop(self.stop)),
                               asyncio.create_task(device.execute_loop(self.stop)),
                               asyncio.create_task(device.diagnostics_loop(self.stop)),
+                              asyncio.create_task(device.reports_loop(self.stop)),
                               asyncio.create_task(self.discord_loop(self.stop))]
             return self.status()
 

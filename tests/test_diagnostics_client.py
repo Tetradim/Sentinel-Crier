@@ -125,6 +125,7 @@ def test_real_relay_host_to_follower_diagnostics(tmp_path,monkeypatch):
     posts=[]
     class Transport(httpx.AsyncBaseTransport):
         async def handle_async_request(self,request):
+            if request.url.path.endswith('/stream'): return httpx.Response(404)
             if request.url.host=='data.alpaca.markets':
                 assert request.url.params['feed']=='iex'
                 return httpx.Response(200,json={'quote':{'t':iso(time.time()*1000-25),'bp':2.30,'ap':2.40}})

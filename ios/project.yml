@@ -27,6 +27,7 @@ targets:
         buildPhase: resources
       - path: SentinelCrier/MirrorConnection.swift
       - path: SentinelCrier/IntentDiagnostics.swift
+      - path: SentinelCrier/CopyDashboard.swift
       - path: SentinelCrier/IntentMirroring.swift
       - path: SentinelCrier/IntentViews.swift
       - path: SentinelCrier/QuickConnection.swift
@@ -79,6 +80,9 @@ targets:
       - path: SentinelCrier/PracticeGuideTests.swift
       - path: SentinelCrier/MirrorTests.swift
       - path: SentinelCrier/IntentDiagnosticsTests.swift
+      - path: SentinelCrier/CopyDashboardTests.swift
+      - path: ../tests/fixtures/copy-dashboard.json
+        buildPhase: resources
       - path: SentinelCrier/IntentTests.swift
       - path: SentinelCrier/IntentPolicyTests.swift
       - path: ../tests/fixtures/policy-preview.json
