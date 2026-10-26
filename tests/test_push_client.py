@@ -24,7 +24,8 @@ def test_parser_bounds_utf8_and_unknown_frames():
     asyncio.run(run())
 
 
-def test_real_socket_push_does_not_wait_for_fill_or_poll(tmp_path):
+@pytest.mark.parametrize('count',[1,50])
+def test_real_socket_push_does_not_wait_for_fill_or_poll(tmp_path,count):
     relay=IntentRelay(tmp_path/'relay.db'); pair=relay.create('Synthetic push','paper')
     app=FastAPI(); app.include_router(sync_router(relay,lambda:None)); polls=[]
     @app.middleware('http')
@@ -43,15 +44,16 @@ def test_real_socket_push_does_not_wait_for_fill_or_poll(tmp_path):
                 if d.transport=='push': break
                 await asyncio.sleep(.01)
             assert d.transport=='push'
-            instruction=event(); start=time.monotonic()
+            instructions=[event() for _ in range(count)]; start=time.monotonic()
             async with httpx.AsyncClient(trust_env=False) as client:
-                response=await client.post(d.pair['url']+'/api/sync/events',headers={'Authorization':'Bearer '+pair['host_token']},json=instruction.to_dict())
-                assert response.status_code==200
-            for _ in range(100):
-                if d.engine.events: break
+                for instruction in instructions:
+                    response=await client.post(d.pair['url']+'/api/sync/events',headers={'Authorization':'Bearer '+pair['host_token']},json=instruction.to_dict())
+                    assert response.status_code==200
+            for _ in range(500):
+                if len(d.engine.events)==count: break
                 await asyncio.sleep(.01)
-            assert d.engine.events[0].event_id==instruction.event_id
-            assert time.monotonic()-start<1.5
+            assert [e.event_id for e in d.engine.events]==[e.event_id for e in instructions]
+            if count==1: assert time.monotonic()-start<1.5
             assert polls==[]
             with d.db() as db: assert db.execute('SELECT cursor FROM cursors').fetchone()[0]==response.json()['cursor']
         finally:

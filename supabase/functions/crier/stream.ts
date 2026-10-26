@@ -100,9 +100,11 @@ export async function createPushStream(o: StreamOptions): Promise<Response> {
     // Subscription acknowledgement precedes initial drain; an intervening wake sets dirty.
     release = await o.source.subscribe(o.channel, wake, close);
     if (closed) { release(); throw new Error('Stream unavailable'); }
-  } catch {
+  } catch (error) {
     close();
-    return Response.json({ detail: 'Push unavailable; use polling' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+    const state = (error as {wakeState?: unknown})?.wakeState;
+    const reason = typeof state === 'string' && ['SUBSCRIBE_TIMEOUT','CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(state) ? state : 'SUBSCRIBE_UNAVAILABLE';
+    return Response.json({ detail: 'Push unavailable; use polling', reason }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
   }
   active = true;
   emit('ready', { version: 1, transport: 'push' });

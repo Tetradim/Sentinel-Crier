@@ -20,12 +20,12 @@ export function createWakeHub(client: Client, timeoutMs = 8_000): WakeSource {
     entry = { channel, listeners: new Set(), ready, dead: false };
     const current = entry;
     entries.set(channelId, current);
-    const timer = setTimeout(() => fail(), timeoutMs);
-    const fail = () => {
+    const timer = setTimeout(() => fail('SUBSCRIBE_TIMEOUT'), timeoutMs);
+    const fail = (state: string) => {
      if (current.dead) return;
      current.dead = true; clearTimeout(timer);
      if (entries.get(channelId) === current) entries.delete(channelId);
-     reject(new Error('Private wake unavailable'));
+     reject(Object.assign(new Error('Private wake unavailable'), { wakeState: state }));
      for (const listener of [...current.listeners]) listener.failed();
      current.listeners.clear();
      void client.removeChannel(channel).catch(() => {});
@@ -34,7 +34,7 @@ export function createWakeHub(client: Client, timeoutMs = 8_000): WakeSource {
      for (const listener of [...current.listeners]) listener.wake();
     }).subscribe((state) => {
      if (state === 'SUBSCRIBED') { clearTimeout(timer); resolve(); }
-     else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') fail();
+     else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') fail(state);
     });
    }
    const listener = { wake, failed }; entry.listeners.add(listener);
