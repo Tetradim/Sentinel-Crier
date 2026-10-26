@@ -14,11 +14,21 @@ def test_reports_use_cumulative_prices_without_changing_execution(tmp_path):
     report=d.reporter.collect()[0]
     assert report['bought']==2 and report['buy_premium']=='0.40'
     assert report['currency'] is None and report['fees'] is None
-    d.reporter.queue(d.fingerprint,'status:'+e['event_id'],report)
-    d.reporter.queue(d.fingerprint,'status:'+e['event_id'],report)
+    slot='status:'+e['trade_id']
+    d.reporter.queue(d.fingerprint,slot,report)
+    d.reporter.queue(d.fingerprint,slot,report)
     with d.db() as db:
         row=db.execute('SELECT payload FROM copy_outbox').fetchone()
         assert StatusReport.model_validate_json(row[0]).revision==1
     restarted=IntentDevice(tmp_path,broker)
     with restarted.db() as db: assert db.execute('SELECT pending FROM copy_outbox').fetchone()[0]==1
     assert len(broker.sent)==before
+    replacement=event(action='replace',sequence=2,trade_id=e['trade_id'],quantity=3)
+    d.engine.accept(replacement)
+    latest=d.reporter.collect()[0]
+    d.reporter.queue(d.fingerprint,slot,latest)
+    with d.db() as db:
+        rows=db.execute('SELECT payload FROM copy_outbox').fetchall()
+        assert len(rows)==1
+        saved=json.loads(rows[0][0]); assert saved['event_id']==replacement['event_id'] and saved['revision']==2
+    assert len(broker.sent)==before  # Report coalescing cannot submit the replacement.

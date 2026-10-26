@@ -9,7 +9,7 @@ from .copy_dashboard import StatusReport, PresenceReport
 
 class CopyReporter:
     def __init__(self,device):
-        self.device=device; self.changed=asyncio.Event(); self.results={}; self.metadata={}
+        self.device=device; self.changed=asyncio.Event(); self.results={}; self.metadata={}; self.event_trades={}
         with device.db() as db:
             db.executescript('''
             CREATE TABLE IF NOT EXISTS copy_revision(pair TEXT PRIMARY KEY,revision INTEGER);
@@ -41,6 +41,7 @@ class CopyReporter:
             plans={r[0]:json.loads(r[1]) for r in db.execute('SELECT event_id,data FROM intent_policy_plan')}
         reports=[]
         for e in trades:
+            self.event_trades[e['event_id']]=e['trade_id']
             local=[o for o in orders if o['trade_id']==e['trade_id']]
             result=self.results.get(e['trade_id'],{})
             quantities={}; costs={}
@@ -120,7 +121,7 @@ class CopyReporter:
                     self.changed.clear(); device=self.device; scope=device.fingerprint; pair=dict(device.pair or {})
                     if pair and device.engine:
                         try:
-                            for report in self.collect(): self.queue(scope,'status:'+report['event_id'],report)
+                            for report in self.collect(): self.queue(scope,'status:'+self.event_trades[report['event_id']],report)
                             now=asyncio.get_running_loop().time()
                             current_presence=(scope,device.transport,device.engine.load_settings()['enabled'])
                             if now>=presence_at or current_presence!=presence_state:
@@ -134,6 +135,12 @@ class CopyReporter:
                                 route='presence' if row['slot']=='presence' else 'status'
                                 response=await client.post(pair['url'].rstrip('/')+'/api/sync/'+route,
                                     headers={'Authorization':'Bearer '+pair['token']},content=row['payload'])
+                                if response.status_code in (400,409,422):
+                                    # A stale observational report cannot starve presence or
+                                    # another trade. A changed snapshot gets a fresh revision.
+                                    with device.db() as db:
+                                        db.execute('UPDATE copy_outbox SET pending=0 WHERE pair=? AND slot=? AND payload=?',(scope,row['slot'],row['payload']))
+                                    continue
                                 response.raise_for_status()
                                 with device.db() as db:
                                     db.execute('UPDATE copy_outbox SET pending=0 WHERE pair=? AND slot=? AND payload=?',(scope,row['slot'],row['payload']))

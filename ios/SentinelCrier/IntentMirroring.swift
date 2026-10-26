@@ -1200,6 +1200,8 @@ extension IntentController {
                 }
             }
             // Presence remains independent of whether the relay accepts a report.
+            // Retry a previously failed journal write before any later upload.
+            try saveCopyJournal()
             if presence {
                 let revision = try copyJournal.next(); try saveCopyJournal()
                 let body = CopyPresence(revision: revision, observed_at: IntentDiagnosticRecord.timestamp(), transport: copyTransport, entries_enabled: hosting || !state.preferences.paused)
