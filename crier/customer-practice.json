@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "notice": "Paper practice is optional. This guide does not connect accounts, place orders, send alerts, or authorize live trading. Keep iPhone Crier in the foreground, Android workers available, and the PC awake.",
+  "notice": "Paper practice is optional. This guide takes no account or trading actions. Keep iPhone Crier in the foreground, Android workers available, and the PC awake.",
   "privacy": "For support, remove API keys, passwords, bearer tokens, invitation links, webhook URLs and account data. Do not upload raw journals or credentials to public issues.",
   "journeys": [
     {"id":"alerts","title":"Alerts only","steps":[
@@ -22,7 +22,7 @@
     ]},
     {"id":"follow","title":"Follow trades","steps":[
       {"title":"Join a paper host","body":"Choose Follow or Receive, enter a paper invitation, and verify your own paper account. Check the account, environment and receiver role before enabling new entries."},
-      {"title":"Review local settings","body":"Review pricing, source quantity cap and entry submit age. Following currently uses source units. Proposed fixed, ratio, budget and proportional-exit policies are design-only and are not selectable live features."},
+      {"title":"Review local settings","body":"Review pricing, the source quantity cap and entry submit age. Following uses source units. Choose limits you understand before enabling new entries."},
       {"title":"Enable deliberately and compare orders","body":"Enable new entries explicitly. Have the host enter a paper order inside Crier. Compare the complete symbol or option contract, side, quantity, limit and actual broker status. A relay receipt alone is not a fill."},
       {"title":"Check cancel and exit handling","body":"Inspect host cancellation and explicit exits. Pausing new entries leaves cancel and exit instructions active. A cancellation does not close already-filled positions; an exit is bounded by tracked and available holdings."},
       {"title":"Inspect recovery instead of resending","body":"If a request or acknowledgement is uncertain, open health and tracked order history and reconcile the original account. Never clear the journal or re-pair to bypass an unresolved outcome."},

@@ -12,7 +12,7 @@ def test_bundled_guide_covers_three_purposes_without_permission_state():
     assert 'optional' in guide.notice.lower()
     assert 'API keys' in guide.privacy
     assert 'suppressed baseline' in guide.text('alerts')
-    assert 'design-only' in guide.text('follow')
+    assert 'Following uses source units' in guide.text('follow')
     assert not hasattr(guide,'enabled') and not hasattr(guide,'completed')
 
 

@@ -65,6 +65,8 @@ Windows offers optional tray mode and current-user sign-in startup in **Start he
 
 The source quantity cap rejects larger instructions; it does not choose an order size. Entry age applies before submission, while day orders may keep working afterward. The [execution settings guide](docs/execution-policies.md) explains the current behavior and distinguishes H.5's proposed sizing policies from available live features.
 
+An optional paper-practice guide is available in Windows Start here/F1, Android setup and iPhone Home. Reading it performs no account or trading action and never gates live use. See [customer setup, recovery and acceptance](docs/customer-acceptance.md) for installation artifacts, support and the real-device checks still deferred.
+
 ## Run the Python monitor and console
 
 Requires **Python 3.11+**. From PowerShell:

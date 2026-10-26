@@ -12,8 +12,10 @@ or pairing tokens. These checks require actual devices and have not been run by 
 
 ## Installation and pairing
 
-1. Follow [intent-mirroring.md](intent-mirroring.md) to run the HTTPS relay and pair
-   one host and one follower. Keep iOS in the foreground. Start Android's sync service.
+1. Use the bundled testing relay through Host/Receive invitations to pair one paper
+   host and one paper follower; customers do not need a home server or router port.
+   [intent-mirroring.md](intent-mirroring.md) also covers advanced/self-hosted setup.
+   Keep iOS in the foreground. Start Android's sync service explicitly.
 2. Verify both apps show the intended paper account and selected role. Enable following.
 3. Keep both broker dashboards available to independently inspect order IDs, symbols,
    quantities, limit prices, status and cumulative filled quantity.
