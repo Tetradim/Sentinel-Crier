@@ -74,7 +74,16 @@ class MainActivity:Activity() {
     runOnUiThread { if(!isDestroyed && foreground && lifecycle==lifecycleRevision && Settings.sameIdentity(saved,Vault(this).read())) {
      CopyDashboardCache.accept(saved,snapshot)
      val view=TextView(this).apply { text=CopyDashboardCache.describe(snapshot); setPadding(24,24,24,24); textSize=16f; setTextIsSelectable(true) }
-     android.app.AlertDialog.Builder(this).setTitle("Copy dashboard · read only").setView(ScrollView(this).apply { addView(view) }).setPositiveButton("Close",null).show()
+     val dialog=android.app.AlertDialog.Builder(this).setTitle("Copy dashboard · read only").setView(ScrollView(this).apply { addView(view) }).setPositiveButton("Close",null).create()
+     val refresh=object:Runnable {
+      override fun run() {
+       if(!dialog.isShowing) return
+       if(isDestroyed || !foreground || lifecycle!=lifecycleRevision || !Settings.sameIdentity(saved,Vault(this@MainActivity).read())) { view.text="Dashboard disconnected"; dialog.dismiss(); return }
+       view.text=CopyDashboardCache.read(saved)?.let { CopyDashboardCache.describe(it) } ?: "Dashboard unavailable; reconnect to load fresh evidence."
+       view.postDelayed(this,1000)
+      }
+     }
+     dialog.setOnDismissListener { view.removeCallbacks(refresh) }; dialog.show(); view.postDelayed(refresh,1000)
     } }; "Dashboard checked"
    }
   }

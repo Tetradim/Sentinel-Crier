@@ -10,7 +10,9 @@ object CopyDashboardCache {
  @Synchronized fun accept(config:JSONObject,value:JSONObject) {
   require(value.getInt("version")==1 && value.getString("environment")==config.getString("environment") && value.getString("role")==config.getString("role"))
   require(value.getJSONArray("events").length()<=50 && value.getJSONArray("statuses").length()<=200 && value.getJSONArray("members").length()<=200 && value.getJSONArray("diagnostics").length()<=200)
-  Instant.parse(value.getString("generated_at")); scope=key(config); snapshot=JSONObject(value.toString())
+  val generated=Instant.parse(value.getString("generated_at")); val nextScope=key(config)
+  if(scope==nextScope && snapshot?.let { !generated.isAfter(Instant.parse(it.getString("generated_at"))) }==true) return
+  scope=nextScope; snapshot=JSONObject(value.toString())
  }
  @Synchronized fun read(config:JSONObject):JSONObject?=if(scope==key(config)) snapshot?.let { JSONObject(it.toString()) } else null
  @Synchronized fun clear() { scope=""; snapshot=null }

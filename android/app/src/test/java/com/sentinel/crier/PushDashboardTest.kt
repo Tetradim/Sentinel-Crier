@@ -6,6 +6,16 @@ import org.json.JSONObject
 import java.io.ByteArrayInputStream
 
 class PushDashboardTest {
+ @Test fun staleDashboardFetchCannotOverwriteNewerStreamSnapshot() {
+  val config=JSONObject("""{"url":"https://example.test","token":"private","role":"follower","environment":"paper","account":"one"}""")
+  fun snapshot(at:String)=JSONObject("""{"version":1,"role":"follower","environment":"paper","generated_at":"$at","events":[],"members":[],"statuses":[],"diagnostics":[]}""")
+  CopyDashboardCache.clear()
+  CopyDashboardCache.accept(config,snapshot("2026-10-26T12:00:02Z"))
+  CopyDashboardCache.accept(config,snapshot("2026-10-26T12:00:01Z"))
+  assertEquals("2026-10-26T12:00:02Z",CopyDashboardCache.read(config)!!.getString("generated_at"))
+  assertNull(CopyDashboardCache.read(JSONObject(config.toString()).put("account","two")))
+  CopyDashboardCache.clear(); assertNull(CopyDashboardCache.read(config))
+ }
  @Test fun sharedDashboardFixtures() {
   val raw=javaClass.classLoader!!.getResourceAsStream("copy-dashboard.json")!!.bufferedReader().use { it.readText() }
   val cases=JSONObject(raw).getJSONArray("cases")
