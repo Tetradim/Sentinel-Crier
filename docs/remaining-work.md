@@ -1,6 +1,6 @@
 # Remaining work after automated customer acceptance
 
-The approved customer-ease phases E–I and live-policy phase J have automated source verification. This is acceptance of the implemented source scope, with exclusions recorded in each phase report.
+The approved customer-ease phases E–I, live-policy phase J and reconciliation phase K have automated source verification. This is acceptance of the implemented source scope, with exclusions recorded in each phase report.
 
 ## Owner/provider/device work still unpassed
 
@@ -20,6 +20,6 @@ Phase J implements H.5's optional fixed/ratio/budget sizing, separate local quan
 
 The [current settings guide](execution-policies.md) describes available behavior. The [customer acceptance guide](customer-acceptance.md) identifies installable testing routes, recovery, support, automated checks and the deferred real trials.
 
-## Reconciliation hardening under verification
+## Reconciliation hardening verified
 
-The [Phase K plan](superpowers/plans/2026-10-26-terminal-reconciliation.md) adds fresh terminal-order evidence at execution boundaries. It prevents unavailable or corrected cached fills from authorizing another order, while retaining independently verified cancellations. Source implementation and local tests are complete; native/source-bound CI and final evidence are pending.
+The [completed Phase K plan](superpowers/plans/2026-10-26-terminal-reconciliation.md) adds fresh terminal-order evidence at execution boundaries. It prevents unavailable or corrected cached fills from authorizing another order, while retaining independently verified cancellations and stopping resolved historical polling. The [accepted evidence](acceptance/2026-10-26/terminal-reconciliation/source-evidence.json) records full/native/platform/package verification. No approved source implementation item remains open in phases E–K; the owner/provider/device items above remain unpassed.

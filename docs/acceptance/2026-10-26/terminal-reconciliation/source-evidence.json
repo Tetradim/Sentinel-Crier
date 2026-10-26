@@ -1,0 +1,329 @@
+{
+  "phase": "K",
+  "status": "Fresh terminal reconciliation and automated source scope verified; external acceptance deferred",
+  "collected_at_utc": "2026-10-26T07:51:42.720937+00:00",
+  "source_commit": "a292b06a81d20f0939da99b152e1d970b0c4eb9d",
+  "ci_runs": [
+    {
+      "conclusion": "success",
+      "databaseId": 40287731268,
+      "headSha": "a292b06a81d20f0939da99b152e1d970b0c4eb9d",
+      "name": "Windows release",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40287731268"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40287725614,
+      "headSha": "a292b06a81d20f0939da99b152e1d970b0c4eb9d",
+      "name": "Provider connection preparation",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40287725614"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40287723945,
+      "headSha": "a292b06a81d20f0939da99b152e1d970b0c4eb9d",
+      "name": "Windows desktop",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40287723945"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40287723990,
+      "headSha": "a292b06a81d20f0939da99b152e1d970b0c4eb9d",
+      "name": "Backend tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40287723990"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40286972870,
+      "headSha": "22595df800ac6a27caa394659a3a70d6cf8de207",
+      "name": "iOS build",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40286972870"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40286972842,
+      "headSha": "22595df800ac6a27caa394659a3a70d6cf8de207",
+      "name": "Android build and intent tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40286972842"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40286972855,
+      "headSha": "22595df800ac6a27caa394659a3a70d6cf8de207",
+      "name": "Customer acceptance",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40286972855"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40286972840,
+      "headSha": "22595df800ac6a27caa394659a3a70d6cf8de207",
+      "name": "Crier live-trading safety checks",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40286972840"
+    }
+  ],
+  "local_python": {
+    "path": "terminal-reconciliation-python.xml",
+    "tests": 991,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "sha256": "2590cc04f1e71ab14c1b16341d64638f501e6d172514165f7a2ed2c1bc00ee32"
+  },
+  "local_android_tests": 153,
+  "python_matrix": [
+    {
+      "path": "matrix\\provider-preparation-ubuntu-latest-3.11\\provider-preparation.xml",
+      "tests": 991,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 36,
+      "sha256": "08298d1769a9eaa9818dc3ff265eab731ffce27f2ac20e70bd6be924f1c37491"
+    },
+    {
+      "path": "matrix\\provider-preparation-ubuntu-latest-3.12\\provider-preparation.xml",
+      "tests": 991,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 36,
+      "sha256": "5fe793e3d3b6290ee5a101c960fe8e34931240a29e0517d62aae1c4948539910"
+    },
+    {
+      "path": "matrix\\provider-preparation-windows-latest-3.11\\provider-preparation.xml",
+      "tests": 991,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "sha256": "4cb4627fe8bd2185c46f59b99ee66e7c6307ef5882083e9d1421ba9d8d2fa211"
+    }
+  ],
+  "default_backend": {
+    "matrix": [
+      {
+        "passed": 886,
+        "skipped": 38
+      },
+      {
+        "passed": 886,
+        "skipped": 38
+      }
+    ],
+    "log_sha256": "4a03efccb199c53c52911b4ee9b5462600d79362347afc03d01d59ae4c55a3ca"
+  },
+  "android_unit_tests": [
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.BrokerLifecycleFenceTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "49f8397b7bf1902e76f30d21fea5f0cb0dc56ab880f9591da95487639000f29b"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.CheckedBrokerTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "d9f0a529876553b2b0712ab6de889cb128f7eeacf5b820758e9cbf2aa2b6fb7e"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.ComponentHealthTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "bf63270995a69033c64e876ae5f23678caa5651a66a5963096a54c78eee2f600"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.CustomerOAuthTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "e12d260aa8ddd52ba23d6816084a8be77016cdc80378995fc18996696a89c35f"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.DiagnosticsTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f4df8f861ace9ea9cc79fc0f954e65e2291383dc7a261a25745592a1faa11b1d"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.EngineTest.xml",
+      "tests": 25,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "98da0fe91cfe9277344f82b04501a9d96d6f94cefbde9d4c24b0b4328e1883a4"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.EntryClockTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "046265c0c8c76b9d7ed06523a45755010c87f0bbe372093b078d7a370d560a35"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.ExecutionStartGateTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "eb1d1326b2660ff37b5dbb5260f7c3d303cc1525d6d9a8d96e2144fe606a535b"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.GuidedAlertsTest.xml",
+      "tests": 24,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "1fb0a9d8463e3b07da842a448bcff767708f3686462ac838e7dcfbcf3116c4b1"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.HealthPersistenceTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "af916d74c07ed55edb22f1f8debd0831fbc813a78256f21b443756e89c191eda"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.LivePolicyTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "304436d708ab98ef30ff82f81aef1063cc55f7b6a7a578a610e503d894ea0cd8"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.LiveRuntimeTest.xml",
+      "tests": 23,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "961804a3e844a9536ca6c5c457773beeec038cf43e3e416a06724d52e3532533"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.OAuthReturnTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "6dd950b82542b3f35e0f93e3d183f5a9b4f8d25c639112d557dd03b2da85c23c"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.Phase2FlowTest.xml",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "5c3bb061fc91af0b18e7053101c58b11a5fce9fb6231bf8134014ed273c3b421"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.PolicyTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "133dfdbb174c09308338b3be5e54f4ffec66c8988dfc7a77fa48fa52f4c5e7eb"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.PracticeGuideTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "aee4740f56f05944836ed80d43d88f5f5159688fe26c14c4adc6cf2c4ae4b18f"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.SetupChoicesTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "a69cb53c5cd7df6dfdafbff3a2e2c0fdb93724364b318aa45e061c0ff1528d5f"
+    },
+    {
+      "path": "android\\test-results\\testDebugUnitTest\\TEST-com.sentinel.crier.TerminalReconciliationTest.xml",
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "94ca4b248ee1f015fc0b106ab1c7fb8db42918e5da0c3f383b0a06658a5780c2"
+    }
+  ],
+  "android_emulator_tests": [
+    {
+      "path": "android-ui\\outputs\\androidTest-results\\connected\\debug\\TEST-emulator-5554 - 15-_app-.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f05b6aa39585fd78c08e7c5cd861cc8827d0722ed3887b6cd551b4626f2e7319"
+    }
+  ],
+  "ios_native_tests": {
+    "tests": 147,
+    "failures": 0,
+    "log_sha256": "b4119cccfe1802eb4398d68b3cfbf7ab0d1c491a8e1882d0ea44dcb85f8f75e3"
+  },
+  "ios_ui_tests": {
+    "tests": 1,
+    "failures": 0,
+    "log_sha256": "c3abc4c7d529946292c9760816963bbe604ad52670c79fd044ff9f84a0c01942"
+  },
+  "component_reuse": {
+    "verified_commit": "22595df800ac6a27caa394659a3a70d6cf8de207",
+    "current_commit": "a292b06a81d20f0939da99b152e1d970b0c4eb9d",
+    "identical_git_objects": {
+      "android": "1e1bdf0a7f858394a676fdb4cbf41cc43d2f8bc1",
+      "ios": "6201f1b4c52209e2bd786ccef739caba3728a9dd",
+      "crier/customer-practice.json": "4987b4e42898a9dd5e0f940d07c659cece3a85aa",
+      "crier/customer_guide.py": "d4539044ef95654125e8427b4eb3b6e7ba342616",
+      "crier/desktop.py": "55b8db005a33ed2b55cdd563535b9c79ec52aa02",
+      "scripts/customer_acceptance.py": "02d734f67da2953d0e5d19a315ed3f4eed144af3"
+    },
+    "reason": "Final source change affects Python execution-health reporting and its tests; native and guide components are unchanged",
+    "changed_paths": [
+      "crier/intent_device.py",
+      "crier/intent_engine.py",
+      "tests/test_desktop_health.py",
+      "tests/test_execution_policy.py"
+    ]
+  },
+  "copied_evidence_sha256": {
+    "windows-installer-acceptance.json": "1bb5c8021de14866853ac583d4be2c71f3a6b97475ae75d9cd1b8d611d4ea747",
+    "ios-unsigned-archive-validation.json": "201228a6073991ed5d9dad86995a976810f8ea453c17f24afc4658bde5e13a3d",
+    "windows-journey-report.json": "30011d4f87bb1bcf6198d1f5a256bdcd183c75d02ba8977ec6a7feb589c0a7fe"
+  },
+  "regressions": [
+    "missing/failed terminal buy and sell proof blocks new orders and recovers once",
+    "fresh corrected fill quantity and average constrain budget replacement",
+    "malformed old evidence does not suppress independently verified cancellation",
+    "Android stop/interruption/credential/OAuth cancellation fence",
+    "iOS cancellation-only reconnect recovery before aggregate reconciliation failure",
+    "resolved terminal/zero-due instructions stop historical polling",
+    "explicit local no-POST dispositions and diagnostic-proven old HTTP-refusal upgrade",
+    "execution health stays blocked during partial reconciliation even when cancellation proceeds"
+  ],
+  "no_real_broker_orders_or_discord_messages": true,
+  "unpassed": [
+    "Webull Connect approval/integration",
+    "provider registration and real OAuth activation",
+    "Apple enrollment/signing/TestFlight",
+    "real broker/Discord and cross-network acceptance",
+    "physical suspension/notification/sleep/tray/accessibility acceptance",
+    "production operation and distribution trust"
+  ]
+}
