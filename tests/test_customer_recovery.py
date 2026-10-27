@@ -23,7 +23,12 @@ def test_receiver_conflict_and_environment_do_not_block_next_event(tmp_path, mon
         stop = asyncio.Event()
         async def respond(request):
             await asyncio.sleep(.001)
-            if request.url.path.endswith(('/stream','/dashboard')): return httpx.Response(404)
+            if request.url.path.endswith('/stream'): return httpx.Response(404)
+            if request.url.path.endswith('/dashboard'):
+                # The batch has been consumed before this request. End here so
+                # this recovery assertion does not time the reconnect backoff.
+                stop.set()
+                return httpx.Response(404)
             if int(request.url.params['after']) == 0:
                 return httpx.Response(200, json={'events': [{'cursor': i+1, 'event': e.to_dict()} for i,e in enumerate(items)]})
             stop.set()
