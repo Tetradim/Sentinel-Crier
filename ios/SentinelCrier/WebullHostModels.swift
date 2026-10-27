@@ -2,6 +2,17 @@ import Foundation
 
 /// Source brokerage identity is deliberately separate from IntentEvent.environment (.paper).
 enum WebullHostRules {
+    static func authorizationURL(_ text: String, service: URL) throws -> URL {
+        guard let parts = URLComponents(string: text), let target = parts.url,
+              parts.scheme == "https", parts.host == service.host, parts.port == service.port,
+              parts.user == nil, parts.password == nil, parts.fragment == nil,
+              parts.percentEncodedPath == service.appendingPathComponent("v1/connect/launch").path,
+              let items = parts.queryItems, items.count == 1, items[0].name == "ticket",
+              let ticket = items[0].value, ticket.range(of: "^[A-Za-z0-9_-]{43}$", options: .regularExpression) != nil else {
+            throw AlpacaError.invalid("Webull consent must start at this exact gateway's secure browser launch.")
+        }
+        return target
+    }
     static func price(_ value: String) throws {
         guard try IntentExecutionPolicy.money(value) <= 100000 else { throw AlpacaError.invalid("Limit price exceeds receiver wire cap.") }
     }

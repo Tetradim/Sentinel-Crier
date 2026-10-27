@@ -119,8 +119,12 @@ export interface GatewayOptions {
   timeoutMs?: number;
 }
 class HttpError extends Error {
-  constructor(readonly status: number, readonly code: string) {
+  readonly status: number;
+  readonly code: string;
+  constructor(status: number, code: string) {
     super(code);
+    this.status = status;
+    this.code = code;
   }
 }
 function fail(status = 400, code = "invalid_request"): never {

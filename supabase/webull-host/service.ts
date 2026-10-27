@@ -98,6 +98,8 @@ export interface HostedOptions {
   publishableKey: string;
   serviceRoleKey: string;
   fetch?: typeof fetch;
+  /** Trusted service assembly may reuse its already verified request principal. */
+  verify?: (token: string) => Promise<string>;
   /** Only set together after approved Connect resource paths, mappings, exact
    * contract resolution, account/token binding and no-short enforcement validate. */
   provider?: Provider;
@@ -107,7 +109,7 @@ export function createHostedGateway(
   options: HostedOptions,
 ): (r: Request) => Promise<Response> {
   const fetcher = options.fetch ?? fetch,
-    verify = createSupabaseVerifier({
+    verify = options.verify ?? createSupabaseVerifier({
       url: options.supabaseUrl,
       publishableKey: options.publishableKey,
       fetch: fetcher,

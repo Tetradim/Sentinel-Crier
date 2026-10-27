@@ -4,13 +4,19 @@ on:
   push:
     paths:
       - 'supabase/webull-host/**'
+      - 'supabase/functions/crier-webull-host/**'
       - 'supabase/tests/webull-host-ledger.test.mjs'
+      - 'supabase/tests/webull-host-browser.test.mjs'
+      - 'supabase/tests/webull-host-authorization.test.mjs'
       - 'tests/test_webull_host_receiver.py'
       - '.github/workflows/webull-host.yml'
   pull_request:
     paths:
       - 'supabase/webull-host/**'
+      - 'supabase/functions/crier-webull-host/**'
       - 'supabase/tests/webull-host-ledger.test.mjs'
+      - 'supabase/tests/webull-host-browser.test.mjs'
+      - 'supabase/tests/webull-host-authorization.test.mjs'
       - 'tests/test_webull_host_receiver.py'
       - '.github/workflows/webull-host.yml'
 permissions:
@@ -27,9 +33,11 @@ jobs:
       - name: Webull gateway tests without broker connections
         run: npm exec --yes --package deno@2.9.6 -- deno test supabase/webull-host
       - name: Webull gateway lint
-        run: npm exec --yes --package deno@2.9.6 -- deno lint supabase/webull-host
+        run: |
+          npm exec --yes --package deno@2.9.6 -- deno lint supabase/webull-host supabase/functions/crier-webull-host
+          npm exec --yes --package deno@2.9.6 -- deno check supabase/functions/crier-webull-host/index.ts
       - name: Candidate durable ledger SQL tests
-        run: npm ci --prefix supabase/tests && node --test supabase/tests/webull-host-ledger.test.mjs
+        run: npm ci --prefix supabase/tests && node --test supabase/tests/webull-host-ledger.test.mjs supabase/tests/webull-host-browser.test.mjs supabase/tests/webull-host-authorization.test.mjs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'

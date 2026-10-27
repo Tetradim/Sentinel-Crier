@@ -49,9 +49,10 @@ struct WebullHostAPI {
     // Navigation can disappear while a network request is in flight. One owner
     // prevents a reopened screen from loading a stale, competing journal copy.
     static let shared = WebullHostController()
-    struct Capabilities: Decodable { var available: Bool; var environments: [String]; var stocks: [String]; var options: Bool }
+    struct Capabilities: Decodable { var available: Bool; var environments: [String]; var stocks: [String]; var options: Bool; var authorization_available: Bool? }
     struct Connection: Decodable { var state: String; var environment: String; var account_id: String? }
     private struct Begin: Decodable { var authorization_url: String; var flow_id: String }
+    private struct AuthorizationStatus: Decodable { var state: String; var generation: Int }
     private struct Position: Decodable { var symbol: String; var quantity: Int }
     private struct OrderRequest: Encodable {
         var client_order_id: String; var account_id: String; var environment: String; var asset: String
@@ -64,6 +65,7 @@ struct WebullHostAPI {
     @Published private(set) var connection: Connection?
     @Published private(set) var invitation = ""
     @Published private(set) var paired = false
+    @Published private(set) var authorizationState: String?
     private var api: WebullHostAPI?
     private var pair: IntentPairing?
     private var blocked = false
@@ -71,7 +73,7 @@ struct WebullHostAPI {
     private var active = false
     private var pollCursor = 0
     private var generation = UUID()
-    func clearConnection() { generation = UUID(); api = nil; connection = nil; capabilities = nil }
+    func clearConnection() { generation = UUID(); api = nil; connection = nil; capabilities = nil; authorizationState = nil }
     func setActive(_ value: Bool) { active = value; if !value { clearConnection() } }
     private let file: URL
     private let session: URLSession
@@ -113,26 +115,41 @@ struct WebullHostAPI {
             guard state.owner.isEmpty || (state.owner == customer.user.id && state.authService == auth && state.service == candidate.base.absoluteString) else { throw AlpacaError.invalid("This journal belongs to another customer or service. Preserve it for recovery.") }
             // First explicit Check pins this HTTPS service to the retained customer journal.
             let caps: Capabilities = try await candidate.call("capabilities", customer: customer)
-            guard caps.available, caps.environments.contains(environment), caps.environments.allSatisfy({ ["sandbox", "production"].contains($0) }) else { throw AlpacaError.invalid("Webull provider approval pending or environment unavailable.") }
+            guard caps.available || caps.authorization_available == true, caps.environments.contains(environment), caps.environments.allSatisfy({ ["sandbox", "production"].contains($0) }) else { throw AlpacaError.invalid("Webull provider approval pending or environment unavailable.") }
             let value: Connection = try await candidate.call("connection", customer: customer, query: context(environment))
+            var authorization: AuthorizationStatus?
+            if caps.authorization_available == true { authorization = try await candidate.call("connect/status", customer: customer, query: context(environment)) }
             guard value.environment == environment, ["connected", "authorization_required", "unavailable"].contains(value.state), value.state != "connected" || !(value.account_id ?? "").isEmpty else { throw AlpacaError.invalid("Invalid Webull connection identity.") }
             guard active, generation == stamp, !Task.isCancelled else { return }
             try commit { $0.owner = customer.user.id; $0.authService = auth; $0.service = candidate.base.absoluteString }
             api = candidate; capabilities = caps; connection = value
-            message = value.state == "connected" ? "Webull \(environment) connected. Receiver route: Alpaca PAPER." : "Official Webull authorization required; approval may be pending."
+            authorizationState = authorization?.state
+            message = !caps.available ? "Webull authorization service ready; the trading adapter remains unavailable." : value.state == "connected" ? "Webull \(environment) connected. Receiver route: Alpaca PAPER." : "Official Webull authorization required; approval may be pending."
         } catch { message = error.localizedDescription }
     }
     func authorize(environment: String, customer: CustomerSession?) async -> URL? {
         guard !busy, let api else { return nil }; busy = true; defer { busy = false }
+        let stamp = generation
         do {
             let customer = try identity(customer)
             let value: Begin = try await api.call("connect/begin", customer: customer, body: JSONEncoder().encode(["environment": environment]))
-            guard let url = URL(string: value.authorization_url), url.scheme == "https", url.host == "passport.webull.com", url.port == nil,
-                  url.user == nil, url.password == nil, url.fragment == nil,
-                  ["/oauth2/authenticate/login", "/oauth2/sandbox/authenticate/login"].contains(url.path), !value.flow_id.isEmpty else { throw AlpacaError.invalid("Gateway returned an untrusted provider authorization URL.") }
+            let url = try WebullHostRules.authorizationURL(value.authorization_url, service: api.base)
+            guard !value.flow_id.isEmpty, active, generation == stamp, !Task.isCancelled else { return nil }
             message = "Complete official Webull consent, then Check connection again."
             return url
         } catch { message = error.localizedDescription; return nil }
+    }
+    func authorizationAction(_ action: String, environment: String, customer: CustomerSession?) async {
+        guard !busy, let api, ["refresh", "revoke"].contains(action), capabilities?.authorization_available == true else { return }
+        busy = true; defer { busy = false }; let stamp = generation
+        do {
+            let customer = try identity(customer)
+            let value: AuthorizationStatus = try await api.call("connect/" + action, customer: customer, body: JSONEncoder().encode(["environment": environment]))
+            guard active, generation == stamp else { return }
+            authorizationState = value.state
+            if action == "revoke" { connection = nil }
+            message = action == "revoke" ? "Crier's saved Webull access removed. Revoke the grant itself in Webull if needed. Broker orders and receiver holdings remain." : "Webull authorization refreshed."
+        } catch { message = error.localizedDescription }
     }
     func createPair(service: String) async {
         guard !busy else { return }; busy = true; defer { busy = false }
@@ -151,7 +168,7 @@ struct WebullHostAPI {
     }
     private func ready(environment: String, customer: CustomerSession?, acknowledged: Bool) throws -> CustomerSession {
         let customer = try identity(customer)
-        guard acknowledged, let connection, connection.state == "connected", connection.environment == environment,
+        guard acknowledged, capabilities?.available == true, let connection, connection.state == "connected", connection.environment == environment,
               pair?.role == "host", pair?.environment == .paper, state.pairingID == pair?.fingerprint else { throw AlpacaError.invalid("Check the source account, pair a PAPER receiver, and acknowledge the source-to-paper route.") }
         return customer
     }

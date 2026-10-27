@@ -45,6 +45,8 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/webull-connect/token_store.sql
           psql -v ON_ERROR_STOP=1 -f supabase/webull-connect/authorization_flow.sql
           psql -v ON_ERROR_STOP=1 -f supabase/webull-connect/operations.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/webull-host/ledger.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/webull-host/browser_store.sql
           psql -v ON_ERROR_STOP=1 -f supabase/provider-connect/flow_store.sql
           for test in supabase/tests/*.sql; do psql -v ON_ERROR_STOP=1 -f "$test"; done
           psql -v ON_ERROR_STOP=1 -c "SET crier.test_dsn = 'host=127.0.0.1 port=5432 dbname=crier_test user=postgres password=local-test-only';" -f supabase/tests/integration/concurrency.sql
@@ -52,6 +54,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -c "SET crier.test_dsn = 'host=127.0.0.1 port=5432 dbname=crier_test user=postgres password=local-test-only';" -f supabase/tests/integration/webull_tokens_concurrency.sql
           psql -v ON_ERROR_STOP=1 -c "SET crier.test_dsn = 'host=127.0.0.1 port=5432 dbname=crier_test user=postgres password=local-test-only';" -f supabase/tests/integration/webull_authorization_concurrency.sql
           psql -v ON_ERROR_STOP=1 -c "SET crier.test_dsn = 'host=127.0.0.1 port=5432 dbname=crier_test user=postgres password=local-test-only';" -f supabase/tests/integration/webull_operations_concurrency.sql
+          psql -v ON_ERROR_STOP=1 -c "SET crier.test_dsn = 'host=127.0.0.1 port=5432 dbname=crier_test user=postgres password=local-test-only';" -f supabase/tests/integration/webull_host_concurrency.sql
       - name: Edge gateway tests and type checks
         run: |
           npm exec --yes --package deno@2.9.6 -- deno test supabase/functions/crier/gateway_test.ts supabase/functions/crier/stream_test.ts

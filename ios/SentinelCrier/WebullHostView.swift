@@ -41,6 +41,12 @@ struct WebullHostView: View {
                 Button("Authorize selected Webull environment") {
                     Task { if let url = await host.authorize(environment: environment, customer: connections.customer) { openURL(url) } }
                 }.disabled(host.capabilities == nil)
+                if let state = host.authorizationState {
+                    Text("Webull authorization: \(state)").font(.caption)
+                    Button("Refresh Webull authorization") { Task { await host.authorizationAction("refresh", environment: environment, customer: connections.customer) } }
+                    Button("Remove Crier's Webull access", role: .destructive) { Task { await host.authorizationAction("revoke", environment: environment, customer: connections.customer) } }
+                    Text("Removes this service's saved access. Revoke the grant itself in Webull if needed. Broker orders and receiver holdings remain.").font(.caption)
+                }
                 if let connection = host.connection {
                     Text("\(connection.environment): \(connection.state)")
                     if let account = connection.account_id { Text("Source account: \(account)").font(.caption).textSelection(.enabled) }

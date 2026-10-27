@@ -7,7 +7,7 @@ The approved customer-ease phases E–I, live-policy phase J, reconciliation pha
 Phase L's [completed plan](superpowers/plans/2026-10-26-push-dashboard.md) and [accepted evidence](acceptance/2026-10-26/push-dashboard/source-evidence.json) record push delivery, the read-only dashboard, hosted deployment and an isolated synthetic probe. See the [usage guide](push-dashboard.md). The following external work remains unpassed:
 
 - Webull Connect approval, issued integration details and real authorized integration testing.
-- The [candidate Webull iPhone → Alpaca-paper Windows route](webull-iphone-host.md) now has native host and authenticated gateway/ledger code. It still needs the approved Connect resource/token-custody adapter, deployment and real sandbox acceptance. This is a specific single-host route, not completion of deferred D.1.
+- The [candidate Webull iPhone → Alpaca-paper Windows route](webull-iphone-host.md) now has native host and authenticated gateway/ledger code. Its [authorization runtime and deployable service](webull-authorization-deployment.md) are now composed. It still needs the approved account/contract/order resource adapter, operator activation and real sandbox acceptance. This is a specific single-host route, not completion of deferred D.1.
 - Provider app registrations/credentials, real OAuth consent and activation/deployment of the separately prepared provider service.
 - Apple enrollment/signing and an installable signed iPhone/TestFlight candidate. An unsigned archive is not an installation package.
 - Real broker/Discord paper receipts and cross-network Host/Follow trials with independent broker-UI reconciliation.

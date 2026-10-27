@@ -9,3 +9,8 @@ verify_jwt = false
 # Browser login/callback requests have no platform JWT header. The separate
 # handler validates native and browser customer sessions through Auth itself.
 verify_jwt = false
+
+[functions.crier-webull-host]
+# Native routes verify customer sessions through Auth; browser launch/callback
+# use single-use stored tickets, state and Secure/HttpOnly cookie binding.
+verify_jwt = false

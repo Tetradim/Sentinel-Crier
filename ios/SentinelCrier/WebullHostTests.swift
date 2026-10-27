@@ -2,6 +2,14 @@ import XCTest
 @testable import SentinelCrier
 
 final class WebullHostTests: XCTestCase {
+    func testAuthorizationLaunchRequiresExactGatewayAndOneOpaqueTicket() throws {
+        let base = URL(string: "https://project.test/functions/v1/crier-webull-host")!
+        let good = base.absoluteString + "/v1/connect/launch?ticket=" + String(repeating: "a", count: 43)
+        XCTAssertEqual(try WebullHostRules.authorizationURL(good, service: base).absoluteString, good)
+        for bad in [good.replacingOccurrences(of: "project.test", with: "attacker.test"), good + "&owner=forged", good + "#fragment", "https://passport.webull.com/oauth2/authenticate/login", good.replacingOccurrences(of: "/launch?", with: "/callback?")] {
+            XCTAssertThrowsError(try WebullHostRules.authorizationURL(bad, service: base))
+        }
+    }
     func testProductionSourceAlwaysMakesPaperIntentAndPreservesFIFO() throws {
         var state = WebullHostState()
         let trade = try state.enter(symbol: "AAPL", asset: "stock", quantity: 2, price: "1.25", environment: "production", account: "account", stocks: ["AAPL"])
@@ -167,6 +175,30 @@ final class WebullHostTransportTests: XCTestCase {
         let host = WebullHostController(file: file, loadPairing: false)
         host.setActive(true)
         await host.confirm(symbol: "AAPL", asset: "stock", quantity: 1, price: "1", environment: "production", acknowledged: true, customer: nil)
+        XCTAssertTrue(host.state.trades.isEmpty)
+    }
+    @MainActor func testAuthorizationReadyDoesNotEnableUnfinishedTradingAdapter() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory); WebullHostHTTPStub.handler = nil }
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [WebullHostHTTPStub.self]
+        let session = URLSession(configuration: config); defer { session.invalidateAndCancel() }
+        WebullHostHTTPStub.handler = { stub in
+            switch stub.request.url!.path {
+            case "/v1/capabilities": stub.send(["available": false, "authorization_available": true, "environments": ["production"], "stocks": ["AAPL"], "options": true])
+            case "/v1/connection": stub.send(["state": "connected", "environment": "production", "account_id": "source"])
+            case "/v1/connect/status": stub.send(["state": "active", "generation": 1])
+            default: XCTFail("Authorization-only service must not receive an order"); stub.send([:], status: 503)
+            }
+        }
+        var customer = CustomerSession(access_token: "customer", refresh_token: "refresh", expires_in: 3600, token_type: "bearer", user: .init(id: UUID().uuidString.lowercased()))
+        customer.expiresAt = Date().addingTimeInterval(3600)
+        customer.serviceURL = "https://abcdefghijklmnopqrst.supabase.co/functions/v1/crier-oauth"
+        let pair = IntentPairing(url: URL(string: "https://relay.test")!, token: String(repeating: "a", count: 43), environment: .paper, role: "host")
+        let host = WebullHostController(file: directory.appendingPathComponent("journal.json"), session: session, pairing: pair, loadPairing: false)
+        host.setActive(true)
+        await host.connect(service: "https://webull.test", environment: "production", customer: customer)
+        XCTAssertEqual(host.authorizationState, "active")
+        await host.confirm(symbol: "AAPL", asset: "stock", quantity: 1, price: "1", environment: "production", acknowledged: true, customer: customer)
         XCTAssertTrue(host.state.trades.isEmpty)
     }
 }
