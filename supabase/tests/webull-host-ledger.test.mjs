@@ -117,7 +117,8 @@ test('cancel acknowledgement retains quantity; terminal partial cancellation rel
     await rpc(db,'save',{owner,id:sell.client_order_id,revision:2,receipt:update('canceled',1),action:'lookup'});
     assert.equal((await rpc(db,'reserve',{owner,order:sale('c',1),fingerprint:'second'})).created,true);
     assert.equal((await rpc(db,'reserve',{owner,order:sale('d',1),fingerprint:'third'})).created,false);
-    assert.equal(await rpc(db,'save',{owner,id:sell.client_order_id,revision:3,receipt:update('canceled',2),action:'lookup'}),false);
+    // A raced revision must not discard contradictory authoritative quantity.
+    assert.equal(await rpc(db,'save',{owner,id:sell.client_order_id,revision:1,receipt:update('canceled',2),action:'lookup'}),false);
     const blocked=await rpc(db,'reserve',{owner,order:sale('e',1),fingerprint:'fourth'});
     assert.equal(blocked.reason,'source_inventory_reconciliation_required');
     assert.equal((await rpc(db,'reserve',{owner,order:{...order,client_order_id:'f'.repeat(32)},fingerprint:'new-buy'})).reason,'source_inventory_reconciliation_required');

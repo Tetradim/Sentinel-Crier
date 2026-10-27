@@ -111,7 +111,6 @@ begin
  if not found then return false; end if;
  perform webull_host_private.lock_quantity(p_owner,prior.intent);
  select * into prior from webull_host_private.orders where owner=p_owner and client_order_id=p_id for update;
- if prior.revision<>p_revision then return false; end if;
  if p_action='lookup' and (
    (prior.receipt->>'status' in ('filled','canceled','rejected') and
     (status<>prior.receipt->>'status' or q<>(prior.receipt->>'filled_quantity')::numeric))
@@ -122,6 +121,7 @@ begin
     and account_id=prior.intent->>'account_id' and asset=prior.intent->>'asset' and symbol=prior.intent->>'symbol';
    return false;
  end if;
+ if prior.revision<>p_revision then return false; end if;
  update webull_host_private.orders set receipt=p_receipt,revision=revision+1,updated_at=clock_timestamp(),
  cancel_pending=case when p_action='cancel' or (p_action='lookup' and cancel_started_at<clock_timestamp()-interval '60 seconds') then false else cancel_pending end,
  cancel_claimed=case when p_action='lookup' and status in ('accepted','partially_filled') and (not cancel_pending or cancel_started_at<clock_timestamp()-interval '60 seconds') then false else cancel_claimed end
