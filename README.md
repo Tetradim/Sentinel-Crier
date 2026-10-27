@@ -81,7 +81,7 @@ The current iPhone target has no ReplayKit extension and does not continuously o
 | Alpaca | Implemented paper/live native trading and Python monitoring/execution paths. Real account/device acceptance is separately tracked. |
 | Tradier | Read-only Python polling adapter requiring account-specific validation; no native Tradier copy executor. |
 | Webull Trading API | Experimental Python SDK observer with separate access and verification requirements. |
-| Webull Connect | Candidate iPhone Webull Host workflow, authenticated server gateway and durable source-order ledger, alongside authorization/token-custody groundwork. The approved Connect resource/token binding, deployment and sandbox acceptance remain unfinished; no real Webull trading is activated. |
+| Webull Connect | Candidate iPhone Webull Host workflow, authenticated server gateway, durable source-order ledger and composed authorization/token-custody service. The approved account/contract/order adapter, deployment and sandbox acceptance remain unfinished; no real Webull trading is activated. |
 
 Multiple hosts, simultaneous broker-account routing and copying across different brokers remain [deferred D.1](docs/deferred/multi-host-cross-broker.md). A donor bot's adapter name does not establish working support in Crier.
 

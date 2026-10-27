@@ -1,0 +1,439 @@
+{
+  "source_commit": "4ff1a33cc82c6c9dd458b0349df9e663e8c460ee",
+  "collected_at_utc": "2026-10-27T01:17:37.955671+00:00",
+  "scope": "Authorization/service assembly and local Windows diagnostics; no operational Webull trading acceptance",
+  "ci_runs": [
+    {
+      "conclusion": "success",
+      "headSha": "6448594681488eb56828976d3ba65d51e95bc94b",
+      "name": "Webull iPhone host contracts",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40427057923"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "6448594681488eb56828976d3ba65d51e95bc94b",
+      "name": "Supabase relay tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40427057991"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "6448594681488eb56828976d3ba65d51e95bc94b",
+      "name": "Crier live-trading safety checks",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40427057895"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "6448594681488eb56828976d3ba65d51e95bc94b",
+      "name": "iOS build",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40427057922"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "dfaa5b6411a045a0e67d061fa60bc27cef61ff61",
+      "name": "Windows desktop",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40430081284"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "1f86422ef1cb3baa7e769a44a3be76a28874bb71",
+      "name": "Windows release",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40429894219"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "4ff1a33cc82c6c9dd458b0349df9e663e8c460ee",
+      "name": "Backend tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40431345178"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "4ff1a33cc82c6c9dd458b0349df9e663e8c460ee",
+      "name": "Windows desktop",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40431345180"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "4ff1a33cc82c6c9dd458b0349df9e663e8c460ee",
+      "name": "Windows release",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40431372085"
+    }
+  ],
+  "tests": {
+    "local_python_oauth": {
+      "passed": 1048,
+      "skipped": 1,
+      "seconds": 106.22
+    },
+    "focused_recovery_push": {
+      "passed": 11
+    },
+    "deno_gateway_authorization_service": 38,
+    "node_sql_integration": 10,
+    "native_ios": 174,
+    "windows_ci_dfaa5b6": {
+      "passed": 979,
+      "skipped": 3
+    },
+    "linux_ci_4ff1a33": {
+      "passed": 944,
+      "skipped": 38
+    },
+    "windows_ci_4ff1a33": {
+      "passed": 979,
+      "skipped": 3
+    }
+  },
+  "test_environment_note": "Local environment includes optional OAuth dependencies; CI dependency/platform differences explain distinct collected counts. Skips are not passes.",
+  "auth_native_runtime_identical_to_6448594": [
+    {
+      "path": "ios/SentinelCrier/AlpacaAlertFormatter.swift",
+      "sha256": "baafab5c7a5fe011486d5ee934a8b923bb0ce4ca1470e48365b5b91aa374f498"
+    },
+    {
+      "path": "ios/SentinelCrier/AlpacaAlertFormatterTests.swift",
+      "sha256": "5963c674529fcadfabbc3be98849f7c5c5af518bb231e6faa85d8506331bc0ab"
+    },
+    {
+      "path": "ios/SentinelCrier/AlpacaJournal.swift",
+      "sha256": "fbe512873af65a6e70620b23b01a78624dd93bd1d949e78a0963d8673f8d7fff"
+    },
+    {
+      "path": "ios/SentinelCrier/AlpacaREST.swift",
+      "sha256": "66f0a60e3fa50fecb7810919e40816945ce47d50ca36dbda00e78150d548b4ae"
+    },
+    {
+      "path": "ios/SentinelCrier/AlpacaTests.swift",
+      "sha256": "018e4544fa080eaf53f170fb804ae06ab2f528b320b6f551fa874fe728b77654"
+    },
+    {
+      "path": "ios/SentinelCrier/AlpacaWorkspace.swift",
+      "sha256": "e57cc938a6f389bfe4288a2c530ce6135f1b081251a7baa078e0dd2e2ceedfe7"
+    },
+    {
+      "path": "ios/SentinelCrier/Assets.xcassets/AppIcon.appiconset/AppIcon.png",
+      "sha256": "70e999b96781bca8956b5c6222e1098987dba53db92f6ba6c2218a1feb311883"
+    },
+    {
+      "path": "ios/SentinelCrier/Assets.xcassets/AppIcon.appiconset/Contents.json",
+      "sha256": "6ad2c5c3bbcf972c7f02d217d6afcac3f24a10e30510c7e2d06c582371ed9d22"
+    },
+    {
+      "path": "ios/SentinelCrier/Assets.xcassets/Contents.json",
+      "sha256": "10e3b5dc202f1cd9fad1f688c8fc9fe9e9669bf3f8295e67d216b10fd99b6f49"
+    },
+    {
+      "path": "ios/SentinelCrier/BrokerageOverview.swift",
+      "sha256": "2bd3ccf6a73f67969cbbc78c93779f8c4f97ad08687d25475b00284c801eb5e7"
+    },
+    {
+      "path": "ios/SentinelCrier/CopyDashboard.swift",
+      "sha256": "595cb26711172653507a273487a2b8e0659b59d407893c501df3586424052c86"
+    },
+    {
+      "path": "ios/SentinelCrier/CopyDashboardTests.swift",
+      "sha256": "2b2342a54dd5277784469d21434c98b1dd439199c662fde7de632394e52a099b"
+    },
+    {
+      "path": "ios/SentinelCrier/CrierCommandCenter.swift",
+      "sha256": "132ff0b166ca243e2634dd9ae65314da75404f5cfe9892d09dd05a31a36263a9"
+    },
+    {
+      "path": "ios/SentinelCrier/EntryClock.swift",
+      "sha256": "2d8dc5365b356109ce4a54a8822d05a8d97ece10c333339da11504ad8981845b"
+    },
+    {
+      "path": "ios/SentinelCrier/EntryClockTests.swift",
+      "sha256": "94bd62e40615fb2c66c15f64d0b3640ebd4c8c9346cd53b175c58a6bd4f90f7c"
+    },
+    {
+      "path": "ios/SentinelCrier/GuidedSetup.swift",
+      "sha256": "a51475df24ef1ac9fa437d92f2d2442fdfbaf65e85b3d47e6c0bea8fee9f8b71"
+    },
+    {
+      "path": "ios/SentinelCrier/GuidedSetupTests.swift",
+      "sha256": "a93743d62f256a9a9c16e09427a513930beeeb3665cf87f252d529074091fbe1"
+    },
+    {
+      "path": "ios/SentinelCrier/IntentDiagnostics.swift",
+      "sha256": "a0431e525c6d2ee99c4287b81bcaf32677f893132dcd36bcc61c3c29dbe47296"
+    },
+    {
+      "path": "ios/SentinelCrier/IntentDiagnosticsTests.swift",
+      "sha256": "104fb67f9947599aa529e192d22d15f16eaaae0e0de6ee3930afbda3390a199a"
+    },
+    {
+      "path": "ios/SentinelCrier/IntentMirroring.swift",
+      "sha256": "fad25780a885e94f2149562976ae2a0f58a8e60dc887c51ceffbcf615356c82c"
+    },
+    {
+      "path": "ios/SentinelCrier/IntentPolicyTests.swift",
+      "sha256": "521e6956964ead89f5c14fbae46170239ae1a7f3d41ee0b405cc604da1c5b170"
+    },
+    {
+      "path": "ios/SentinelCrier/IntentTests.swift",
+      "sha256": "32943d63e19b3d6c40789954554d9b8754fe7c3dfbcec97d7dfc7aa9152016cd"
+    },
+    {
+      "path": "ios/SentinelCrier/IntentViews.swift",
+      "sha256": "d617658ffab9ae305f4f6999cf9da23370048b29158a31c5b25337ef083afb52"
+    },
+    {
+      "path": "ios/SentinelCrier/LiveBrokerGateway.swift",
+      "sha256": "3e1fa1fb8c9a1fcf203ef8923b06e149e30f12a091746fd6d9e01bb42693496d"
+    },
+    {
+      "path": "ios/SentinelCrier/LiveTradingHome.swift",
+      "sha256": "9499b86789adaef54df6c0a5ebc66d158ab39b914de0af038d1df5aa88482171"
+    },
+    {
+      "path": "ios/SentinelCrier/LiveTradingModels.swift",
+      "sha256": "85fd2074fc47e501ca3ac93921a0244a883ba92d35ee7c695b6fc1beb3ce58cf"
+    },
+    {
+      "path": "ios/SentinelCrier/MirrorConnection.swift",
+      "sha256": "69d56b42dc9e7cd4ef2dd8e33fcf96c9e970cb8914d4bd85c64731e326736420"
+    },
+    {
+      "path": "ios/SentinelCrier/MirrorTests.swift",
+      "sha256": "b99314d2d763972f16fbf20dfd29b34aae25d467eb2a7b506dc89b9211ab2752"
+    },
+    {
+      "path": "ios/SentinelCrier/MultiBrokerAllocation.swift",
+      "sha256": "a32443b40ef54449fe34516b4fef1993744702596d50cd620c6ccb146119f417"
+    },
+    {
+      "path": "ios/SentinelCrier/MultiBrokerExecutionCoordinator.swift",
+      "sha256": "56a4035eaf4a63e40422e0bfb4f25fc547ceff9a3f47f5ea20bae2585abfe337"
+    },
+    {
+      "path": "ios/SentinelCrier/MultiBrokerTradeGroups.swift",
+      "sha256": "5726b2cdc9f2c82938047cc59f59c45535d8cd0005a541a17fbd92b9cccc61aa"
+    },
+    {
+      "path": "ios/SentinelCrier/MultiBrokerTradingTests.swift",
+      "sha256": "f4a9c10a0291f40db8108015428d38123c4822339cb09d45134c1dd3b994806e"
+    },
+    {
+      "path": "ios/SentinelCrier/NativeHealth.swift",
+      "sha256": "b7f6cfc42a8a1e73f76074edc109be221f26e04aaafe59674dcd00a794b8a102"
+    },
+    {
+      "path": "ios/SentinelCrier/NativeHealthFlowTests.swift",
+      "sha256": "664e519eae5c14449aad413bf95b226f025cb0981fc48723ff470024207af78d"
+    },
+    {
+      "path": "ios/SentinelCrier/NativeHealthTests.swift",
+      "sha256": "4fc5cb645b08426631deba8e099e4b3419bda5787f88e1fb9c4a0ac021db5a00"
+    },
+    {
+      "path": "ios/SentinelCrier/NativeHealthView.swift",
+      "sha256": "323fb06af45d4f2387b815a58e56e860dbbab8b8ca8a3bf8c7d6f30e6f80f80f"
+    },
+    {
+      "path": "ios/SentinelCrier/OAuthReturn.swift",
+      "sha256": "9191e9bf6192ff6f38bba626c040caeb2fb17ea593b2f1d6dffbcc89f32e141d"
+    },
+    {
+      "path": "ios/SentinelCrier/OAuthReturnTests.swift",
+      "sha256": "6a46b72c2a71768908877fe992fc791d54cca3dccaabae116fd5256a12ad389b"
+    },
+    {
+      "path": "ios/SentinelCrier/Phase2FlowTests.swift",
+      "sha256": "cb3729ec138088045bdaa08348c966defabce07ee70d160062e8bf166fa2e80a"
+    },
+    {
+      "path": "ios/SentinelCrier/PracticeGuide.swift",
+      "sha256": "2247a2ec3bd38325c4ad46417aa3c5efecec06cd276104842b136ed428cd2981"
+    },
+    {
+      "path": "ios/SentinelCrier/PracticeGuideTests.swift",
+      "sha256": "71ae2b898651fef3538e5e85622dfd38169e7e2e30ee24629632c265db86bc75"
+    },
+    {
+      "path": "ios/SentinelCrier/PrivacyInfo.xcprivacy",
+      "sha256": "5996a2ce9e558d34b2970dab3466c1d536e6c0e29ba775ed0a95f0f96b3466b6"
+    },
+    {
+      "path": "ios/SentinelCrier/ProviderConnections.swift",
+      "sha256": "01018a978f5cc5c4c577277b9c4f3015a169481898d0f50ca93f66fce570bdd1"
+    },
+    {
+      "path": "ios/SentinelCrier/ProviderConnectionsTests.swift",
+      "sha256": "c217ef46406a9e145d745e98d40424e06fe12db5c055eff777c2cab0193c89c0"
+    },
+    {
+      "path": "ios/SentinelCrier/QuickConnection.swift",
+      "sha256": "a45c593f8021bb7ffcdca437984bc60a2b8fa3b8f46b8f661e0809243faa667e"
+    },
+    {
+      "path": "ios/SentinelCrier/QuickConnectionTests.swift",
+      "sha256": "9545814155f86a1990abb6972c7e300bf2b63b719086f29b03d57015d53095a4"
+    },
+    {
+      "path": "ios/SentinelCrier/SentinelCrierApp.swift",
+      "sha256": "06b7a6df473015387cd0210bdf13277c5b81693a7fe935648c937f377106c230"
+    },
+    {
+      "path": "ios/SentinelCrier/StandaloneConfiguration.swift",
+      "sha256": "c6b9774e5ea02831ece0922d2c7f77b55fbb8b47a152b02b8534d6fae581d376"
+    },
+    {
+      "path": "ios/SentinelCrier/TradingCandleCanvas.swift",
+      "sha256": "94f5b76918402e65295e7f757096ec081504778d665ad4bdb58627a22c96ba2f"
+    },
+    {
+      "path": "ios/SentinelCrier/TradingChartTests.swift",
+      "sha256": "9e51aa9722ee809a22f1b74f45e9b8c5d2e3109955a2e38d9568ced316f73866"
+    },
+    {
+      "path": "ios/SentinelCrier/TradingChartWorkspace.swift",
+      "sha256": "17f28aafbdd2d34e965607954cfca4601db3756da18a942e1023a4b89b99f576"
+    },
+    {
+      "path": "ios/SentinelCrier/TradingCharts.swift",
+      "sha256": "47902b63a3715f791304f567eabdf53a5f35a9143d1a5b0d4662c1fe819c2039"
+    },
+    {
+      "path": "ios/SentinelCrier/TradingPreferences.swift",
+      "sha256": "87fd2158e7888db821d68aa488a3d479785d751f6b4f021f2276a8ad9bab78b8"
+    },
+    {
+      "path": "ios/SentinelCrier/TradingViewHostedChart.swift",
+      "sha256": "f05388b28438ed35db13b262f2be735197976565874601d352c69ca0aa27df5c"
+    },
+    {
+      "path": "ios/SentinelCrier/VerifiedExecutionDiscordPublisher.swift",
+      "sha256": "4e1405d159b84bcc7a9ec87cdb11a383a2c391464f57eda7b614392b00a9e4b3"
+    },
+    {
+      "path": "ios/SentinelCrier/VerifiedExecutionOutbox.swift",
+      "sha256": "067809eb7195ca1e90e197c128e8f2cdcf5e06db1ca3076965be1d189b3edc99"
+    },
+    {
+      "path": "ios/SentinelCrier/WebullHostController.swift",
+      "sha256": "ca95bcaec0b5ff4525b0f76a00e47bd615fe83ae0e97ef6be9a8325eeec29f98"
+    },
+    {
+      "path": "ios/SentinelCrier/WebullHostModels.swift",
+      "sha256": "e132aed9e57378346186fcedfbf58872a4f044c31819cadcecad9dd7978efc4c"
+    },
+    {
+      "path": "ios/SentinelCrier/WebullHostTests.swift",
+      "sha256": "65e65bda9b32052dea2df02ced063eed56589d8cbaba64d2abdae8e60f5b0d30"
+    },
+    {
+      "path": "ios/SentinelCrier/WebullHostView.swift",
+      "sha256": "d3352b8af3cb681f75092f978ded18addc9e43b2109ec93fe3357cee2d02bc16"
+    },
+    {
+      "path": "supabase/functions/crier-webull-host/index.ts",
+      "sha256": "b530003b56d1b353d9b518ba7219ed27bc5563e786bbfbadf50d79324c6cd4ad"
+    },
+    {
+      "path": "supabase/webull-host/application.ts",
+      "sha256": "bc0ee0897c5ac53e14b99002912ebeec2e0473e8af90508de2f685f221c04639"
+    },
+    {
+      "path": "supabase/webull-host/application_test.ts",
+      "sha256": "52dca03259e860634defb6261b4459cd8de49d4a17463824aee7b1de08a1d991"
+    },
+    {
+      "path": "supabase/webull-host/authorization.ts",
+      "sha256": "be9387be3a37c7d4570727590ba6c26081d3bad2749c873abaeb2bf83499ea2d"
+    },
+    {
+      "path": "supabase/webull-host/authorization_test.ts",
+      "sha256": "b6bc00143aa03facef9e5c7899a708c02323fc892203664264d9005d5e2b5e55"
+    },
+    {
+      "path": "supabase/webull-host/browser_store.sql",
+      "sha256": "9e37e30a1e8e49159fff4adb0cfe718525fa4574fcef5fc5ee292cc8da9de621"
+    },
+    {
+      "path": "supabase/webull-host/browser_store.ts",
+      "sha256": "683daa34d5b219d5d8ad72bca6ededa7a8deb1c3e5f31c29f0d7f5800351a2d4"
+    },
+    {
+      "path": "supabase/webull-host/custody.ts",
+      "sha256": "a33c7bd444880d473a852eb4db35098690b0a8cc6f9ccf45fedf048c57d8e81c"
+    },
+    {
+      "path": "supabase/webull-host/custody_test.ts",
+      "sha256": "f9a1b9a627fc95058b3ba989d132fff7ffa4818608b0c5cef1d7d50fc202e72b"
+    },
+    {
+      "path": "supabase/webull-host/gateway.ts",
+      "sha256": "191f514ceae7fd9b47c0b2640e9c50fd4d8519f94890f53b57fa3c16b58802f1"
+    },
+    {
+      "path": "supabase/webull-host/gateway_test.ts",
+      "sha256": "f51c233f8e80dbf8c8e686d2eb041fb421eac7e32505ce3288579ad68f82260e"
+    },
+    {
+      "path": "supabase/webull-host/ledger.sql",
+      "sha256": "1c6871c6b8a62945ebfc49aba16df96efb8cb937c1b40f4a2e897f3b3bb56c33"
+    },
+    {
+      "path": "supabase/webull-host/preflight.ts",
+      "sha256": "9dce1a0ba43ca2b6df8e9028b84c6b6f38f35e753074140a6ecc9c08e83e0871"
+    },
+    {
+      "path": "supabase/webull-host/runtime_config.ts",
+      "sha256": "2201ba69f5df31859a42cefc4bdac6f0aa70119cb3e33369f1e4e3e32a930ecd"
+    },
+    {
+      "path": "supabase/webull-host/runtime_config_test.ts",
+      "sha256": "13fc31751374833fefd2aba6ee3a40e3187078a727a5e6762908d1b81fb669ea"
+    },
+    {
+      "path": "supabase/webull-host/service.ts",
+      "sha256": "8095561e1c3fe3eb930e9af0268287b82e74cac09eaf9fd5c6370fecb98001b0"
+    },
+    {
+      "path": "supabase/webull-host/service_test.ts",
+      "sha256": "558ee3358d0f65da64d7378e44957f1ecad7a7c90cae2c231ef2b93db89aff0c"
+    },
+    {
+      "path": "supabase/webull-host/token_transport.ts",
+      "sha256": "271f3d7315ea6948418301551f48a537a87d6591fe2814ce2bd628d7450e447e"
+    },
+    {
+      "path": "supabase/webull-host/token_transport_test.ts",
+      "sha256": "a51a367488ecc5923e2cbca27d1471dcaeb79402644b9b847ef5003fe02b2cdc"
+    },
+    {
+      "path": "supabase/webull-host/transport.ts",
+      "sha256": "ebc48d9092f9688a8626545b3fd8359f1cead02a75d3f8a3cc972b1dfd4f3a49"
+    }
+  ],
+  "installer_final_revision_status": "passed at 4ff1a33; run 40431372085",
+  "failed_ci_attempt": {
+    "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40430113471/attempts/1",
+    "reason": "Existing receiver recovery test hit its two-second deadline in push reconnect backoff",
+    "repair": "4ff1a33 ends mock transport after the batch dashboard boundary; production retry unchanged"
+  },
+  "external_effects": {
+    "real_broker_orders": 0,
+    "discord_messages": 0,
+    "webull_service_deployed": false,
+    "real_webull_authorization": false,
+    "webull_trading_adapter_installed": false,
+    "apple_signing_or_physical_acceptance": false
+  },
+  "remaining": [
+    "Approved Webull account/contract/order resource adapter and long-only source reservations",
+    "Operator activation and real sandbox integration",
+    "Apple signing and physical cross-network acceptance",
+    "Independent remote dead-PC notification; no automatic trading restart"
+  ],
+  "installer_evidence": "installer-acceptance.json"
+}

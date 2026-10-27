@@ -6,11 +6,13 @@
 
 Native consent may be available while trading remains unavailable. Tokens never return to the native client. The first deployment must remain disabled until Webull approval and protected configuration are supplied. No order/resource endpoint is invented.
 
-- [ ] Add failing behavioral tests for browser cookie binding, one-use launch, callback replay, refresh/revoke and secret-free replies.
-- [ ] Implement authorization runtime using the existing coordinator/vault and durable browser flow RPCs.
-- [ ] Add server-only signed token exchange with pinned endpoint, bounded response and no retry.
-- [ ] Add per-customer durable admission, service configuration validation and deployable Edge entry point.
-- [ ] Adapt iPhone consent to the exact configured gateway launch URL while retaining trading-disabled checks.
-- [ ] Run SQL/gateway/native verification, document precise source results and remaining approved trading-adapter work; commit/push main.
+- [x] Add failing behavioral tests for browser cookie binding, one-use launch, callback replay, refresh/revoke and secret-free replies.
+- [x] Implement authorization runtime using the existing coordinator/vault and durable browser flow RPCs.
+- [x] Add server-only signed token exchange with pinned endpoint, bounded response and no retry.
+- [x] Add per-customer durable admission, service configuration validation and deployable Edge entry point.
+- [x] Adapt iPhone consent to the exact configured gateway launch URL while retaining trading-disabled checks.
+- [x] Run SQL/gateway/native verification, document precise source results and remaining approved trading-adapter work; commit/push main.
 
-Customer-ready handoff still requires the concrete approved account/contract/order adapter, its long-only reservations, deployed operator configuration, Webull sandbox acceptance and signed/physical iPhone acceptance. Unattended logging/alerting remains a separate next work item.
+Customer-ready handoff still requires the concrete approved account/contract/order adapter, its long-only reservations, deployed operator configuration, Webull sandbox acceptance and signed/physical iPhone acceptance. Windows technical logging/support export is now implemented separately; independent remote outage notification remains unfinished.
+
+Automated source acceptance: [handoff operations evidence](../../acceptance/2026-10-26/customer-handoff-ops/README.md). This completes this plan's implementation scope, with the external and trading-adapter exclusions above retained.

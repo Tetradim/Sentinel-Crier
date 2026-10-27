@@ -23,6 +23,8 @@ The [Webull authorization service assembly](webull-authorization-deployment.md) 
 
 [Windows unattended diagnostics](unattended-diagnostics.md) add bounded background technical logs and a local support bundle with packaged source metadata. Independent remote outage notification, real unattended recovery trials and automatic restart policy remain separate; no automatic trading restart was enabled.
 
+[Accepted authorization and Windows diagnostics evidence](acceptance/2026-10-26/customer-handoff-ops/README.md) records the implementation revisions, automated checks and exclusions. These changes do not activate Webull trading or establish customer-ready handoff.
+
 ## Deferred future enhancements
 
 The [future-scope register](future-scope.md) expands D.1/D.2 with candidate controls, recurring stock-card ideas, accounting requirements and research/acceptance work. It does not activate those features.

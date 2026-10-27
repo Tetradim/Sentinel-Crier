@@ -1,0 +1,89 @@
+{
+  "evidence_scope": "ephemeral GitHub-hosted Windows runner",
+  "physical_customer_machine_verified": false,
+  "upgrade_scope": "Same program payload with acceptance-only next patch installer; no future application migration claim.",
+  "status": "passed",
+  "commands": [
+    {
+      "executable": "ISCC.exe",
+      "returncode": 0
+    },
+    {
+      "executable": "SentinelCrier-0.2.0-Windows-Setup.exe",
+      "returncode": 0
+    },
+    {
+      "executable": "SentinelCrier-0.2.1-Windows-Setup.exe",
+      "returncode": 0
+    },
+    {
+      "executable": "SentinelCrier-0.2.0-Windows-Setup.exe",
+      "returncode": 7
+    },
+    {
+      "executable": "unins000.exe",
+      "returncode": 0
+    }
+  ],
+  "stages": [
+    {
+      "stage": "install",
+      "version": "0.2.0",
+      "startup_opt_in_preserved": true,
+      "data": {
+        "journal_sha256": "daf59efe3defa0cfbbf5ca5d3dbcd6e28ab9d7bb723845f2dc73af13370a8039",
+        "credential_sha256": "d41f5884671c63627a6aa550351d555a5a13551bab029bb981201360eac967ae",
+        "unresolved_order_count": 1,
+        "dpapi_decryption_verified": true
+      }
+    },
+    {
+      "stage": "upgrade",
+      "version": "0.2.1",
+      "startup_opt_in_preserved": true,
+      "data": {
+        "journal_sha256": "daf59efe3defa0cfbbf5ca5d3dbcd6e28ab9d7bb723845f2dc73af13370a8039",
+        "credential_sha256": "d41f5884671c63627a6aa550351d555a5a13551bab029bb981201360eac967ae",
+        "unresolved_order_count": 1,
+        "dpapi_decryption_verified": true
+      }
+    },
+    {
+      "stage": "downgrade_rejected",
+      "returncode": 7,
+      "data": {
+        "journal_sha256": "daf59efe3defa0cfbbf5ca5d3dbcd6e28ab9d7bb723845f2dc73af13370a8039",
+        "credential_sha256": "d41f5884671c63627a6aa550351d555a5a13551bab029bb981201360eac967ae",
+        "unresolved_order_count": 1,
+        "dpapi_decryption_verified": true
+      }
+    },
+    {
+      "stage": "uninstall",
+      "program_removed": true,
+      "uninstall_registry_removed": true,
+      "data": {
+        "journal_sha256": "daf59efe3defa0cfbbf5ca5d3dbcd6e28ab9d7bb723845f2dc73af13370a8039",
+        "credential_sha256": "d41f5884671c63627a6aa550351d555a5a13551bab029bb981201360eac967ae",
+        "unresolved_order_count": 1,
+        "dpapi_decryption_verified": true
+      }
+    }
+  ],
+  "base_version": "0.2.0",
+  "upgrade_version": "0.2.1",
+  "source_file_count": 1659,
+  "initial_data": {
+    "journal_sha256": "daf59efe3defa0cfbbf5ca5d3dbcd6e28ab9d7bb723845f2dc73af13370a8039",
+    "credential_sha256": "d41f5884671c63627a6aa550351d555a5a13551bab029bb981201360eac967ae",
+    "unresolved_order_count": 1,
+    "dpapi_decryption_verified": true
+  },
+  "startup": {
+    "default_off": true,
+    "explicit_opt_in": true,
+    "preserved_on_upgrade": true,
+    "removed_on_uninstall": true
+  },
+  "retention": "Any acceptance-owned synthetic user data and evidence are retained for ephemeral runner disposal by GitHub."
+}

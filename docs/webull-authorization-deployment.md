@@ -74,4 +74,4 @@ Before customer handoff, test real sandbox consent, account identity, expiry/ref
 
 An uncertain exchange/refresh requires status inspection and fresh consent rather than repeating a rotating grant. Local removal clears Crier custody; it does not claim remote Webull grant revocation or cancel broker orders. Disabling deployment/configuration also does not constitute remote revocation or liquidation.
 
-The approved account/contract/order adapter, long-only source reservations, actual service activation and real Webull → Alpaca-paper acceptance remain unfinished. Unattended error logging/notifications remain the next separate hardening item. See [route status](webull-iphone-host.md).
+The approved account/contract/order adapter, long-only source reservations, actual service activation and real Webull → Alpaca-paper acceptance remain unfinished. [Windows technical logging and support export](unattended-diagnostics.md) are implemented; independent remote outage notification remains separate work. See [route status](webull-iphone-host.md).
