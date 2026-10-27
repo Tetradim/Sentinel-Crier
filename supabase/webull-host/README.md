@@ -45,6 +45,12 @@ Secure/HttpOnly cookie. Operator provisioning, schema installation, registered
 callbacks and real activation remain required. The included Edge entry point has
 no trading adapter; an environment flag alone cannot enable orders.
 
+`bounded_json.ts` bounds actual response bytes while reading into an owned buffer.
+Token replies are limited to 64 KiB; resource replies to one MiB. Invalid UTF-8,
+overflow, aborted reads and non-success responses are refused, and cleanup does
+not await an untrusted stream cancellation promise. Resource calls combine caller
+cancellation with a ten-second deadline. Mutation retries remain disabled.
+
 Keep the service-role key, application signing/client secrets and vault keys
 server-side. Mobile requests carry only a verified Crier customer session.
 Native source environments are sandbox/production; the destination intent

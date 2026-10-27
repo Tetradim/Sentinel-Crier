@@ -4,6 +4,7 @@ import {
   oauthApiEndpoints,
 } from "../webull-connect/oauth_contract.ts";
 import type { Environment } from "./gateway.ts";
+import { readBoundedJson } from "./bounded_json.ts";
 export function createSignedTokenTransport(
   options: {
     environment: Environment;
@@ -39,6 +40,7 @@ export function createSignedTokenTransport(
       timestamp: new Date().toISOString().replace(/\.\d{3}Z$/u, "Z"),
       nonce: crypto.randomUUID().replaceAll("-", ""),
     });
+    if (signal.aborted) throw Error("Invalid token dispatch");
     const response = await fetcher(endpoint, {
       method: "POST",
       redirect: "error",
@@ -50,33 +52,6 @@ export function createSignedTokenTransport(
       body,
       signal,
     });
-    if (!response.ok || !response.body) throw Error("Token exchange failed");
-    const reader = response.body.getReader(), chunks: Uint8Array[] = [];
-    let size = 0;
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        size += value.length;
-        if (size > 65536) throw Error("Token reply too large");
-        chunks.push(value);
-      }
-    } finally {
-      await reader.cancel().catch(() => {});
-      reader.releaseLock();
-    }
-    const bytes = new Uint8Array(size);
-    let offset = 0;
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset);
-      offset += chunk.length;
-    }
-    try {
-      return JSON.parse(
-        new TextDecoder("utf-8", { fatal: true }).decode(bytes),
-      );
-    } catch {
-      throw Error("Invalid token reply");
-    }
+    return await readBoundedJson(response, 65536, signal);
   };
 }

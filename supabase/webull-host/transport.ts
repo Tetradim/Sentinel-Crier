@@ -1,6 +1,7 @@
 /** Official Webull signing algorithm. No API resource mappings are guessed here. */
 import { createHash } from "node:crypto";
 import type { Environment } from "./gateway.ts";
+import { readBoundedJson } from "./bounded_json.ts";
 interface SignInput {
   host: string;
   path: string;
@@ -79,18 +80,23 @@ export function createConnectTransport(
     appSecret = options.appSecret,
     fetcher = options.fetch ?? fetch;
   return async (request: ConnectRequest): Promise<unknown> => {
+    const signal = request.signal
+      ? AbortSignal.any([request.signal, AbortSignal.timeout(10000)])
+      : AbortSignal.timeout(10000);
     if (
       !/^\/oauth-openapi\/[a-zA-Z0-9/_-]+$/u.test(request.path) ||
       request.path.includes("//") ||
       !["GET", "POST"].includes(request.method) || !request.accessToken ||
       /[\r\n]/u.test(request.accessToken) ||
-      (request.method === "GET" && request.body !== undefined)
+      (request.method === "GET" && request.body !== undefined) || signal.aborted
     ) throw Error("Invalid Webull request");
     const body = request.body === undefined
         ? undefined
         : JSON.stringify(request.body),
       query = { ...request.query };
-    if (body && body.length > 65536) throw Error("Webull body too large");
+    if (body && utf8.encode(body).byteLength > 65536) {
+      throw Error("Webull body too large");
+    }
     const headers = await signWebullRequest({
       host,
       path: request.path,
@@ -105,6 +111,7 @@ export function createConnectTransport(
     for (const [key, value] of Object.entries(query)) {
       url.searchParams.set(key, value);
     }
+    if (signal.aborted) throw Error("Webull request aborted");
     const response = await fetcher(url, {
       method: request.method,
       redirect: "error",
@@ -115,18 +122,9 @@ export function createConnectTransport(
         ...(body ? { "content-type": "application/json" } : {}),
       },
       body,
-      signal: request.signal ?? AbortSignal.timeout(10000),
+      signal,
     });
     // Neither HTTP errors nor ambiguous network failures trigger another request.
-    if (!response.ok) throw Error("Webull request failed");
-    const bytes = await response.arrayBuffer();
-    if (bytes.byteLength > 1048576) throw Error("Webull response too large");
-    try {
-      return JSON.parse(
-        new TextDecoder("utf-8", { fatal: true }).decode(bytes),
-      );
-    } catch {
-      throw Error("Invalid Webull response");
-    }
+    return await readBoundedJson(response, 1048576, signal);
   };
 }
