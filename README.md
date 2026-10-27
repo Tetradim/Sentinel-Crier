@@ -64,7 +64,7 @@ Windows now adds bounded background technical error logs and **Health → Export
 | --- | --- | --- |
 | iPhone | Native Alpaca trading, alerts, Host/Receive, dashboard and health/recovery. Account operations do not require a PC or Python server. | Simulator and unsigned hardware archive verified. Apple enrollment/signing is required for installable distribution. Suspension can stop networking. |
 | Android | Native Alpaca trading, alerts, Host/Receive, dashboard and health/recovery. | Signed candidate APK/AAB builds produced. Physical/background acceptance remains deferred. |
-| Windows | Alpaca desktop app, alerts, Host/Receive, dashboard, health, optional tray and sign-in startup. | Installer/portable candidates produced; installer lifecycle tested. Publisher signing is absent. Keep the PC awake. Sign-in startup begins disconnected. |
+| Windows | Alpaca desktop app, alerts, Host/Receive, dashboard, health, optional tray/startup and signed update/recovery flow. | Installer/portable candidates produced; installer lifecycle tested. Ed25519 update trust is configured; Microsoft publisher signing remains separate. Keep the PC awake. Startup and post-update launch begin disconnected. |
 | Python | Local monitor/publisher console, manual receipt review and separately configured intent execution. | Python 3.11+; optional local or hosted connection service. |
 
 - [iPhone build](ios/BUILD.md) · [distribution checklist](docs/iphone-release-checklist.md)

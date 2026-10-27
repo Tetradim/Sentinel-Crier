@@ -246,7 +246,8 @@ class UpdateClient:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     _reject()
-                with client.stream('GET', url, follow_redirects=False, timeout=httpx.Timeout(min(15, remaining), connect=min(5, remaining)), headers={'Accept':'application/octet-stream', 'Accept-Encoding':'identity'}) as response:
+                accept='application/vnd.github+json' if urlsplit(url).netloc=='api.github.com' else 'application/octet-stream'
+                with client.stream('GET', url, follow_redirects=False, timeout=httpx.Timeout(min(15, remaining), connect=min(5, remaining)), headers={'Accept':accept, 'Accept-Encoding':'identity'}) as response:
                     self._ensure_active()
                     if time.monotonic() >= deadline:
                         _reject()

@@ -53,6 +53,16 @@ def test_disabled_never_connects(tmp_path):
     assert client.check() == {'status':'unconfigured'}
 
 
+def test_release_metadata_uses_github_json_media_type(tmp_path):
+    client, _, _ = fixture_client(tmp_path)
+    def respond(request):
+        # Matches GitHub's real 415 for octet-stream on release metadata.
+        status=404 if request.headers['accept']=='application/vnd.github+json' else 415
+        return httpx.Response(status)
+    client.client=httpx.Client(transport=httpx.MockTransport(respond))
+    assert client.check()=={'status':'no_release'}
+
+
 def test_missing_latest_release_is_safe_empty_state(tmp_path):
     client, _, _ = fixture_client(tmp_path)
     client.check()
