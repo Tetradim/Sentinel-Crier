@@ -1,0 +1,56 @@
+{
+  "source_commit": "727c6d19223c419a54274c8e698f228e05e0a6eb",
+  "collected_at_utc": "2026-10-27T05:12:24.919203+00:00",
+  "scope": "Webull signed HTTP response memory/cancellation hardening; no trading adapter activation",
+  "ci_runs": [
+    {
+      "conclusion": "success",
+      "headSha": "727c6d19223c419a54274c8e698f228e05e0a6eb",
+      "name": "Webull iPhone host contracts",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40453856926"
+    }
+  ],
+  "verified": {
+    "webull_deno_passed": 52,
+    "new_transport_regressions": 14,
+    "initial_red_failures": 7,
+    "additional_red_failures_before_buffer_and_utf8_repairs": 3,
+    "sql_integrated_passed": 10,
+    "alpaca_intercepted_receiver_passed": 3,
+    "deno_lint": true,
+    "edge_function_typecheck": true
+  },
+  "runtime_hashes": [
+    {
+      "path": "supabase/webull-host/bounded_json.ts",
+      "sha256_git_blob": "a840bd9bbb74af5214913d4dd22cfb3b639010faeb7219235dbe8e1f23c230cb"
+    },
+    {
+      "path": "supabase/webull-host/transport.ts",
+      "sha256_git_blob": "1e4efb658c9de9aca28081ed1f24a4a7953a6e33e04f3dfdb410d78d3495c88f"
+    },
+    {
+      "path": "supabase/webull-host/token_transport.ts",
+      "sha256_git_blob": "a60aa4177bfc419009820a971c5699a82c3e61c312e1122ade433e29600f43f6"
+    },
+    {
+      "path": "supabase/webull-host/transport_test.ts",
+      "sha256_git_blob": "ff8c33ee21912475eca678d6648d227fdd360eacaa47a0bc7bd3b5b13bcbbc0d"
+    }
+  ],
+  "effects": {
+    "real_broker_requests": 0,
+    "orders": 0,
+    "discord_messages": 0,
+    "service_deployment": false,
+    "trading_enabled": false
+  },
+  "limits": [
+    "Byte storage is bounded, not total process memory; decoding and JSON objects allocate additional memory.",
+    "Upstream may deliver an oversized chunk before it is rejected.",
+    "Token transport receives its deadline from the trusted coordinator; resource transport supplies ten seconds independently.",
+    "Approved Connect resource adapter, activation and real sandbox interoperability remain unpassed.",
+    "Physical tests and Apple signing remain deferred."
+  ]
+}

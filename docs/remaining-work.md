@@ -25,6 +25,8 @@ The [Webull authorization service assembly](webull-authorization-deployment.md) 
 
 [Accepted authorization and Windows diagnostics evidence](acceptance/2026-10-26/customer-handoff-ops/README.md) records the implementation revisions, automated checks and exclusions. These changes do not activate Webull trading or establish customer-ready handoff.
 
+[October 27 Webull HTTP boundary verification](acceptance/2026-10-27/webull-response-bounds/README.md) additionally records bounded streaming replies, prompt body cancellation and enforced resource deadlines. This hardens the existing transports without enabling a trading adapter.
+
 ## Deferred future enhancements
 
 The [future-scope register](future-scope.md) expands D.1/D.2 with candidate controls, recurring stock-card ideas, accounting requirements and research/acceptance work. It does not activate those features.

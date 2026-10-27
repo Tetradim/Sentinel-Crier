@@ -6,4 +6,6 @@ Design: share a small bounded JSON reader between resource and token transports.
 
 - [x] Add failing transport/reader tests for incremental overflow, stalled cancellation, invalid UTF-8, exact byte boundaries and non-success cleanup.
 - [x] Implement bounded reader and compose both existing transports; enforce UTF-8 request body byte limits.
-- [ ] Run Deno tests/lint/type checks, integrated SQL tests and relevant CI; record exact results and commit/push main.
+- [x] Run Deno tests/lint/type checks, integrated SQL tests and relevant CI; record exact results and commit/push main.
+
+Completed source verification: [acceptance evidence](../../acceptance/2026-10-27/webull-response-bounds/README.md). No resource adapter or service activation was included.
