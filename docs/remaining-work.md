@@ -19,6 +19,13 @@ These items have not been silently marked passed, and no new mandatory paper-com
 
 ## Additional autonomous hardening
 
+Windows 0.3.0 now includes signed release discovery/download, private recovery
+snapshots, profile/protocol/source compatibility checks and installer handoff after
+normal worker shutdown. Release authority is provisioned in protected local storage
+and encrypted Actions secrets. See [update operations](customer-updates.md).
+Customer distribution still requires explicit release publication, real publisher
+trust and physical acceptance; Apple distribution remains deferred.
+
 The [Webull authorization service assembly](webull-authorization-deployment.md) now composes browser consent, encrypted custody/refresh, local revocation, request admission and a deployable Edge entry point. The approved account/contract/order adapter and actual activation remain unfinished.
 
 [Windows unattended diagnostics](unattended-diagnostics.md) add bounded background technical logs and a local support bundle with packaged source metadata. Independent remote outage notification, real unattended recovery trials and automatic restart policy remain separate; no automatic trading restart was enabled.

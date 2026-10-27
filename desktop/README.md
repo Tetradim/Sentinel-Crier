@@ -114,6 +114,10 @@ the packaged smoke test. Physical cross-device testing remains separate:
 
 ## Installer and updates
 
+Version 0.3.0 adds **Health → Updates & recovery**: check for signed releases,
+download/verify, then install after shutdown and a private recovery snapshot.
+See [update, publishing and recovery instructions](../docs/customer-updates.md).
+
 Use the versioned per-user installer from the manual **Windows release** workflow for
 normal installations. It preserves journals and DPAPI credentials across updates and
 uninstall. Close the app before replacing program files; downgrade is unsupported.

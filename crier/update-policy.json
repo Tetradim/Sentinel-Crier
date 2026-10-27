@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "enabled": true,
+  "repository": "Tetradim/Sentinel-Crier",
+  "channel": "stable",
+  "public_keys": {
+    "crier-50634cc64d58": "GMmk79uUSqc4ECj469yYGqWO1s39P7pwaR+5LLrjpTg="
+  },
+  "publisher_thumbprints": []
+}

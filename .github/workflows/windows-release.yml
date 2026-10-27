@@ -1,6 +1,19 @@
 name: Windows release
 on:
   workflow_dispatch:
+    inputs:
+      publish_update:
+        description: 'Publish the verified signed update to GitHub Releases after acceptance'
+        type: boolean
+        default: false
+      minimum_source:
+        description: 'Oldest tested source version for this release'
+        type: string
+        default: '0.2.0'
+      maximum_source:
+        description: 'Newest tested source version for this release'
+        type: string
+        default: '0.2.0'
 permissions:
   contents: read
 jobs:
@@ -63,3 +76,59 @@ jobs:
           name: SentinelCrier-Windows-release
           path: dist/release/*
           if-no-files-found: error
+      - name: Sign public update manifest
+        shell: pwsh
+        env:
+          CRIER_UPDATE_PRIVATE_KEY_PEM: ${{ secrets.CRIER_UPDATE_PRIVATE_KEY_PEM }}
+          CRIER_UPDATE_KEY_PASSWORD: ${{ secrets.CRIER_UPDATE_KEY_PASSWORD }}
+          CRIER_UPDATE_KEY_ID: ${{ secrets.CRIER_UPDATE_KEY_ID }}
+          CRIER_MINIMUM_SOURCE: ${{ inputs.minimum_source }}
+          CRIER_MAXIMUM_SOURCE: ${{ inputs.maximum_source }}
+        run: |
+          if (-not $env:CRIER_UPDATE_PRIVATE_KEY_PEM) {
+            if ('${{ inputs.publish_update }}' -eq 'true') { throw 'Publishing requires a protected release signing key' }
+            Write-Output 'Candidate artifacts only; update signing is not configured.'
+            exit 0
+          }
+          $version = python desktop/release_metadata.py --version-only
+          if ($LASTEXITCODE -ne 0) { throw 'Invalid release version' }
+          python desktop/update_release.py sign `
+            --installer "dist/release/SentinelCrier-$version-Windows-Setup.exe" `
+            --release-manifest "dist/release/SentinelCrier-$version-Windows-manifest.json" `
+            --notes desktop/UPDATE_NOTES.md `
+            --minimum-source $env:CRIER_MINIMUM_SOURCE --maximum-source $env:CRIER_MAXIMUM_SOURCE `
+            --output dist/release/SentinelCrier-update.json
+          if ($LASTEXITCODE -ne 0) { throw 'Update manifest signing failed' }
+      - name: Retain signed update catalog
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-signed-update
+          path: dist/release/SentinelCrier-update.json
+          if-no-files-found: ignore
+      - name: Prepare publication bundle
+        if: inputs.publish_update
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-update-publication
+          path: dist/release/*
+          if-no-files-found: error
+  publish:
+    if: inputs.publish_update
+    needs: release
+    runs-on: ubuntu-latest
+    environment: windows-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-update-publication
+          path: release-assets
+      - name: Publish accepted signed Windows update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test -f release-assets/SentinelCrier-update.json
+          version=$(python3 -c "import json; print(json.load(open('release.json'))['version'])")
+          gh release create "v$version" release-assets/* --target "$GITHUB_SHA" --title "Crier $version" --notes-file desktop/UPDATE_NOTES.md --latest

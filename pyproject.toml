@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sentinel-crier"
-version = "0.2.0"
+version = "0.3.0"
 description = "Broker fill alerts with an iPhone-first console"
 requires-python = ">=3.11"
-dependencies = ["fastapi==0.143.0", "uvicorn==0.54.0", "httpx==0.28.1", "tzdata==2026.5"]
+dependencies = ["fastapi==0.143.0", "uvicorn==0.54.0", "httpx==0.28.1", "httpcore==1.0.9", "tzdata==2026.5", "cryptography==50.0.2"]
 
 [project.optional-dependencies]
 webull = ["webull-openapi-python-sdk==3.0.3"]
@@ -23,7 +23,7 @@ crier-desktop = "crier.desktop:main"
 crier = "crier.__main__:main"
 
 [tool.setuptools.package-data]
-crier = ["static/*", "connection-service.json", "customer-practice.json"]
+crier = ["static/*", "connection-service.json", "customer-practice.json", "update-policy.json"]
 
 [tool.setuptools.packages.find]
 include = ["crier*"]

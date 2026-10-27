@@ -2,7 +2,8 @@
 
 The manually dispatched **Windows release** workflow tests the source and builds an
 x64 Python-free portable ZIP plus an Inno Setup installer. It uploads the artifacts
-for review; it does not publish a GitHub release or install an update on a user's PC.
+for review. Its explicit `publish_update` option controls GitHub Release publication;
+the default retains artifacts only. It does not install an update on a user's PC.
 Version comes from root `release.json` and must match `pyproject.toml`. Stable
 `MAJOR.MINOR.PATCH` versions with components up to 65535 are required; prereleases
 and build suffixes are rejected rather than silently losing their ordering.
@@ -28,6 +29,12 @@ app automatically. Portable users extract the whole versioned ZIP, preserving th
 `SentinelCrier.exe` / `_internal` layout.
 
 ## Update and retained state
+
+Version 0.3.0 adds **Health → Updates & recovery** for authenticated update checks,
+verified download, protected snapshot and installer handoff. See the complete
+[customer and publisher update guide](customer-updates.md). The instructions below
+remain the manual installation/recovery path. The unsigned evidence manifest above
+is distinct from the new Ed25519-signed `SentinelCrier-update.json` update catalog.
 
 1. Pause new entries, review unresolved broker orders, disconnect, and close Crier.
    Closing Crier does not cancel existing broker orders.

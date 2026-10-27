@@ -7,6 +7,7 @@ import tempfile
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import webbrowser
+from concurrent.futures import ThreadPoolExecutor
 
 from .desktop_runtime import DesktopWorker, data_directory
 from .connection_client import default_origin
@@ -28,6 +29,9 @@ class DesktopApp:
         self.provider_available = set()
         self.closing = False
         self.latest = {}
+        self.update_requested = False
+        self.update_pool = ThreadPoolExecutor(max_workers=1,thread_name_prefix='Crier updates')
+        self.update_future = None
         self.setup_progress = SetupProgress()
         self.setup_dirty = False
         self.rendering_setup = False
@@ -85,6 +89,9 @@ class DesktopApp:
         timeline=ttk.Frame(health_sections,padding=8)
         health_sections.add(connection_health,text='Connections')
         health_sections.add(timeline,text='Trade timeline')
+        updates=ttk.Frame(health_sections,padding=8)
+        health_sections.add(updates,text='Updates & recovery')
+        self.build_updates(updates)
         self._health(connection_health)
         self._diagnostics(timeline)
         self.notice = tk.StringVar(value='Choose Send my fills to Discord, Trade/share trades, or Follow trades in Start here.')
@@ -990,17 +997,93 @@ class DesktopApp:
         if self.presence.error:
             self.notice.set(self.presence.error)
 
-    def close(self, *, quit=False):
+    def build_updates(self,frame):
+        from .desktop_updates import DesktopUpdates
+        ttk.Label(frame,text='Crier updates',style='Title.TLabel').pack(anchor='w')
+        profile=getattr(getattr(self.worker,'session',None),'folder',None)
+        if profile is None:
+            self.updater=None
+            ttk.Label(frame,text='Updates require the installed desktop profile.').pack(anchor='w')
+            return
+        self.updater=DesktopUpdates(profile)
+        self.update_notice=tk.StringVar(value='Check for a signed release. Updates preserve your profile and never restart trading automatically.')
+        ttk.Label(frame,textvariable=self.update_notice,wraplength=780).pack(anchor='w',pady=12)
+        self.update_notes=tk.StringVar(value='')
+        ttk.Label(frame,textvariable=self.update_notes,wraplength=780).pack(anchor='w',pady=8)
+        self.update_button=ttk.Button(frame,text='Check for updates',command=self.update_action)
+        self.update_button.pack(anchor='w',pady=8)
+        ttk.Button(frame,text='Cancel update download',command=lambda:self.updater.cancel()).pack(anchor='w',pady=5)
+        ttk.Button(frame,text='Verify recovery backup…',command=self.verify_recovery).pack(anchor='w',pady=5)
+        ttk.Button(frame,text='Restore backup to a new folder…',command=self.restore_recovery).pack(anchor='w',pady=5)
+        ttk.Label(frame,text='Backups contain private account and pairing data. Restoration never overwrites your active profile or reconnects a broker. Keep the original profile until recovery is verified.',wraplength=780).pack(anchor='w',pady=12)
+
+    def run_update_job(self,operation,callback):
+        if self.update_future is not None and not self.update_future.done():return
+        self.update_button.configure(state='disabled')
+        self.update_future=self.update_pool.submit(operation)
+        def finish():
+            if not self.update_future.done():self.root.after(100,finish);return
+            try:callback(self.update_future.result())
+            except Exception:self.update_notice.set('Update/recovery failed safely. No installer was started; keep the original profile.')
+            self.update_button.configure(state='normal')
+        self.root.after(100,finish)
+
+    def update_action(self):
+        status=self.updater.state.get('status')
+        if status=='ready':
+            if not messagebox.askokcancel('Install verified update','Crier will disconnect and wait for broker work, save a private recovery backup, then close and open the installer. Existing broker orders remain active. Trading will not restart automatically.',parent=self.root):return
+            self.close(quit=True,update=True)
+            return
+        self.update_notice.set('Verifying release…' if status!='available' else 'Downloading and verifying installer…')
+        def display(result):
+            messages={'unconfigured':'Update signing is not activated for this build. Use the reviewed manual installer until the publisher provisions release trust.',
+                      'up_to_date':'This version is current.','available':'A signed compatible update is available.',
+                      'no_release':'No signed public update has been published yet.',
+                      'ready':'Installer verified. Install update will create a private backup and close Crier.'}
+            self.update_notice.set(messages.get(result['status'],'Check the release information.'))
+            self.update_notes.set(result.get('notes',''))
+            self.update_button.configure(text={'available':'Download verified update','ready':'Install update'}.get(result['status'],'Check for updates'))
+        self.run_update_job(self.updater.download if status=='available' else self.updater.check,display)
+
+    def verify_recovery(self):
+        path=filedialog.askdirectory(parent=self.root,title='Choose a Crier recovery backup')
+        if path:self.run_update_job(lambda:self.updater.inspect_backup(path),lambda _:self.update_notice.set('Backup integrity verified. Credentials remain bound to the original Windows user.'))
+
+    def restore_recovery(self):
+        source=filedialog.askdirectory(parent=self.root,title='Choose a Crier recovery backup')
+        if not source:return
+        parent=filedialog.askdirectory(parent=self.root,title='Choose a private parent folder for a new restored profile')
+        if parent:self.run_update_job(lambda:self.updater.recover(source,parent),lambda row:self.update_notice.set('Restored to '+row['path']+'. Your active profile was not changed. Follow the recovery guide before replacing any data.'))
+
+    def finish_update(self):
+        self.notice.set('Saving and verifying private recovery backup…')
+        future=self.update_pool.submit(lambda:self.updater.prepare(worker_closed=True))
+        def finish():
+            if not future.done():self.root.after(100,finish);return
+            try:
+                from .update_install import launch
+                launch(future.result())
+            except Exception:
+                messagebox.showerror('Update not installed','Backup or installer verification failed. Your original profile was preserved. Restart Crier and inspect the release before retrying.',parent=self.root)
+            self.update_pool.shutdown(wait=False,cancel_futures=True)
+            self.root.destroy()
+        finish()
+
+    def close(self, *, quit=False, update=False):
         if self.closing:
             return
         if not quit and self.presence is not None and self.presence.tray_enabled and self.presence.tray_ready:
             self.root.withdraw()
             self.notice.set('Crier is still running. Use Show Crier or Quit Crier in the tray.')
             return
-        if self.connected and not messagebox.askokcancel('Close Crier',
+        if self.connected and not update and not messagebox.askokcancel('Close Crier',
                 'Mirroring will stop. Existing broker orders remain active. Close Crier?', parent=self.root):
             return
+        self.update_requested=update
         self.closing = True
+        if not update and getattr(self,'updater',None):
+            cancel=getattr(self.updater,'cancel',None)
+            if cancel:cancel()
         self.notice.set('Stopping receiver and waiting for in-flight broker work…')
         future = self.worker.call('disconnect')
         def finish():
@@ -1010,13 +1093,25 @@ class DesktopApp:
                 future.result()
             except Exception:
                 self.closing = False
+                self.update_requested = False
                 self.notice.set('Shutdown failed. Inspect broker orders and try disconnecting again.')
                 self.root.after(250, self.refresh)
                 return
             if self.presence is not None:
                 self.presence.stop()
             self.worker.close()
-            self.root.destroy()
+            if getattr(self,'update_requested',False):
+                self.finish_update()
+                return
+            if hasattr(self,'update_pool'):
+                def stop_updates():
+                    if self.update_future is not None and not self.update_future.done():
+                        self.notice.set('Broker work stopped. Waiting for the canceled update download to close…')
+                        self.root.after(100,stop_updates);return
+                    self.update_pool.shutdown(wait=False,cancel_futures=True)
+                    self.root.destroy()
+                stop_updates()
+            else:self.root.destroy()
         finish()
 
 
@@ -1028,6 +1123,9 @@ def smoke_test(report=None):
     assert len(load_guide().journeys)==3, 'Missing bundled customer practice guide'
     tray_result = 'not_requested'
     assert Path(__file__).with_name('connection-service.json').exists(), 'Missing bundled connection-service resource'
+    from .desktop_updates import load_policy
+    update_policy=load_policy()
+    assert update_policy['repository']=='Tetradim/Sentinel-Crier', 'Missing pinned update trust policy'
     with tempfile.TemporaryDirectory(prefix='crier-desktop-smoke-') as folder:
         path = Path(folder)
         save_secret(path/'test.secret', 'offline-smoke')
@@ -1075,6 +1173,12 @@ def smoke_test(report=None):
         Path(report).write_text(json.dumps({'ok':True,'network_calls':0,'ui':'Tk','credentials':'round-trip passed','tray':tray_result,'support_bundle':'validated'}), encoding='utf-8')
 
 
+def show_profile_error():
+    root=tk.Tk();root.withdraw()
+    messagebox.showerror('Crier profile cannot be opened','This profile has an unsupported format. No broker was connected. Keep the original data and use the matching release or a verified recovery backup.',parent=root)
+    root.destroy()
+
+
 def main():
     parser = argparse.ArgumentParser(description='Sentinel Crier desktop')
     launch = parser.add_mutually_exclusive_group()
@@ -1093,6 +1197,11 @@ def main():
         except ValueError: return
     try:
         with single_process(folder/'desktop.lock'):
+            from .update_recovery import ensure_profile_compatible
+            try:ensure_profile_compatible(folder)
+            except ValueError:
+                show_profile_error()
+                raise SystemExit(1)
             root = tk.Tk()
             worker = DesktopWorker(folder)
             from .desktop_presence import Presence
