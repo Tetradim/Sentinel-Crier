@@ -17,6 +17,12 @@ Phase L's [completed plan](superpowers/plans/2026-10-26-push-dashboard.md) and [
 
 These items have not been silently marked passed, and no new mandatory paper-completion gate has been introduced.
 
+## Additional autonomous hardening
+
+The [Webull authorization service assembly](webull-authorization-deployment.md) now composes browser consent, encrypted custody/refresh, local revocation, request admission and a deployable Edge entry point. The approved account/contract/order adapter and actual activation remain unfinished.
+
+[Windows unattended diagnostics](unattended-diagnostics.md) add bounded background technical logs and a local support bundle with packaged source metadata. Independent remote outage notification, real unattended recovery trials and automatic restart policy remain separate; no automatic trading restart was enabled.
+
 ## Deferred future enhancements
 
 The [future-scope register](future-scope.md) expands D.1/D.2 with candidate controls, recurring stock-card ideas, accounting requirements and research/acceptance work. It does not activate those features.

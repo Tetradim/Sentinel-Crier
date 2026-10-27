@@ -88,6 +88,7 @@ class DesktopApp:
         self._health(connection_health)
         self._diagnostics(timeline)
         self.notice = tk.StringVar(value='Choose Send my fills to Discord, Trade/share trades, or Follow trades in Start here.')
+        root.report_callback_exception=self.report_callback_error
         ttk.Label(outer, textvariable=self.notice, wraplength=1000).pack(anchor='w', pady=(12,0))
         ttk.Label(outer, text='Keep this PC awake. Closing stops Crier unless tray mode is enabled. Quit stops monitoring; broker orders remain.',
                   style='Subtitle.TLabel').pack(anchor='w', pady=(6,0))
@@ -685,7 +686,20 @@ class DesktopApp:
         self.health_activity_button.pack(side='left',padx=3)
         ttk.Button(actions,text='Discord history',command=lambda:self.tabs.select(self.delivery_tab)).pack(side='left',padx=3)
         ttk.Button(actions,text='Disconnect',command=lambda:self.submit('disconnect')).pack(side='left',padx=3)
+        ttk.Button(actions,text='Export support bundle',command=self.save_support_bundle).pack(side='left',padx=3)
+        self.log_notice=tk.StringVar(value='Technical log status unavailable.')
+        ttk.Label(frame,textvariable=self.log_notice,wraplength=700).pack(anchor='w',pady=4)
         ttk.Label(frame,text='Idle means no queued work; it does not prove the remote service is reachable. Inspect uncertain orders or messages before retrying.',wraplength=700).pack(anchor='w',pady=8)
+
+    def report_callback_error(self, kind, error, trace):
+        from .error_log import emit_error
+        emit_error(getattr(self.worker,'error_log',None),'desktop.interface_failed',error)
+        self.notice.set('Interface error. Use Health to inspect diagnostic status and export a support bundle.')
+
+    def save_support_bundle(self):
+        path=filedialog.asksaveasfilename(parent=self.root,defaultextension='.zip',initialfile='crier-support-'+datetime.now().strftime('%Y%m%d-%H%M%S')+'.zip',filetypes=[('ZIP','*.zip')])
+        if not path:return
+        self.submit('support_bundle',path,callback=lambda result:self.notice.set('Support bundle saved. It contains technical IDs and stack locations; review before sharing.'))
 
     def show_health_detail(self):
         selected=self.health_rows.selection()
@@ -833,6 +847,9 @@ class DesktopApp:
         self.copy_dashboard.delete('1.0','end'); self.copy_dashboard.insert('1.0',copy_text)
         self.copy_dashboard.configure(state='disabled')
         self.render_health(state.get('health',[]),state.get('health_error',False))
+        logging_state=state.get('technical_logging') or {}
+        self.log_notice.set(('Technical logs available.' if logging_state.get('available') else 'Technical logging unavailable; existing execution journals remain separate.')+
+                            ' Dropped records: '+str(logging_state.get('dropped',0))+'. Repeated errors suppressed: '+str(logging_state.get('suppressed',0))+'.')
         if self.connected != state['connected']:
             self.clear_delivery_list('alerts')
             self.clear_delivery_list('receivers')
@@ -1026,6 +1043,18 @@ def smoke_test(report=None):
             app.render_diagnostics({'trade_id': 'offline-smoke', 'timeline': [],
                                     'premium_movement': {'status': 'unavailable'}})
             assert 'offline-smoke' in app.diagnostic_text.get('1.0', 'end')
+            import zipfile
+            from .error_log import read_build_info
+            support=path/'support.zip'
+            worker.call('support_bundle',support).result(timeout=10)
+            with zipfile.ZipFile(support) as archive:
+                assert sorted(archive.namelist())==['diagnostics/error-log.jsonl','manifest.json']
+                manifest=json.loads(archive.read('manifest.json'))
+                assert manifest['includes_credentials'] is False
+                if getattr(sys,'frozen',False):
+                    build=read_build_info(Path(__file__).with_name('build-info.json'))
+                    assert build and len(build['commit'])==40, 'Missing packaged public source revision'
+                    assert manifest['build']==build
             root.update_idletasks()
         finally:
             worker.call('disconnect').result(timeout=5)
@@ -1041,7 +1070,7 @@ def smoke_test(report=None):
         assert not tray.alive, 'Packaged notification-area thread failed to stop'
         tray_result = 'ready_and_stopped'
     if report:
-        Path(report).write_text(json.dumps({'ok':True,'network_calls':0,'ui':'Tk','credentials':'round-trip passed','tray':tray_result}), encoding='utf-8')
+        Path(report).write_text(json.dumps({'ok':True,'network_calls':0,'ui':'Tk','credentials':'round-trip passed','tray':tray_result,'support_bundle':'validated'}), encoding='utf-8')
 
 
 def main():
@@ -1066,7 +1095,19 @@ def main():
             worker = DesktopWorker(folder)
             from .desktop_presence import Presence
             DesktopApp(root, worker, presence=Presence(folder), startup=args.startup)
-            root.mainloop()
+            try:
+                root.mainloop()
+            except Exception as exc:
+                from .error_log import emit_error
+                emit_error(worker.error_log,'desktop.process_failed',exc)
+                worker.error_log.flush()
+                try:
+                    # Reuse normal shutdown: pause entries and drain in-flight
+                    # mutations before stopping the non-daemon execution loop.
+                    worker.close()
+                except Exception as shutdown_error:
+                    emit_error(worker.error_log,'desktop.shutdown_failed',shutdown_error)
+                raise
     except AlreadyRunningError:
         if args.oauth_return or args.startup: return
         root = tk.Tk(); root.withdraw()

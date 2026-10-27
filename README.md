@@ -56,6 +56,8 @@ Choose **Alerts only** on iPhone, **Alerts** on Android, or **Start here → Sen
 
 The read-only **Copy dashboard** shows instructions, device results, quantities, fill averages and remaining units. Actual host/receiver price comparisons, eligible P&L calculations, clock-adjusted delivery estimates and JSON/CSV exports require appropriate evidence. Missing prices or fees are not invented. See [execution diagnostics](docs/execution-diagnostics.md) and [dashboard calculation and privacy limits](docs/push-dashboard.md).
 
+Windows now adds bounded background technical error logs and **Health → Export support bundle**, with safe stack locations, validated trade/order IDs and packaged build metadata. Secret messages and raw account databases are excluded. Writer failure and evidence loss are visible. See [unattended diagnostics](docs/unattended-diagnostics.md); this does not enable remote outage notification or automatic trading restart.
+
 ## Platforms and installation
 
 | Platform | Implementation | Distribution and operating limits |

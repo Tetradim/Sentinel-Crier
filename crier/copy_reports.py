@@ -141,7 +141,10 @@ class CopyReporter:
             device=self.device; engine=device.engine; scope=device.fingerprint
             if engine and hasattr(device.broker,'metadata'):
                 try: status=await self.background(engine.status)
-                except Exception: status={'trades':[]}
+                except Exception as exc:
+                    from .error_log import emit_error
+                    emit_error(getattr(device,'error_log',None),'copy.metadata_status_failed',exc)
+                    status={'trades':[]}
                 for trade in status['trades'][-50:]:
                     if stop.is_set() or scope!=device.fingerprint: break
                     key=(scope,trade['id'])
@@ -156,7 +159,10 @@ class CopyReporter:
                         await asyncio.gather(task,return_exceptions=True)
                         self.metadata_retry.complete(key,False)
                         raise
-                    except Exception: self.metadata_retry.complete(key,False)
+                    except Exception as exc:
+                        from .error_log import emit_error
+                        emit_error(getattr(device,'error_log',None),'copy.metadata_failed',exc,trade_id=trade['id'])
+                        self.metadata_retry.complete(key,False)
                     if stop.is_set(): break
             try: await asyncio.wait_for(stop.wait(),15)
             except TimeoutError: pass
@@ -201,7 +207,10 @@ class CopyReporter:
                                     continue
                                 response.raise_for_status()
                                 await self.background(self.acknowledged,scope,row)
-                        except Exception: pass  # Observational errors never alter the engine or event cursor.
+                        except Exception as exc:
+                            from .error_log import emit_error
+                            emit_error(getattr(device,'error_log',None),'copy.reporting_failed',exc)
+                            # Observational errors never alter the engine or event cursor.
                     try: await asyncio.wait_for(self.changed.wait(),2)
                     except TimeoutError: pass
         finally:

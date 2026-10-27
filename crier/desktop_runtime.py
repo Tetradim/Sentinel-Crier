@@ -19,6 +19,7 @@ from .connection_client import ConnectionClient
 from .store import Store
 from .discord_settings import DiscordPublisher
 from .component_health import ComponentHealth
+from .error_log import ErrorLog, emit_error, emit_event
 
 
 def data_directory():
@@ -85,7 +86,8 @@ class AlpacaFillReader:
 class DesktopSession:
     def __init__(self, folder, account_lookup=discover_account,
                  broker_factory=AlpacaIntentBroker, start_workers=True,
-                 alerts_lookup=discover_alerts_account, alerts_factory=AlpacaFillReader):
+                 alerts_lookup=discover_alerts_account, alerts_factory=AlpacaFillReader, error_log=None):
+        self.error_log=error_log; self.last_log_health={}
         self.folder = Path(folder)
         self.folder.mkdir(parents=True, exist_ok=True)
         self.health_error=False
@@ -121,6 +123,10 @@ class DesktopSession:
         self.discord_authorized = False
 
     def observe(self, component, state, reason):
+        previous=self.last_log_health.get(component)
+        if previous!=(state,reason):
+            self.last_log_health[component]=(state,reason)
+            emit_event(self.error_log,'health.'+component+'.'+state+'.'+reason,environment=self.environment)
         if self.health is None: return
         try:
             self.health.record(self.health_scope,component,state,reason)
@@ -276,6 +282,9 @@ class DesktopSession:
         await self.stop_oauth_jobs()
         await self.disconnect()
         if self.oauth: await self.oauth.close()
+        if self.error_log:
+            emit_event(self.error_log,'desktop.shutdown')
+            await asyncio.to_thread(self.error_log.close)
 
     def connection_client(self):
         saved=json.loads(load_secret(self.credentials)) if self.credentials.exists() else {}
@@ -474,7 +483,7 @@ class DesktopSession:
                 raise ValueError('This desktop journal is pinned to its original account and channel. Reuse that pairing.')
             broker = self.broker_factory(pair['environment'], key, secret, account, **({'bearer':bearer} if bearer else {}))
             try:
-                device = IntentDevice(self.folder/'journal', broker)
+                device = IntentDevice(self.folder/'journal', broker, error_log=self.error_log)
                 device.configure(pair)
                 device.engine.save_settings({'enabled': False})
                 save_secret(self.credentials, json.dumps(dict(pair=pair, key=key, secret=secret, account=account, **({'bearer':bearer,'oauth':saved['oauth']} if bearer else {}))))
@@ -508,6 +517,7 @@ class DesktopSession:
                     account=self.account, saved=self.credentials.exists(), saved_alerts=self.alerts_credentials.exists(),
                     runtime='foreground' if self.broker else 'stopped',
                     alerts=self.alert_state, health=self.component_status(), health_error=self.health_error,
+                    technical_logging=self.error_log.status() if self.error_log else None,
                     recovery=recovery)
 
     async def diagnostics(self, trade_id, side='buy'):
@@ -519,6 +529,10 @@ class DesktopSession:
         if not self.device or self.closing or self.auth_closing:
             raise ValueError('Connect first.')
         return await asyncio.to_thread(self.device.export_trade, trade_id, format, side)
+
+    async def support_bundle(self,path):
+        if not self.error_log: raise ValueError('Technical logging is unavailable in this session.')
+        return await asyncio.to_thread(self.error_log.export,path)
 
     def settings(self, settings):
         if not self.device or self.closing or self.auth_closing:
@@ -563,7 +577,10 @@ class DesktopWorker:
     """Bridge Tk to the asyncio loop without executing UI calls off the Tk thread."""
     def __init__(self, folder):
         self.loop = asyncio.new_event_loop()
-        self.session = DesktopSession(folder)
+        self.error_log=ErrorLog(Path(folder)/'logs')
+        self.session = DesktopSession(folder,error_log=self.error_log)
+        emit_event(self.error_log,'desktop.started')
+        self.loop.set_exception_handler(lambda loop,context:emit_error(self.error_log,'desktop.async_failure',context.get('exception') or RuntimeError()))
         self.thread = threading.Thread(target=self.loop.run_forever, name='Crier desktop', daemon=False)
         self.thread.start()
 
@@ -575,6 +592,9 @@ class DesktopWorker:
             try:
                 result = getattr(self.session, method)(*args, **kwargs)
                 return await result if asyncio.iscoroutine(result) else result
+            except Exception as exc:
+                emit_error(self.error_log,'desktop.operation_failed',exc)
+                raise
             finally:
                 if tracked: self.session.oauth_jobs.discard(task)
         return asyncio.run_coroutine_threadsafe(invoke(), self.loop)

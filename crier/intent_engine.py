@@ -15,6 +15,7 @@ from .intent_protocol import IntentEvent
 from .trade_diagnostics import validate_quote, trade_report, export_trade_json, export_trade_csv
 from .lock import single_process, AlreadyRunningError
 from .entry_clock import EntryClock, ClockUncertain
+from .error_log import emit_error
 
 DEFAULTS = dict(enabled=False, mode='exact_limit', max_slippage_bps=100,
                 max_slippage_amount='0.02', max_age_seconds=10, max_quantity=1000, execution_policy=None)
@@ -26,7 +27,8 @@ BROKER_STATUSES = {'new', 'accepted', 'pending_new', 'accepted_for_bidding',
 
 class IntentEngine(PolicyJournal):
     policy_terminal = TERMINAL
-    def __init__(self, path, broker, clock=None, *, entry_clock=None, pairing_id=None, role=None, monotonic=None):
+    def __init__(self, path, broker, clock=None, *, entry_clock=None, pairing_id=None, role=None, monotonic=None, error_log=None):
+        self.error_log = error_log
         self.path, self.broker = str(path), broker
         self.pairing_id,self.role=pairing_id,role
         self.monotonic=monotonic or time.monotonic
@@ -208,6 +210,7 @@ class IntentEngine(PolicyJournal):
             for tid in ids:
                 try: results.append(self._step(tid))
                 except Exception as exc:
+                    emit_error(self.error_log,'intent.execution_failed',exc,trade_id=tid)
                     self._trace(tid,'execution_error',error_type=type(exc).__name__)
                     results.append({'trade_id':tid,'state':'reconcile_required','error':type(exc).__name__})
         finally: self.worker.release()
@@ -239,6 +242,7 @@ class IntentEngine(PolicyJournal):
             try:
                 if self._reconcile(order): reconciled.add(order['cid'])
             except Exception as exc:
+                emit_error(self.error_log,'intent.reconciliation_failed',exc,trade_id=tid,client_order_id=order['cid'])
                 failures.append(type(exc).__name__)
                 self._trace(tid,'broker_lookup_unusable',client_order_id=order['cid'],error_type=type(exc).__name__)
         orders=self._orders(tid); active=[o for o in orders if o['status'] not in TERMINAL]

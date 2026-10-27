@@ -6,6 +6,12 @@ source order submission, lookup and cancellation. `service.ts` composes remote
 Supabase Auth verification and service-role PostgREST ledger calls. The default
 provider is unavailable.
 
+`application.ts` and `functions/crier-webull-host/index.ts` now provide deployable
+assembly. `authorization.ts`, `custody.ts` and `browser_store.sql` compose browser
+launch/callback, encrypted token custody/refresh, local revocation and durable
+rolling-window request admission. Authorization availability remains separate
+from trading availability. See [activation instructions](../../docs/webull-authorization-deployment.md).
+
 `ledger.sql` is a candidate private/RLS-enabled schema with service-role-only
 RPCs. It is deliberately outside deployment migrations. Source client IDs are
 reserved before dispatch, and a repeated POST cannot repeat a broker submission.
@@ -25,20 +31,19 @@ holdings: use broker-enforced reduction or durable account-wide quantity
 reservations. Options sales must be sell-to-close.
 
 Existing `../webull-connect` coordinator/vault/RPC components provide
-authorization groundwork. They are **not yet composed into a concrete
-Provider**. The official signature and pinned Connect HTTPS transport are
+the composed authorization runtime. A concrete account/order **Provider remains
+unfinished**. The official signature and pinned Connect HTTPS transport are
 implemented in `transport.ts`, but generic personal Trading API resource schemas
 are not assumed to be Connect-compatible. The transport's resource-path
 constraint must be checked against issued integration details before binding
 resources. No guessed order endpoint, fake authorized account or synthetic
 success is enabled.
 
-The service factory expects the `/v1` path at the gateway root. A future Edge
-entry point must strip its exact deployment prefix before passing the request to
-the handler. It must also compose the official browser callback/cookie flow,
-apply per-customer request limits within Webull's limits, provision protected
-keys and register the approved callback. Those deployment/provider components
-are not supplied by this module.
+The application strips only known deployment prefixes and verifies protected
+native routes through Auth. Browser requests use single-use stored state and a
+Secure/HttpOnly cookie. Operator provisioning, schema installation, registered
+callbacks and real activation remain required. The included Edge entry point has
+no trading adapter; an environment flag alone cannot enable orders.
 
 Keep the service-role key, application signing/client secrets and vault keys
 server-side. Mobile requests carry only a verified Crier customer session.
@@ -51,11 +56,13 @@ environment for this route is always Alpaca paper.
 npm exec --yes --package deno@2.9.6 -- deno test supabase/webull-host
 npm exec --yes --package deno@2.9.6 -- deno lint supabase/webull-host
 npm ci --prefix supabase/tests
-node --test supabase/tests/webull-host-ledger.test.mjs
+node --test supabase/tests/webull-host-ledger.test.mjs supabase/tests/webull-host-browser.test.mjs supabase/tests/webull-host-authorization.test.mjs
 python -m pytest tests/test_webull_host_receiver.py -q
 ```
 
 Tests use synthetic provider/auth responses and intercepted Alpaca HTTP. SQL
 tests execute the candidate schema in PGlite. They do not establish real
-PostgreSQL concurrency, approved Webull compatibility, real sandbox execution or
-physical-device behavior. See [route status](../../docs/webull-iphone-host.md).
+PostgreSQL concurrency by themselves; separate PostgreSQL CI now checks
+simultaneous launches, admission and source reservation. Neither establishes
+approved Webull compatibility, real sandbox execution or physical-device
+behavior. See [route status](../../docs/webull-iphone-host.md).

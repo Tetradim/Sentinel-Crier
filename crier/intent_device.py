@@ -23,7 +23,8 @@ from .push_client import pages
 from .copy_reports import CopyReporter
 
 class IntentDevice:
-    def __init__(self,folder,broker=None,*,observe=None):
+    def __init__(self,folder,broker=None,*,observe=None,error_log=None):
+        self.error_log=error_log
         self.folder=Path(folder); self.folder.mkdir(parents=True,exist_ok=True)
         self.path=self.folder/'intent-device.sqlite3'; self.broker=broker
         self.pair=None; self.engine=None; self.message='Not paired'; self.lock=threading.RLock()
@@ -82,7 +83,7 @@ class IntentDevice:
     @property
     def fingerprint(self): return sha256(json.dumps(self.pair,sort_keys=True).encode()).hexdigest() if self.pair else ''
     def _engine(self):
-        self.engine=IntentEngine(self.folder/('intent-'+self.fingerprint+'.sqlite3'),self.broker,pairing_id=self.fingerprint,role=self.pair['role']) if self.broker and self.pair else None
+        self.engine=IntentEngine(self.folder/('intent-'+self.fingerprint+'.sqlite3'),self.broker,pairing_id=self.fingerprint,role=self.pair['role'],error_log=self.error_log) if self.broker and self.pair else None
     def configure(self,pair):
         if set(pair)!={'url','token','environment','role'}: raise ValueError('Paste a complete intent pairing')
         service_url(pair['url'], allow_local=True)

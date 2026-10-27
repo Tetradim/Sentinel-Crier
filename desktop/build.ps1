@@ -5,7 +5,13 @@ Push-Location $repo
 try {
     $serviceResource = (Join-Path $repo 'crier/connection-service.json') + ';crier'
     $practiceResource = (Join-Path $repo 'crier/customer-practice.json') + ';crier'
-    & $Python -m PyInstaller --noconfirm --clean --windowed --onedir --name SentinelCrier --paths $repo --add-data $serviceResource --add-data $practiceResource --hidden-import pystray._win32 --specpath build desktop/launch.py
+    $crierBuildCommit = (& git rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or $crierBuildCommit -notmatch '^[a-f0-9]{40}$') { throw 'Cannot identify source commit for support diagnostics' }
+    New-Item -ItemType Directory -Path (Join-Path $repo 'build') -Force | Out-Null
+    $crierBuildInfo = Join-Path $repo 'build/crier-build-info.json'
+    @{schema=1;version=(Get-Content -LiteralPath release.json -Raw | ConvertFrom-Json).version;commit=$crierBuildCommit} | ConvertTo-Json | Set-Content -LiteralPath $crierBuildInfo -Encoding UTF8
+    $crierBuildResource = $crierBuildInfo + ';crier'
+    & $Python -m PyInstaller --noconfirm --clean --windowed --onedir --name SentinelCrier --paths $repo --add-data $serviceResource --add-data $practiceResource --add-data $crierBuildResource --hidden-import pystray._win32 --specpath build desktop/launch.py
     if ($LASTEXITCODE -ne 0) { throw 'Desktop packaging failed' }
     & $Python desktop/third_party.py dist/SentinelCrier/third-party
     if ($LASTEXITCODE -ne 0) { throw 'Desktop dependency source/notice packaging failed' }

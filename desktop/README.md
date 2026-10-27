@@ -151,6 +151,8 @@ the same atomic destination write as the webhook, and survives reusing that webh
 
 ## Component health
 
+**Export support bundle** in Health saves bounded technical logs and public build metadata to a local ZIP, even while disconnected. The screen shows writer availability and dropped/suppressed records. Credential/configuration files and raw databases are excluded. See [unattended diagnostics and limits](../docs/unattended-diagnostics.md); remote outage notification and automatic trading restart are not enabled.
+
 Open **Health → Connections** for independent broker, fill-monitor, trade-sharing,
 trade-receiving, execution-worker and Discord status. Checks observe the operations
 Crier already performs; opening the panel sends no additional requests. Last successes
