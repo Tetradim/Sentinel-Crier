@@ -1,0 +1,13 @@
+# Webull tracked source inventory verification
+
+The implementation revision, successful workflows and test counts are recorded in [source evidence](source-evidence.json). This is candidate source acceptance, not activated Webull trading or account-wide short prevention.
+
+Before a new order is reserved, the private ledger locks its customer/environment/account/asset/symbol quantity row under READ COMMITTED. Verified recorded buy fills fund the scope. Working or unknown sells reserve their entire requested quantity; terminal sells consume actual fills. An authoritative cancellation releases only its unfilled remainder. A repeated client ID returns the existing reservation and cannot authorize a second dispatch. Denied reservations create no order row and reach the client as a conflict before broker submission.
+
+Contradictory terminal quantity/status, decreasing cumulative fills or changed broker identity block new orders in the affected scope. The stored receipt is preserved. Fresh conflicting evidence is checked before the revision compare-and-swap refusal, so a raced revision cannot silently discard the inventory block. A late stale lookup may therefore conservatively require reconciliation. No automatic reset or unsafe operator unblock command is supplied.
+
+Behavioral tests cover uncertain reservations, duplicate submissions, partial buys, rejected sells, partially filled cancellations, corrected terminal quantities, scope separation, READ COMMITTED enforcement and service-only permissions. An integrated gateway with the actual SQL/RPC ledger and a synthetic provider demonstrates one dispatch plus one conflict for competing sales. Real PostgreSQL 17 tests use independent connections, hold one transaction open and verify that a different sell ID waits on shared quantity before being refused. PGlite tests alone do not establish cross-worker serialization.
+
+This guard counts Crier-tracked inventory only. Existing holdings bought outside Crier are not imported, and external broker orders/transactions are not reserved. The approved provider must still validate actual holdings and external working orders and enforce sell-to-close/broker reduction or a reviewed account-wide alternative. Corrections cannot undo previously dispatched orders. Historical ledger rows must not be pruned without a separately reviewed accounting migration.
+
+The candidate schema remains outside deployment migrations and was not installed in a hosted project. No real broker orders, Discord messages, credentials or configuration changes were involved. Approved Webull resource binding, authoritative inventory recovery, service activation, sandbox interoperability, Apple signing and physical acceptance remain unfinished.

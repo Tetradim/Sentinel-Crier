@@ -27,6 +27,8 @@ The [Webull authorization service assembly](webull-authorization-deployment.md) 
 
 [October 27 Webull HTTP boundary verification](acceptance/2026-10-27/webull-response-bounds/README.md) additionally records bounded streaming replies, prompt body cancellation and enforced resource deadlines. This hardens the existing transports without enabling a trading adapter.
 
+[Tracked source inventory reservations](acceptance/2026-10-27/webull-owned-quantity/README.md) now serialize competing sales against recorded buy fills and retain uncertain reservations. Contradictory evidence blocks new orders in the exact scope, including after a revision race. Existing external holdings/orders, broker-side long-only enforcement and a reviewed authoritative recovery mechanism remain outside this guard and are still required for the approved trading adapter.
+
 ## Deferred future enhancements
 
 The [future-scope register](future-scope.md) expands D.1/D.2 with candidate controls, recurring stock-card ideas, accounting requirements and research/acceptance work. It does not activate those features.

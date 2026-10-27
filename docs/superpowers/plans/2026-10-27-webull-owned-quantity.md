@@ -8,5 +8,7 @@ This guard protects Crier-tracked inventory, not all external brokerage activity
 
 - [x] Add failing SQL and gateway/RPC regressions for overlapping sales, uncertain reservations, partial cancellation, exact scope, idempotency and terminal correction fencing.
 - [x] Implement private quantity-scope locks/fences, atomic reservation refusal and typed gateway handling; preserve service-only permissions.
-- [ ] Add real PostgreSQL concurrent competing-sale acceptance and run Deno, PGlite/integrated and CI checks.
-- [ ] Record source evidence, update remaining work and commit/push main without activating Webull trading.
+- [x] Add real PostgreSQL concurrent competing-sale acceptance and run Deno, PGlite/integrated and CI checks.
+- [x] Record source evidence, update remaining work and commit/push main without activating Webull trading.
+
+Completed source verification: [acceptance evidence](../../acceptance/2026-10-27/webull-owned-quantity/README.md). The provider-wide enforcement and recovery exclusions remain open.

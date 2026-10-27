@@ -1,0 +1,74 @@
+{
+  "source_commit": "c64598d148c70e6c38a25e5de56b2346f43d4766",
+  "collected_at_utc": "2026-10-27T11:40:41.737779+00:00",
+  "scope": "Candidate Crier-tracked source inventory reservations; not account-wide broker short prevention or activated trading",
+  "ci_runs": [
+    {
+      "conclusion": "success",
+      "headSha": "c64598d148c70e6c38a25e5de56b2346f43d4766",
+      "name": "Webull iPhone host contracts",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40497640033"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "c64598d148c70e6c38a25e5de56b2346f43d4766",
+      "name": "Supabase relay tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40497640202"
+    }
+  ],
+  "tests": {
+    "deno_webull_passed": 55,
+    "sql_integrated_passed": 15,
+    "intercepted_alpaca_receiver_passed": 3,
+    "real_postgres_17_concurrency": true,
+    "rls_and_rpc_permissions": true,
+    "lint_and_edge_typecheck": true
+  },
+  "red_evidence": {
+    "initial_quantity_sql_failures": 3,
+    "recognized_rpc_refusal_failure": 1,
+    "gateway_refusal_and_fence_failures": 2,
+    "blocked_scope_new_buy_failure": 1,
+    "raced_revision_terminal_correction_failure": 1
+  },
+  "runtime_hashes": [
+    {
+      "path": "supabase/webull-host/ledger.sql",
+      "sha256_git_blob": "dd42131e37baaaec9ce4c30e535a6b8749918990f2c5dd74fad8e3203086a6fa"
+    },
+    {
+      "path": "supabase/webull-host/gateway.ts",
+      "sha256_git_blob": "961f17ed83398dbc86bd88f7fa2d44653c8a0036f7b7ee46acb429a672cdf5f0"
+    },
+    {
+      "path": "supabase/webull-host/service.ts",
+      "sha256_git_blob": "a1f5af0dcd3f145963e7a387c5c236de3f370495fff1746d379416eeb32d2d63"
+    },
+    {
+      "path": "supabase/tests/webull-host-ledger.test.mjs",
+      "sha256_git_blob": "01dce1e47aab5095ba51f765762917d3e80517cd0d1b1579030f6aafcdbb6ed2"
+    },
+    {
+      "path": "supabase/tests/integration/webull_host_concurrency.sql",
+      "sha256_git_blob": "f716e6e9185f95ef1ca7bb418c4b831f01c19c9c1308f547aae6ee997c80c66f"
+    }
+  ],
+  "effects": {
+    "real_broker_orders": 0,
+    "discord_messages": 0,
+    "hosted_schema_installed": false,
+    "service_activated": false,
+    "credentials_or_configuration_changed": false
+  },
+  "limits": [
+    "Only Crier-recorded buy fills fund sales; external holdings are not imported.",
+    "External orders/activity still require broker-side or reviewed account-wide enforcement.",
+    "A contradictory or stale authoritative observation can conservatively block new orders; no automatic reset is supplied.",
+    "Historical order rows remain accounting evidence and must not be pruned without a reviewed migration.",
+    "A correction cannot undo an order that was already dispatched.",
+    "Webull resource adapter, inventory recovery, activation and real sandbox acceptance remain unfinished.",
+    "Apple signing and physical trials remain deferred."
+  ]
+}
