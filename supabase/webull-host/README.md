@@ -20,6 +20,19 @@ Cancellation claims remain blocked during dispatch; completed/expired attempts
 can be rearmed only by fresh authoritative working-order evidence, followed by
 an explicit cancel request.
 
+The ledger also serializes owned-quantity decisions by exact customer,
+environment, account, asset and symbol under READ COMMITTED. Only recorded buy
+fills fund sales. Working/unknown sells hold their full quantity; a verified
+terminal sale consumes its actual fills. Duplicate submissions retain their
+original reservation. Insufficient tracked inventory returns a conflict before
+dispatch. Contradictory terminal fills or broker identity block new orders in the
+scope for reconciliation. No automatic unblock/reset is supplied. Do not delete
+historical order rows: they are the accounting evidence for this guard.
+
+This covers Crier-tracked inventory only. It neither imports pre-existing holdings
+nor reserves external brokerage orders. Provider-side long-only enforcement and
+actual approved API integration remain required.
+
 ## Provider boundary still required
 
 An approved `Provider` implementation must bind the verified customer and source

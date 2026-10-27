@@ -52,10 +52,25 @@ export function createRpcLedger(rpc: Rpc): Ledger {
         }),
       );
       if (typeof result.created !== "boolean") invalid();
+      if (
+        result.created === false && result.row === null &&
+        (result.reason === "insufficient_tracked_long_position" ||
+          result.reason === "source_inventory_reconciliation_required") &&
+        Object.keys(result).length === 3
+      ) {
+        return { created: false, row: null, reason: result.reason };
+      }
       return {
         created: result.created,
         row: row(result.row, owner, order.client_order_id),
       };
+    },
+    async blockInventory(owner, id) {
+      const result = await rpc("webull_host_block_inventory", {
+        p_owner: owner,
+        p_id: id,
+      });
+      if (result !== true) invalid();
     },
     async read(owner, id) {
       const result = await rpc("webull_host_read", {

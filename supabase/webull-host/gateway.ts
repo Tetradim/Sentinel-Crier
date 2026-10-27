@@ -34,12 +34,20 @@ export interface StoredOrder {
   cancel_revision: number | null;
 }
 /** All claims and CAS updates must be atomic and durable across processes/restarts. */
+export type Reservation = { created: boolean; row: StoredOrder } | {
+  created: false;
+  row: null;
+  reason:
+    | "insufficient_tracked_long_position"
+    | "source_inventory_reconciliation_required";
+};
 export interface Ledger {
   reserve(
     owner: string,
     order: Order,
     fingerprint: string,
-  ): Promise<{ created: boolean; row: StoredOrder }>;
+  ): Promise<Reservation>;
+  blockInventory(owner: string, id: string): Promise<void>;
   read(owner: string, id: string): Promise<StoredOrder | null>;
   settleCancel(
     owner: string,
@@ -68,8 +76,10 @@ export interface Connection {
  * Must bind the vault token's owner/environment/identity to the selected account,
  * resolve exact stock/OCC contracts, validate responses, and never retry mutations.
  * submit MUST use SELL_TO_CLOSE for option sells and broker-enforced reduce-only
- * or atomic owned-quantity reservations for stock sells; snapshots alone cannot
- * prevent shorts. submit receives a frozen validated LIMIT/DAY intent; cancel must report observed
+ * or reviewed account-wide quantity reservations for stock sells; snapshots alone
+ * cannot prevent shorts. The Crier ledger's tracked-fill guard does not cover
+ * external orders/activity and does not replace that broker constraint.
+ * submit receives a frozen validated LIMIT/DAY intent; cancel must report observed
  * state, never convert acknowledgement into a cancellation or a fill. */
 export interface Provider {
   connection(
@@ -392,14 +402,20 @@ export function createGateway(
       (["filled", "canceled", "rejected"].includes(row.receipt.status) &&
         receipt.status !== row.receipt.status)
     ) {
-      if (action === "lookup") fail(503, "contradictory_broker_evidence");
+      if (action === "lookup") {
+        await ledger.blockInventory(row.owner, row.order.client_order_id);
+        fail(503, "contradictory_broker_evidence");
+      }
       return row.receipt;
     }
     if (
       row.receipt.broker_order_id && receipt.broker_order_id &&
       receipt.broker_order_id !== row.receipt.broker_order_id
     ) {
-      if (action === "lookup") fail(503, "contradictory_broker_evidence");
+      if (action === "lookup") {
+        await ledger.blockInventory(row.owner, row.order.client_order_id);
+        fail(503, "contradictory_broker_evidence");
+      }
       return row.receipt;
     }
     if (row.receipt.broker_order_id && !receipt.broker_order_id) {
@@ -498,6 +514,7 @@ export function createGateway(
           }
         }
         const claim = await ledger.reserve(owner, order, fingerprint);
+        if (!claim.row) fail(409, claim.reason);
         if (claim.row.fingerprint !== fingerprint) {
           fail(409, "client_order_id_conflict");
         }

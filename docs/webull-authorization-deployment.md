@@ -12,6 +12,7 @@ The deployable `crier-webull-host` Edge Function now composes browser authorizat
 - Both signed HTTP transports stream JSON into fixed-size owned buffers: 64 KiB for token replies and one MiB for resource replies. Oversized, malformed UTF-8 and non-success replies are refused; cancellation does not wait for stalled stream cleanup. Resource requests retain a ten-second deadline even when the caller supplies a cancellation signal. Neither transport retries a mutation or follows a redirect.
 - Private SQL provides rolling sixty-second admission, with separate customer HTTP and actual Webull request budgets. The application uses 60 HTTP and 80 Webull requests per customer per window. Future resource adapters must use the credential request boundary for every outbound call; do not hide multiple requests inside one admission.
 - The iPhone can distinguish authorization availability from trading availability. Its consent URL must be the exact configured gateway launch URL. An authorization-only service cannot enable source orders.
+- The candidate ledger now atomically reserves Crier-tracked buy fills for sales. Unknown/working sells retain their full reservation; verified cancellation releases only the unfilled remainder. Contradictory terminal fill/identity evidence blocks new orders in that exact inventory scope. No automatic unblock or import of existing external holdings is implemented. This guard does not replace broker-side long-only enforcement or account-wide external-order handling in the approved adapter.
 
 ## Operator prerequisites
 
@@ -75,4 +76,4 @@ Before customer handoff, test real sandbox consent, account identity, expiry/ref
 
 An uncertain exchange/refresh requires status inspection and fresh consent rather than repeating a rotating grant. Local removal clears Crier custody; it does not claim remote Webull grant revocation or cancel broker orders. Disabling deployment/configuration also does not constitute remote revocation or liquidation.
 
-The approved account/contract/order adapter, long-only source reservations, actual service activation and real Webull → Alpaca-paper acceptance remain unfinished. [Windows technical logging and support export](unattended-diagnostics.md) are implemented; independent remote outage notification remains separate work. See [route status](webull-iphone-host.md).
+The approved account/contract/order adapter, account-wide broker long-only enforcement, reviewed inventory recovery, actual service activation and real Webull → Alpaca-paper acceptance remain unfinished. [Windows technical logging and support export](unattended-diagnostics.md) are implemented; independent remote outage notification remains separate work. See [route status](webull-iphone-host.md).

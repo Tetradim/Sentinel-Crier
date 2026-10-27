@@ -23,7 +23,7 @@ const order: Order = {
   limit_price: "100.25",
   side: "buy",
 };
-function fixture() {
+function fixture(overrides?: Partial<Ledger>) {
   let cancelImpl: ((o: Order) => Promise<Receipt>) | undefined,
     lookupImpl: ((o: Order) => Promise<Receipt>) | undefined;
   const rows = new Map<string, StoredOrder>();
@@ -37,6 +37,7 @@ function fixture() {
   });
   const key = (owner: string, id: string) => owner + id;
   const ledger: Ledger = {
+    async blockInventory() {},
     async reserve(owner, o, fingerprint) {
       const k = key(owner, o.client_order_id), old = rows.get(k);
       if (old) return { created: false, row: structuredClone(old) };
@@ -88,6 +89,7 @@ function fixture() {
       return true;
     },
   };
+  Object.assign(ledger, overrides);
   const provider = {
     async connection(_owner: string, environment: "sandbox" | "production") {
       return {
@@ -192,6 +194,43 @@ Deno.test("requires verified customer bearer before any gateway capability", asy
     401,
   );
   eq(f.posts, 0);
+});
+Deno.test("inventory refusal is a conflict and never dispatches a source order", async () => {
+  for (
+    const reason of [
+      "insufficient_tracked_long_position",
+      "source_inventory_reconciliation_required",
+    ] as const
+  ) {
+    const f = fixture({
+      reserve: async () => ({ created: false, row: null, reason }),
+    });
+    const response = await f.request("/orders", { ...order, side: "sell" });
+    eq(response.status, 409);
+    eq((await response.json()).error, reason);
+    eq(f.posts, 0);
+  }
+});
+Deno.test("contradictory authoritative identity fences inventory before rejecting lookup", async () => {
+  const fences: string[] = [];
+  const f = fixture({
+    blockInventory: async (owner, id) => {
+      fences.push(owner + ":" + id);
+    },
+  });
+  await f.request("/orders", order);
+  f.setLookup(async () => ({
+    client_order_id: order.client_order_id,
+    broker_order_id: "changed-broker-id",
+    status: "accepted",
+    filled_quantity: 0,
+  }));
+  const response = await f.request(
+    "/orders/" + order.client_order_id +
+      "?environment=sandbox&account_id=account-a",
+  );
+  eq(response.status, 503);
+  eq(fences, ["owner-a:" + order.client_order_id]);
 });
 Deno.test("reserves concurrent duplicate submits once and rejects changed intent", async () => {
   const f = fixture();

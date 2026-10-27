@@ -62,3 +62,43 @@ Deno.test("unconfigured hosted service verifies customer then reports unavailabl
   eq((await response.json()).available, false);
   eq(calls, 1);
 });
+Deno.test("RPC ledger preserves only recognized inventory refusals", async () => {
+  for (
+    const reason of [
+      "insufficient_tracked_long_position",
+      "source_inventory_reconciliation_required",
+    ]
+  ) {
+    const denied = { created: false, row: null, reason };
+    const ledger = createRpcLedger(async () => denied);
+    eq(await ledger.reserve("owner", o, JSON.stringify(o)), denied);
+  }
+  for (
+    const denied of [
+      {
+        created: true,
+        row: null,
+        reason: "insufficient_tracked_long_position",
+      },
+      { created: false, row: null, reason: "unknown" },
+      {
+        created: false,
+        row: null,
+        reason: "insufficient_tracked_long_position",
+        extra: true,
+      },
+    ]
+  ) {
+    let rejected = false;
+    try {
+      await createRpcLedger(async () => denied).reserve(
+        "owner",
+        o,
+        JSON.stringify(o),
+      );
+    } catch {
+      rejected = true;
+    }
+    eq(rejected, true);
+  }
+});
