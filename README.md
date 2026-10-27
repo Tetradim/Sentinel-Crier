@@ -70,6 +70,7 @@ Windows now adds bounded background technical error logs and **Health → Export
 - [iPhone build](ios/BUILD.md) · [distribution checklist](docs/iphone-release-checklist.md)
 - [Android setup](android/README.md) · [release packages](docs/android-release.md)
 - [Windows setup](desktop/README.md) · [installer and updates](docs/windows-release.md)
+- [Windows 0.3.0 installer](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.3.0/SentinelCrier-0.3.0-Windows-Setup.exe) · [signed updates and recovery](docs/customer-updates.md)
 - [Customer setup, paper practice and recovery](docs/customer-acceptance.md)
 
 The current iPhone target has no ReplayKit extension and does not continuously observe other brokerage apps' screens. Submission-time mirroring applies to orders placed **inside Crier**. Supported fill monitoring can observe activity originating elsewhere later; it cannot infer that other app's original button press instantly. Mobile background execution remains constrained by the operating system.

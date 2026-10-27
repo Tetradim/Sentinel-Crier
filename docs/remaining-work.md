@@ -23,8 +23,10 @@ Windows 0.3.0 now includes signed release discovery/download, private recovery
 snapshots, profile/protocol/source compatibility checks and installer handoff after
 normal worker shutdown. Release authority is provisioned in protected local storage
 and encrypted Actions secrets. See [update operations](customer-updates.md).
-Customer distribution still requires explicit release publication, real publisher
-trust and physical acceptance; Apple distribution remains deferred.
+Windows 0.3.0 is [published](https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.3.0)
+with [accepted verification](acceptance/2026-10-27/customer-updates/README.md).
+Future releases still require deliberate publication; Microsoft publisher reputation
+and physical acceptance remain unverified. Apple distribution remains deferred.
 
 The [Webull authorization service assembly](webull-authorization-deployment.md) now composes browser consent, encrypted custody/refresh, local revocation, request admission and a deployable Edge entry point. The approved account/contract/order adapter and actual activation remain unfinished.
 

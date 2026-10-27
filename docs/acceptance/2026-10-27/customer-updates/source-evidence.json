@@ -1,0 +1,127 @@
+{
+  "source_commit": "ff01c87f1f08bbe9ed77d34940878780bf99350c",
+  "version": "0.3.0",
+  "collected_at_utc": "2026-10-27T23:35:16.873048+00:00",
+  "scope": "Windows update delivery, recovery and release publication; external/device prerequisites retained",
+  "ci_runs": [
+    {
+      "conclusion": "success",
+      "headSha": "ff01c87f1f08bbe9ed77d34940878780bf99350c",
+      "name": "Windows release",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40602100841"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "ff01c87f1f08bbe9ed77d34940878780bf99350c",
+      "name": "Windows desktop",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40602100195"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "ff01c87f1f08bbe9ed77d34940878780bf99350c",
+      "name": "Backend tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40602100104"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "42c245906ddf869b659b3c0731a1d61438b073de",
+      "name": "iOS build",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40600674007"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "42c245906ddf869b659b3c0731a1d61438b073de",
+      "name": "Android build and intent tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40600673994"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "ff01c87f1f08bbe9ed77d34940878780bf99350c",
+      "name": "Crier live-trading safety checks",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40602100225"
+    }
+  ],
+  "verification": {
+    "windows_python_passed": 1126,
+    "windows_python_skipped": 1,
+    "local_full_previous_42c2459_passed": 1125,
+    "focused_update_recovery_before_final_header_fix": 77,
+    "final_updater_tests_including_live_header_regression": 41,
+    "packaged_app_smoke": true,
+    "installer_lifecycle": true,
+    "signed_manifest_matches_bundled_public_key": true,
+    "live_public_discovery_download_hash": true,
+    "current_version_recognized": true
+  },
+  "publication": {
+    "url": "https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.3.0",
+    "tag": "v0.3.0",
+    "source_commit": "ff01c87f1f08bbe9ed77d34940878780bf99350c",
+    "installer_url": "https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.3.0/SentinelCrier-0.3.0-Windows-Setup.exe"
+  },
+  "signing": {
+    "ed25519_authority_provisioned": true,
+    "private_values_in_native_bundle": false,
+    "local_backup": "Windows-user DPAPI protected outside repository and customer profiles",
+    "github_encrypted_secret_names": [
+      "CRIER_UPDATE_PRIVATE_KEY_PEM",
+      "CRIER_UPDATE_KEY_PASSWORD",
+      "CRIER_UPDATE_KEY_ID"
+    ],
+    "microsoft_publisher_certificate_provisioned": false
+  },
+  "runtime_hashes": [
+    {
+      "path": "crier/updates.py",
+      "sha256_git_blob": "df171a4b9a98fbac5223d6bd93814b55c5406e10b5a5cbe85defdef8f9189794"
+    },
+    {
+      "path": "crier/update_install.py",
+      "sha256_git_blob": "9d999f13c5b1bbf3928fcd0c29df249bd50e7dbd9a32bf954c0bd0bc94907f99"
+    },
+    {
+      "path": "crier/update_recovery.py",
+      "sha256_git_blob": "9d72ca9a3a0c90d63c2dac9214a85c714cb7370d2df95960a15e95a4614184fb"
+    },
+    {
+      "path": "crier/desktop_updates.py",
+      "sha256_git_blob": "4e7dd3eef7850e73eb8bf58e804df190a37fcf83f4e8d399e0c6d544bbf62867"
+    },
+    {
+      "path": "crier/update-policy.json",
+      "sha256_git_blob": "6df3e320863f427f372ba96b6654048a88aa4f8425e57bafa02334ee90a2bf3d"
+    },
+    {
+      "path": "crier/desktop.py",
+      "sha256_git_blob": "168c50c07ed1631daa98f97514474e542bf370ac71743ac62ff23f9ae4eeb886"
+    },
+    {
+      "path": "desktop/update_release.py",
+      "sha256_git_blob": "3657857666bb30ca9a892169d4e4eeb839c08639f7bb92e3862cd855e71c3150"
+    },
+    {
+      "path": ".github/workflows/windows-release.yml",
+      "sha256_git_blob": "41836d3ef4970c739616e209158a2b19247e45ae323249f4c8db9f40bf72574c"
+    }
+  ],
+  "effects": {
+    "installer_executed_on_owner_pc": false,
+    "real_broker_orders": 0,
+    "discord_messages": 0,
+    "supabase_deployed": false,
+    "github_release_published": true
+  },
+  "remaining": [
+    "Physical/customer install and upgrade trials",
+    "Microsoft publisher certificate/reputation",
+    "Apple enrollment/signing/distribution",
+    "Android APK auto-updater is outside this Windows feature",
+    "Webull approved trading adapter, recovery and broker acceptance remain separate"
+  ]
+}

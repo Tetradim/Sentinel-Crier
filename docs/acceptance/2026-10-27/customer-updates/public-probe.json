@@ -1,0 +1,11 @@
+{
+  "public_release": "https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.3.0",
+  "status": "verified",
+  "available_from": "0.2.0",
+  "current_version": "0.3.0",
+  "current_status": "up_to_date",
+  "source_commit": "ff01c87f1f08bbe9ed77d34940878780bf99350c",
+  "installer_sha256": "500e8fc8e6d0cd97e1146ae9d3a6aa2085317932b99f4dc035441844004f8a5a",
+  "installer_bytes": 25049328,
+  "installer_executed": false
+}
