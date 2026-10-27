@@ -118,9 +118,15 @@ class ErrorLog:
             if len(self._cache) >= 256: self._cache.pop(next(iter(self._cache)))
             self._cache[key] = now
         finally: self._lock.release()
-        frames = traceback.extract_tb(error.__traceback__, limit=12) if isinstance(error, BaseException) else []
+        frames = []
+        if isinstance(error, BaseException):
+            # extract_tb also consults linecache/source files. Admission must
+            # remain CPU-only: walk code objects without formatting source text.
+            for frame, line in traceback.walk_tb(error.__traceback__):
+                frames.append(dict(file=Path(frame.f_code.co_filename).name, function=frame.f_code.co_name, line=line))
+                if len(frames) == 12: break
         return self._emit(dict(schema=1, timestamp=datetime.now(timezone.utc).isoformat(), level='ERROR', code=code,
-                               exception_type=kind, stack=[dict(file=Path(f.filename).name, function=f.name, line=f.lineno) for f in frames], **_context(context)))
+                               exception_type=kind, stack=frames, **_context(context)))
 
     def _write(self, record):
         message = json.dumps(record, separators=(',', ':'), ensure_ascii=True)

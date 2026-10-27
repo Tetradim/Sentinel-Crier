@@ -152,3 +152,22 @@ def test_public_build_metadata_is_bounded_and_never_copies_unknown_fields(tmp_pa
     assert read_build_info(path) is None
     path.write_text('x'*3000)
     assert read_build_info(path) is None
+
+
+def test_error_admission_does_not_read_source_files(tmp_path,monkeypatch):
+    import linecache
+    log=ErrorLog(tmp_path/'logs')
+    def forbidden(*args,**kwargs):raise AssertionError('Source-file IO on diagnostic admission')
+    try:
+        accepted=False
+        with monkeypatch.context() as patch:
+            patch.setattr(linecache,'getlines',forbidden)
+            patch.setattr(linecache,'checkcache',forbidden)
+            patch.setattr(linecache,'lazycache',forbidden)
+            try:
+                try:raise RuntimeError('private')
+                except RuntimeError as error:accepted=log.error('desktop.failure',error)
+            except AssertionError:pass
+        assert accepted
+        assert log.flush()
+    finally:log.close()
