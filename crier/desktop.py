@@ -1055,6 +1055,8 @@ def smoke_test(report=None):
                     build=read_build_info(Path(__file__).with_name('build-info.json'))
                     assert build and len(build['commit'])==40, 'Missing packaged public source revision'
                     assert manifest['build']==build
+                    records=[json.loads(line) for line in archive.read('diagnostics/error-log.jsonl').splitlines()]
+                    assert records and all(record.get('build_commit')==build['commit'] for record in records)
             root.update_idletasks()
         finally:
             worker.call('disconnect').result(timeout=5)

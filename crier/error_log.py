@@ -59,6 +59,9 @@ def _safe(record):
         if parsed.tzinfo is None: return None
     except ValueError: return None
     result = dict(schema=1, timestamp=stamp, code=code, level=record['level'], **_context(record))
+    commit, build_version = record.get('build_commit'), record.get('build_version')
+    if isinstance(commit,str) and re.fullmatch(r'[a-f0-9]{40}',commit): result['build_commit']=commit
+    if isinstance(build_version,str) and re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',build_version): result['build_version']=build_version
     error_type = record.get('exception_type')
     if isinstance(error_type, str) and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]{0,99}', error_type): result['exception_type'] = error_type
     stack = []
@@ -77,6 +80,7 @@ class ErrorLog:
     def __init__(self, folder, *, max_bytes=2*1024*1024, backups=3, capacity=512):
         if max_bytes < 256 or not 0 <= backups <= 8 or capacity < 1: raise ValueError('Invalid diagnostic bounds')
         self.folder = Path(folder).resolve(); self.max_bytes = max_bytes; self.backups = backups
+        self.build=read_build_info(Path(__file__).with_name('build-info.json'))
         self.queue = queue.Queue(maxsize=capacity); self.closing = threading.Event()
         self.failed = False; self.dropped = 0; self.suppressed = 0
         self._cache = {}; self._lock = threading.Lock(); self._thread = None; self._handler = None
@@ -95,6 +99,7 @@ class ErrorLog:
 
     def _emit(self, record):
         if self.failed or self.closing.is_set(): return False
+        if self.build: record=dict(record,build_commit=self.build['commit'],build_version=self.build['version'])
         value = _safe(record)
         if value is None: return False
         try: self.queue.put_nowait(value); return True
