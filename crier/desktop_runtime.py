@@ -1,5 +1,6 @@
 """Desktop lifecycle. All methods run on one background asyncio loop."""
 import asyncio
+from datetime import datetime, timezone
 from concurrent.futures import Future
 import json
 import hashlib
@@ -524,6 +525,25 @@ class DesktopSession:
         if not self.device or self.closing or self.auth_closing:
             raise ValueError('Connect first.')
         return await asyncio.to_thread(self.device.trade_report, trade_id, side)
+
+    async def connection_test(self):
+        from .customer_readiness import probe_connection
+        async with self.lifecycle:
+            if not self.broker or self.closing or self.auth_closing:
+                return {'ready':False,'rows':[{'component':'broker','status':'failed','code':'connect_first'}],
+                        'delivery':'not_tested'}
+            environment=self.environment
+            pair=dict(self.device.pair) if self.device and self.device.pair else None
+            task=asyncio.create_task(probe_connection(self.broker,environment,self.account,pair,
+                require_trading=self.mode != "alerts"))
+            try:
+                result=await asyncio.shield(task)
+                return {**result,'environment':environment,'checked_at':datetime.now(timezone.utc).isoformat()}
+            except asyncio.CancelledError:
+                # Cancel and drain the bounded reader before disconnect proceeds.
+                task.cancel()
+                await asyncio.gather(task,return_exceptions=True)
+                raise
 
     async def export_diagnostics(self, trade_id, format='json', side='buy'):
         if not self.device or self.closing or self.auth_closing:

@@ -56,6 +56,8 @@ Choose **Alerts only** on iPhone, **Alerts** on Android, or **Start here → Sen
 
 The read-only **Copy dashboard** shows instructions, device results, quantities, fill averages and remaining units. Actual host/receiver price comparisons, eligible P&L calculations, clock-adjusted delivery estimates and JSON/CSV exports require appropriate evidence. Missing prices or fees are not invented. See [execution diagnostics](docs/execution-diagnostics.md) and [dashboard calculation and privacy limits](docs/push-dashboard.md).
 
+Windows 0.3.1 adds a startup-only, dismissible update notice, persistent connection status, **Test my connection (read-only)** and a **Support** dialog with version details and sanitized export. The test checks account/environment and relay connectivity without orders or Discord posts; peer execution remains untested. Updates require explicit download and installation. See [updates and connection checks](docs/customer-updates.md).
+
 Windows now adds bounded background technical error logs and **Health → Export support bundle**, with safe stack locations, validated trade/order IDs and packaged build metadata. Secret messages and raw account databases are excluded. Writer failure and evidence loss are visible. See [unattended diagnostics](docs/unattended-diagnostics.md); this does not enable remote outage notification or automatic trading restart.
 
 ## Platforms and installation

@@ -1,9 +1,11 @@
 {
   "schema_version": 1,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "channel": "candidate",
-  "android_version_code": 3,
-  "previous_android_version_code": 2,
-  "ios": {"minimum_build_number": 1},
+  "android_version_code": 4,
+  "previous_android_version_code": 3,
+  "ios": {
+    "minimum_build_number": 1
+  },
   "physical_acceptance": "deferred_by_owner"
 }

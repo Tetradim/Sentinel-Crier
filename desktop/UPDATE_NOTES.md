@@ -1,9 +1,9 @@
-Crier 0.3.0 adds signed Windows update checks, verified installer downloads and private recovery snapshots. Health → Updates & recovery provides the update and backup actions.
+Crier 0.3.1 adds a dismissible Windows update notice checked once at startup, persistent connection status, a read-only connection test, and a Support dialog with version details and sanitized export. Manual update checking remains available. Startup checks never download or install updates, and hidden tray startup remains hidden.
 
-Supported update source: 0.2.0. Profile and trade protocol generation remain 1; this release does not introduce a database format migration. Existing order journals, pairing, credentials and settings are retained. Installer acceptance tests installation and an acceptance-only patch version; physical device acceptance is still deferred.
+Supported update source: 0.3.0. Profile and trade protocol generation remain 1; there is no database migration. Existing journals, pairing, credentials and settings are retained.
 
-Crier pauses/drains broker work and closes before installation. Existing broker orders remain active. Start Crier manually afterward, verify the selected account and unresolved orders, then reconnect deliberately. Trading never resumes automatically.
+Test my connection verifies the selected Alpaca account/environment and authenticated relay connectivity without orders or Discord messages. It does not prove peer trade execution or Discord delivery. Account reads and relay responses have bounded deadlines and response sizes.
 
-Recovery: preserve the original profile and the protected Recovery snapshot. Restore only to a new private folder for inspection. Use the matching or newer application; unsupported profile generations are refused. Do not downgrade or delete order journals to bypass a compatibility check.
+Crier drains broker work and closes before installation. Existing broker orders remain active. Start manually afterward, verify the account and unresolved orders, and reconnect deliberately. Preserve the original profile and protected Recovery snapshot; restore only into a new private folder for inspection. Unsupported profile generations and downgrades are refused.
 
-Webull Connect trading remains unactivated: the approved resource adapter, inventory recovery, operator activation and real sandbox tests are unfinished. Apple signing and physical cross-network acceptance remain deferred. Optional Windows publisher signing is separate from the Ed25519 update-manifest signature.
+Webull Connect activation, Apple signing, physical cross-network acceptance and optional Microsoft publisher signing remain separate prerequisites.

@@ -17,7 +17,7 @@ from .desktop_practice import PracticeWindow, readonly_traversal
 
 
 class DesktopApp:
-    def __init__(self, root, worker, *, presence=None, startup=False):
+    def __init__(self, root, worker, *, presence=None, startup=False, check_updates=True):
         self.root, self.worker = root, worker
         self.practice_window = None
         self.presence = presence
@@ -29,6 +29,9 @@ class DesktopApp:
         self.provider_available = set()
         self.closing = False
         self.latest = {}
+        self.support_window=None
+        from .startup_notice import StartupNotice
+        self.startup_notice=StartupNotice()
         self.update_requested = False
         self.update_pool = ThreadPoolExecutor(max_workers=1,thread_name_prefix='Crier updates')
         self.update_future = None
@@ -48,7 +51,17 @@ class DesktopApp:
         ttk.Label(outer, text='Sentinel Crier', style='Title.TLabel').pack(anchor='w')
         ttk.Label(outer, text='Fill alerts, trade sharing and following — choose your setup.', style='Subtitle.TLabel').pack(anchor='w', pady=(0,12))
         self.summary = tk.StringVar(value='Disconnected • Choose a setup to begin')
+        self.connection_title=tk.StringVar(value='Disconnected')
+        self.connection_detail=tk.StringVar(value='Connect an account and pairing to begin.')
+        ttk.Label(outer,textvariable=self.connection_title,font=('Segoe UI',14,'bold')).pack(anchor='w')
+        ttk.Label(outer,textvariable=self.connection_detail,wraplength=1000).pack(anchor='w',pady=(0,4))
         ttk.Label(outer, textvariable=self.summary, wraplength=1000).pack(anchor='w', pady=(0,12))
+        ttk.Button(outer,text='Support',command=self.open_support).pack(anchor='e',pady=(0,4))
+        self.update_banner=ttk.Frame(outer,padding=8)
+        self.startup_update_text=tk.StringVar(value='')
+        ttk.Label(self.update_banner,textvariable=self.startup_update_text).pack(side='left')
+        ttk.Button(self.update_banner,text='Review update',command=self.review_startup_update).pack(side='left',padx=8)
+        ttk.Button(self.update_banner,text='Dismiss',command=self.dismiss_startup_update).pack(side='left')
         tabs = self.tabs = ttk.Notebook(outer)
         tabs.pack(fill='both', expand=True)
         start = ttk.Frame(tabs, padding=14)
@@ -71,6 +84,7 @@ class DesktopApp:
         tabs.add(delivery, text='Discord & receivers')
         self.build_delivery(delivery)
         diagnostics = ttk.Frame(tabs, padding=14)
+        self.health_tab=diagnostics
         tabs.add(diagnostics, text='Health')
         self.setup_tab = setup
         tabs.select(start)
@@ -85,11 +99,13 @@ class DesktopApp:
         self._pricing(pricing)
         self._activity(self.activity)
         health_sections=ttk.Notebook(diagnostics); health_sections.pack(fill='both',expand=True)
+        self.health_sections=health_sections
         connection_health=ttk.Frame(health_sections,padding=8)
         timeline=ttk.Frame(health_sections,padding=8)
         health_sections.add(connection_health,text='Connections')
         health_sections.add(timeline,text='Trade timeline')
         updates=ttk.Frame(health_sections,padding=8)
+        self.updates_tab=updates
         health_sections.add(updates,text='Updates & recovery')
         self.build_updates(updates)
         self._health(connection_health)
@@ -109,6 +125,8 @@ class DesktopApp:
                 root.withdraw()
         root.after(100, self.refresh)
         root.after(250, self.provider_inbox)
+        if check_updates and self.updater is not None:
+            root.after(750,self.check_startup_updates)
 
     def _start(self, frame):
         ttk.Label(frame, text='What would you like to do?', font=('Segoe UI', 16, 'bold')).pack(anchor='w', pady=12)
@@ -117,6 +135,41 @@ class DesktopApp:
             ttk.Button(frame, text=label, command=lambda p=purpose: self.choose_purpose(p)).pack(anchor='w', pady=8)
         ttk.Label(frame, text='Other tools and existing recovery evidence remain available in the tabs above.', wraplength=700).pack(anchor='w', pady=12)
         ttk.Button(frame,text='Optional paper practice / support (F1)',command=self.open_practice).pack(anchor='w',pady=4)
+        ttk.Button(frame,text='Test my connection (read-only)',command=self.test_connection).pack(anchor='w',pady=5)
+
+    def test_connection(self):
+        current=getattr(self,'connection_test_job',None)
+        if self.closing or (current is not None and not current.done()):return
+        self.notice.set('Checking selected account and relay access; no test order is submitted…')
+        self.connection_test_job=self.worker.call('connection_test')
+        self.pending.append((self.connection_test_job,self.show_connection_test))
+
+    def show_connection_test(self,result):
+        descriptions={'connect_first':'Connect your selected account first.','account_verified':'Selected broker account and environment verified.',
+                      'account_verification_failed':'Broker account verification failed; check account, credentials and environment.',
+                      'pairing_not_configured':'No trade pairing configured.','relay_verified':'Authenticated relay message response verified.',
+                      'relay_timeout':'Relay did not respond in time.','relay_verification_failed':'Relay/pairing could not be verified.'}
+        lines=[str(result.get('environment','')).upper()+' • Read-only connection checks']
+        for row in result.get('rows',[]):
+            lines.append(row['component'].title()+': '+descriptions.get(row['code'],'Connection could not be verified.'))
+        lines.append('No order or Discord message was sent. Trade/peer delivery was not exercised.')
+        messagebox.showinfo('Connection test', '\n\n'.join(lines),parent=self.root)
+
+    def open_support(self):
+        if self.closing:return
+        if self.support_window is not None and self.support_window.winfo_exists():
+            self.support_window.deiconify();self.support_window.lift();return
+        from .customer_support import support_details
+        details=support_details()
+        window=self.support_window=tk.Toplevel(self.root)
+        window.title('Crier support');window.transient(self.root)
+        frame=ttk.Frame(window,padding=18);frame.pack(fill='both',expand=True)
+        ttk.Label(frame,text='Crier '+details['version'],font=('Segoe UI',16,'bold')).pack(anchor='w')
+        ttk.Label(frame,text='Platform: '+details['platform']+'\nSource: '+details['source'],wraplength=550).pack(anchor='w',pady=10)
+        ttk.Label(frame,text='Export a sanitized technical support bundle, review it, then share it through the support page. Do not post API keys, pairing invitations or raw account databases. Nothing is uploaded automatically.',wraplength=550).pack(anchor='w',pady=8)
+        ttk.Button(frame,text='Export support bundle…',command=self.save_support_bundle).pack(anchor='w',pady=5)
+        ttk.Button(frame,text='Open support page',command=lambda:webbrowser.open(details['url'])).pack(anchor='w',pady=5)
+        ttk.Button(frame,text='Close',command=window.destroy).pack(anchor='e',pady=8)
 
     def open_practice(self):
         try:
@@ -847,6 +900,10 @@ class DesktopApp:
 
     def render(self, state):
         self.latest = state
+        from .customer_readiness import connection_summary
+        readiness=connection_summary(state)
+        self.connection_title.set(readiness['title'])
+        self.connection_detail.set(readiness['detail']+' '+readiness['action'])
         from .copy_dashboard import dashboard_text
         try: copy_text=dashboard_text(state.get('dashboard') if state.get('connected') else None)
         except (ValueError,KeyError,TypeError): copy_text='Dashboard evidence is unavailable. Trading controls are independent.'
@@ -1017,14 +1074,18 @@ class DesktopApp:
         ttk.Button(frame,text='Restore backup to a new folder…',command=self.restore_recovery).pack(anchor='w',pady=5)
         ttk.Label(frame,text='Backups contain private account and pairing data. Restoration never overwrites your active profile or reconnects a broker. Keep the original profile until recovery is verified.',wraplength=780).pack(anchor='w',pady=12)
 
-    def run_update_job(self,operation,callback):
+    def run_update_job(self,operation,callback,*,quiet=False):
+        if self.closing:return
         if self.update_future is not None and not self.update_future.done():return
         self.update_button.configure(state='disabled')
         self.update_future=self.update_pool.submit(operation)
         def finish():
             if not self.update_future.done():self.root.after(100,finish);return
-            try:callback(self.update_future.result())
-            except Exception:self.update_notice.set('Update/recovery failed safely. No installer was started; keep the original profile.')
+            try:
+                result=self.update_future.result()
+                if not self.closing:callback(result)
+            except Exception:
+                if not quiet and not self.closing:self.update_notice.set('Update/recovery failed safely. No installer was started; keep the original profile.')
             self.update_button.configure(state='normal')
         self.root.after(100,finish)
 
@@ -1035,15 +1096,34 @@ class DesktopApp:
             self.close(quit=True,update=True)
             return
         self.update_notice.set('Verifying release…' if status!='available' else 'Downloading and verifying installer…')
-        def display(result):
-            messages={'unconfigured':'Update signing is not activated for this build. Use the reviewed manual installer until the publisher provisions release trust.',
-                      'up_to_date':'This version is current.','available':'A signed compatible update is available.',
-                      'no_release':'No signed public update has been published yet.',
-                      'ready':'Installer verified. Install update will create a private backup and close Crier.'}
-            self.update_notice.set(messages.get(result['status'],'Check the release information.'))
-            self.update_notes.set(result.get('notes',''))
-            self.update_button.configure(text={'available':'Download verified update','ready':'Install update'}.get(result['status'],'Check for updates'))
-        self.run_update_job(self.updater.download if status=='available' else self.updater.check,display)
+        self.run_update_job(self.updater.download if status=='available' else self.updater.check,self.render_update_result)
+
+    def render_update_result(self,result):
+        messages={'unconfigured':'Update signing is not activated for this build. Use the reviewed manual installer until the publisher provisions release trust.',
+                  'up_to_date':'This version is current.','available':'A signed compatible update is available.',
+                  'no_release':'No signed public update has been published yet.',
+                  'ready':'Installer verified. Install update will create a private backup and close Crier.'}
+        self.update_notice.set(messages.get(result['status'],'Check the release information.'))
+        self.update_notes.set(result.get('notes',''))
+        self.update_button.configure(text={'available':'Download verified update','ready':'Install update'}.get(result['status'],'Check for updates'))
+
+    def check_startup_updates(self):
+        if self.closing or self.updater is None or not self.startup_notice.begin():return
+        if self.update_future is not None and not self.update_future.done():
+            self.startup_notice.complete(None);return
+        def completed(result):
+            notice=self.startup_notice.complete(result)
+            if notice is None:return
+            self.render_update_result(result)
+            self.startup_update_text.set('Crier '+notice['version']+' is available.')
+            self.update_banner.pack(fill='x',before=self.tabs,pady=(0,8))
+        self.run_update_job(self.updater.check,completed,quiet=True)
+
+    def dismiss_startup_update(self):
+        self.startup_notice.dismiss();self.update_banner.pack_forget()
+
+    def review_startup_update(self):
+        self.tabs.select(self.health_tab);self.health_sections.select(self.updates_tab)
 
     def verify_recovery(self):
         path=filedialog.askdirectory(parent=self.root,title='Choose a Crier recovery backup')
@@ -1081,6 +1161,7 @@ class DesktopApp:
             return
         self.update_requested=update
         self.closing = True
+        if hasattr(self,'startup_notice'):self.startup_notice.close()
         if not update and getattr(self,'updater',None):
             cancel=getattr(self.updater,'cancel',None)
             if cancel:cancel()
@@ -1134,7 +1215,7 @@ def smoke_test(report=None):
         worker = DesktopWorker(path)
         try:
             from .desktop_presence import Presence
-            app = DesktopApp(root, worker, presence=Presence(path))
+            app = DesktopApp(root, worker, presence=Presence(path),check_updates=False)
             state = worker.call('status').result(timeout=5)
             assert not state['connected']
             app.render(state)

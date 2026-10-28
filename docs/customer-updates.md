@@ -1,5 +1,7 @@
 # Windows updates and recovery
 
+Windows 0.3.1 checks for updates once at startup and shows a dismissible notice when a signed compatible release is available. It does not check periodically, download or install automatically, or open a hidden tray window. Dismissing the notice leaves manual checking available. Users on 0.3.0 must check manually once to obtain this feature.
+
 Open **Health → Updates & recovery**. Choose **Check for updates**, **Download verified update**, then **Install update**. Review the release notes before installation. Cancel download is available; checks never interrupt brokerage execution.
 
 Install update disconnects and drains Crier's broker workers, closes their stores, creates and verifies a private recovery snapshot, then closes Crier. A separate Windows helper waits for the process to exit, verifies the signed manifest's expected SHA256 again and opens the normal installer. It holds file/directory handles through launch to prevent replacement. The installer preserves the active profile. Start Crier manually afterward; confirm the account and unresolved orders before reconnecting. Existing broker orders remain active throughout. Trading never resumes automatically.
@@ -43,3 +45,11 @@ The workflow builds/tests packages and installer lifecycle, signs `SentinelCrier
 Initial release/signing uses `CRIER_UPDATE_PRIVATE_KEY_PEM`, `CRIER_UPDATE_KEY_PASSWORD`, `CRIER_UPDATE_KEY_ID`. Windows Authenticode uses the separately optional existing PFX workflow configuration. None of those private values are packaged into Crier. [Windows 0.3.0](https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.3.0) was published after the acceptance workflow passed, and its public discovery/signature/download/hash path was verified without running the installer on the owner's PC.
 
 Apple enrollment/signing, TestFlight/App Store distribution, real publisher trust, physical install/update trials and real broker acceptance remain separate prerequisites. This Windows feature does not add an Android APK auto-updater or complete iPhone distribution.
+
+## Connection checks and support
+
+The persistent connection status distinguishes Hosting, Following, Disconnected, reconnecting and Needs reconciliation. A connected relay does not guarantee broker execution or profit.
+
+Use **Test my connection (read-only)** after setup. It verifies the selected Alpaca account and environment and, when paired, an authenticated relay response. Alerts-only accounts do not require trading permission. The test sends no order or Discord message and does not exercise peer execution. Failed checks show separate account and relay results; they do not enable trading or change synchronization cursors.
+
+**Support** shows the installed version, source and platform and offers the existing sanitized support bundle export. Inspect the bundle before sharing; opening the support page or exporting never uploads it automatically. Private recovery snapshots must not be attached to public issues.

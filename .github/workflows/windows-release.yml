@@ -9,11 +9,11 @@ on:
       minimum_source:
         description: 'Oldest tested source version for this release'
         type: string
-        default: '0.2.0'
+        default: '0.3.0'
       maximum_source:
         description: 'Newest tested source version for this release'
         type: string
-        default: '0.2.0'
+        default: '0.3.0'
 permissions:
   contents: read
 jobs:
