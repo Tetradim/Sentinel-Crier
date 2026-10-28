@@ -1,0 +1,20 @@
+{
+  "source_commit": "49d77cc94bce82eedf4d4f0bad074026a0cd2261",
+  "version": "0.3.1",
+  "python_tests": {
+    "passed": 1188,
+    "skipped": 1
+  },
+  "focused_tests": 62,
+  "smoke": {
+    "ok": true,
+    "network_calls": 0,
+    "ui": "Tk",
+    "credentials": "round-trip passed",
+    "tray": "not_requested",
+    "support_bundle": "validated"
+  },
+  "real_broker_orders_sent": false,
+  "discord_messages_sent": false,
+  "physical_acceptance": "deferred"
+}

@@ -53,3 +53,5 @@ The persistent connection status distinguishes Hosting, Following, Disconnected,
 Use **Test my connection (read-only)** after setup. It verifies the selected Alpaca account and environment and, when paired, an authenticated relay response. Alerts-only accounts do not require trading permission. The test sends no order or Discord message and does not exercise peer execution. Failed checks show separate account and relay results; they do not enable trading or change synchronization cursors.
 
 **Support** shows the installed version, source and platform and offers the existing sanitized support bundle export. Inspect the bundle before sharing; opening the support page or exporting never uploads it automatically. Private recovery snapshots must not be attached to public issues.
+
+[Windows 0.3.1](https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.3.1) passed signed release and installer lifecycle acceptance; see [customer readiness evidence](acceptance/2026-10-27/customer-readiness/README.md).

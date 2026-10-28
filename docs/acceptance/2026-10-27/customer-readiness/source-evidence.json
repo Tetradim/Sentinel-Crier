@@ -1,0 +1,64 @@
+{
+  "source_commit": "49d77cc94bce82eedf4d4f0bad074026a0cd2261",
+  "version": "0.3.1",
+  "ci_runs": [
+    {
+      "conclusion": "success",
+      "headSha": "49d77cc94bce82eedf4d4f0bad074026a0cd2261",
+      "name": "Windows release",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40630558959"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "49d77cc94bce82eedf4d4f0bad074026a0cd2261",
+      "name": "Android build and intent tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40630548841"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "49d77cc94bce82eedf4d4f0bad074026a0cd2261",
+      "name": "Windows desktop",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40630548795"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "49d77cc94bce82eedf4d4f0bad074026a0cd2261",
+      "name": "iOS build",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40630548786"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "49d77cc94bce82eedf4d4f0bad074026a0cd2261",
+      "name": "Backend tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40630548781"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "49d77cc94bce82eedf4d4f0bad074026a0cd2261",
+      "name": "Customer acceptance",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40630548754"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "49d77cc94bce82eedf4d4f0bad074026a0cd2261",
+      "name": "Provider connection preparation",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40630548751"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "49d77cc94bce82eedf4d4f0bad074026a0cd2261",
+      "name": "Crier live-trading safety checks",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40630548745"
+    }
+  ],
+  "customer_acceptance_initial_attempt": "Android emulator RootViewWithoutFocusException in optionalGuidesDoNotChoosePurposeOrStartWorkers; unchanged failed-job rerun passed all Android UI tests. iOS and Windows customer acceptance passed initially.",
+  "customer_acceptance_attempt": 2
+}
