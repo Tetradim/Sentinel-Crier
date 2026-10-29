@@ -10,7 +10,7 @@ import threading
 from uuid import uuid4
 
 from .desktop_runtime import DesktopSession
-from .error_log import ErrorLog
+from .error_log import ErrorLog, emit_event
 
 
 class DesktopConnections:
@@ -86,6 +86,7 @@ class DesktopConnections:
                     return account
                 setattr(session, name, checked)
             self.sessions[identity] = session
+            emit_event(session.error_log, "desktop.connection_loaded")
         return self.sessions[identity]
 
     def import_journal_claims(self, identity, folder):
@@ -125,7 +126,7 @@ class DesktopConnections:
     def add(self, label):
         label = str(label).strip()
         if not label or len(label) > 80:
-            raise ValueError('Enter a connection name of 1â€“80 characters.')
+            raise ValueError('Enter a connection name of 1Ã¢â‚¬â€œ80 characters.')
         with self.guard:
             if self.stopping:
                 raise ValueError('Connections are shutting down.')

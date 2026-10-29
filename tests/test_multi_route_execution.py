@@ -100,3 +100,18 @@ def test_credentialless_retained_history_cannot_be_rebound_or_poison_another_acc
         finally:
             for session in manager.sessions.values(): await session.shutdown()
     asyncio.run(run())
+
+
+def test_each_route_support_bundle_has_startup_evidence(tmp_path):
+    import zipfile
+    from crier.desktop_runtime import DesktopWorker
+    worker=DesktopWorker(tmp_path)
+    try:
+        for route in (worker.connections.selected,worker.connections.add("Second")):
+            worker.connections.select(route)
+            target=tmp_path/(route+".zip")
+            worker.call("support_bundle",target).result(timeout=5)
+            with zipfile.ZipFile(target) as archive:
+                records=[json.loads(line) for line in archive.read("diagnostics/error-log.jsonl").splitlines()]
+            assert records, "Each route needs its own build-tagged startup evidence"
+    finally: worker.close()
