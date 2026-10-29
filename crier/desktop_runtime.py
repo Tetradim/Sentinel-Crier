@@ -597,30 +597,33 @@ class DesktopWorker:
     """Bridge Tk to the asyncio loop without executing UI calls off the Tk thread."""
     def __init__(self, folder):
         self.loop = asyncio.new_event_loop()
-        self.error_log=ErrorLog(Path(folder)/'logs')
-        self.session = DesktopSession(folder,error_log=self.error_log)
+        self.error_log=ErrorLog(Path(folder)/'runtime-logs')
+        from .desktop_connections import DesktopConnections
+        self.connections = DesktopConnections(folder)
         emit_event(self.error_log,'desktop.started')
         self.loop.set_exception_handler(lambda loop,context:emit_error(self.error_log,'desktop.async_failure',context.get('exception') or RuntimeError()))
         self.thread = threading.Thread(target=self.loop.run_forever, name='Crier desktop', daemon=False)
         self.thread.start()
 
+    @property
+    def session(self):
+        return self.connections.session
+
     def call(self, method, *args, **kwargs) -> Future:
+        identity = self.connections.selected
         async def invoke():
-            tracked=method.startswith('provider_') or method in ('customer_login','customer_refresh')
-            task=asyncio.current_task()
-            if tracked: self.session.oauth_jobs.add(task)
             try:
-                result = getattr(self.session, method)(*args, **kwargs)
-                return await result if asyncio.iscoroutine(result) else result
+                return await self.connections.invoke(identity, method, *args, **kwargs)
             except Exception as exc:
-                emit_error(self.error_log,'desktop.operation_failed',exc)
+                emit_error(self.connections.sessions[identity].error_log, 'desktop.operation_failed', exc)
                 raise
-            finally:
-                if tracked: self.session.oauth_jobs.discard(task)
-        return asyncio.run_coroutine_threadsafe(invoke(), self.loop)
+        future = asyncio.run_coroutine_threadsafe(invoke(), self.loop)
+        future.route_id = identity
+        return future
 
     def close(self):
         self.call('shutdown').result()
+        self.error_log.close()
         self.loop.call_soon_threadsafe(self.loop.stop)
         self.thread.join()
         self.loop.run_until_complete(self.loop.shutdown_default_executor())

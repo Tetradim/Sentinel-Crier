@@ -20,6 +20,7 @@ targets:
       - path: SentinelCrier/AlpacaREST.swift
       - path: SentinelCrier/AlpacaAlertFormatter.swift
       - path: SentinelCrier/AlpacaJournal.swift
+      - path: SentinelCrier/ConnectionRoutes.swift
       - path: SentinelCrier/AlpacaWorkspace.swift
       - path: SentinelCrier/GuidedSetup.swift
       - path: SentinelCrier/PracticeGuide.swift
@@ -78,6 +79,7 @@ targets:
     type: bundle.unit-test
     platform: iOS
     sources:
+      - path: SentinelCrier/ConnectionRoutesTests.swift
       - path: SentinelCrier/AlpacaTests.swift
       - path: SentinelCrier/GuidedSetupTests.swift
       - path: SentinelCrier/PracticeGuideTests.swift

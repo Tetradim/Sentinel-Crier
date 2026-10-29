@@ -1,13 +1,13 @@
 # Remaining work after automated customer acceptance
 
-The approved customer-ease phases E–I, live-policy phase J, reconciliation phase K and push/dashboard phase L have automated source verification. This is acceptance of the implemented source scope, with exclusions recorded in each phase report.
+The approved customer-ease phases Eâ€“I, live-policy phase J, reconciliation phase K and push/dashboard phase L have automated source verification. This is acceptance of the implemented source scope, with exclusions recorded in each phase report.
 
 ## Owner/provider/device work still unpassed
 
 Phase L's [completed plan](superpowers/plans/2026-10-26-push-dashboard.md) and [accepted evidence](acceptance/2026-10-26/push-dashboard/source-evidence.json) record push delivery, the read-only dashboard, hosted deployment and an isolated synthetic probe. See the [usage guide](push-dashboard.md). The following external work remains unpassed:
 
 - Webull Connect approval, issued integration details and real authorized integration testing.
-- The [candidate Webull iPhone → Alpaca-paper Windows route](webull-iphone-host.md) now has native host and authenticated gateway/ledger code. Its [authorization runtime and deployable service](webull-authorization-deployment.md) are now composed. It still needs the approved account/contract/order resource adapter, operator activation and real sandbox acceptance. This is a specific single-host route, not completion of deferred D.1.
+- The [candidate Webull iPhone â†’ Alpaca-paper Windows route](webull-iphone-host.md) now has native host and authenticated gateway/ledger code. Its [authorization runtime and deployable service](webull-authorization-deployment.md) are now composed. It still needs the approved account/contract/order resource adapter, operator activation and real sandbox acceptance. This is a specific single-host route, not completion of deferred D.1.
 - Provider app registrations/credentials, real OAuth consent and activation/deployment of the separately prepared provider service.
 - Apple enrollment/signing and an installable signed iPhone/TestFlight candidate. An unsigned archive is not an installation package.
 - Real broker/Discord paper receipts and cross-network Host/Follow trials with independent broker-UI reconciliation.
@@ -42,10 +42,10 @@ The [Webull authorization service assembly](webull-authorization-deployment.md) 
 
 The [future-scope register](future-scope.md) expands D.1/D.2 with candidate controls, recurring stock-card ideas, accounting requirements and research/acceptance work. It does not activate those features.
 
-- **D.1 — Multiple Hosts, Connections, and Cross-Broker Copying:** one app with multiple simultaneous host subscriptions and brokerage sessions; explicit host-to-account routing, including Dave on Alpaca to Carol on Webull, and different hosts assigned to Tradier, Webull and Alpaca accounts. Preserve per-host ownership, shared-account reservations, scoped idempotency, account/environment isolation and loop prevention. Research covers direct OAuth/API connections, broker stream limits and optional middleware. [Research, dependencies and future work](deferred/multi-host-cross-broker.md). Deferred by owner request; not implemented or activated, and outside the completed E–L phase scopes.
-- **D.2 — Independent Trading Policies and Stock/Option Allocation:** requested inventory of optional independent entry/exit authority, Echo-style coordinated trailing/stops/profit stages, cancel/reconcile/market fallback, and separate stock/options funding pools. [Sentinel source inventory and candidate controls](sentinel-feature-inventory.md). Proposals only; no independent strategy or fallback was enabled by the inventory. D.1 remains separately deferred.
+- **D.1 â€” Multiple Hosts, Connections, and Cross-Broker Copying:** one app with multiple simultaneous host subscriptions and brokerage sessions; explicit host-to-account routing, including Dave on Alpaca to Carol on Webull, and different hosts assigned to Tradier, Webull and Alpaca accounts. Preserve per-host ownership, shared-account reservations, scoped idempotency, account/environment isolation and loop prevention. Research covers direct OAuth/API connections, broker stream limits and optional middleware. [Research, dependencies and future work](deferred/multi-host-cross-broker.md). Deferred by owner request; not implemented or activated, and outside the completed Eâ€“L phase scopes.
+- **D.2 â€” Independent Trading Policies and Stock/Option Allocation:** requested inventory of optional independent entry/exit authority, Echo-style coordinated trailing/stops/profit stages, cancel/reconcile/market fallback, and separate stock/options funding pools. [Sentinel source inventory and candidate controls](sentinel-feature-inventory.md). Proposals only; no independent strategy or fallback was enabled by the inventory. D.1 remains separately deferred.
 
-## Reviewed reporting defects — repaired
+## Reviewed reporting defects â€” repaired
 
 The [October 26 review](reviews/2026-10-26-copy-trading-comparison.md) identified **R.1** blocking telemetry database waits, **R.2** incorrect skipped-entry reporting and **R.3** one-attempt metadata suppression. Source `a7b332b` repairs all three, including a separately reproduced skip-reason crash window. [Accepted verification](acceptance/2026-10-26/reporting-recovery/source-evidence.json) records 1,033 full Python tests/one optional SDK skip, 165 Android tests, 160 iOS tests, UI/build and Windows installer checks. D.1 is still deferred, and D.2 is an inventory rather than active trading functionality.
 

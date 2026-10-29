@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "version": "0.3.1",
+  "version": "0.4.0",
   "channel": "candidate",
-  "android_version_code": 4,
-  "previous_android_version_code": 3,
+  "android_version_code": 5,
+  "previous_android_version_code": 4,
   "ios": {
     "minimum_build_number": 1
   },

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, simpledialog
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 
@@ -50,6 +50,15 @@ class DesktopApp:
         outer.pack(fill='both', expand=True)
         ttk.Label(outer, text='Sentinel Crier', style='Title.TLabel').pack(anchor='w')
         ttk.Label(outer, text='Fill alerts, trade sharing and following — choose your setup.', style='Subtitle.TLabel').pack(anchor='w', pady=(0,12))
+        if hasattr(worker, 'connections'):
+            routes = ttk.Frame(outer)
+            routes.pack(fill='x', pady=(0, 8))
+            ttk.Label(routes, text='Connection (Alpaca):').pack(side='left')
+            self.route_choice = ttk.Combobox(routes, state='readonly', width=40)
+            self.route_choice.pack(side='left', padx=8)
+            self.route_choice.bind('<<ComboboxSelected>>', self.select_route)
+            ttk.Button(routes, text='Add connection', command=self.add_route).pack(side='left')
+            self.refresh_routes()
         self.summary = tk.StringVar(value='Disconnected • Choose a setup to begin')
         self.connection_title=tk.StringVar(value='Disconnected')
         self.connection_detail=tk.StringVar(value='Connect an account and pairing to begin.')
@@ -127,6 +136,63 @@ class DesktopApp:
         root.after(250, self.provider_inbox)
         if check_updates and self.updater is not None:
             root.after(750,self.check_startup_updates)
+
+    def refresh_routes(self):
+        self.route_rows = self.worker.connections.routes()
+        self.route_choice.configure(values=[row['label'] + '  |  ' + row['id'][:8] for row in self.route_rows])
+        self.route_choice.current(next(i for i, row in enumerate(self.route_rows) if row['id'] == self.worker.connections.selected))
+
+    def reset_route_view(self):
+        self.poll = None
+        self.latest = {}
+        self.connected = False
+        self.connection_jobs = set()
+        self.setup_progress = SetupProgress()
+        self.setup_dirty = False
+        for name in ('key', 'secret', 'alerts_key', 'alerts_secret', 'pairing', 'invitation', 'delivery_webhook', 'customer_email', 'customer_password', 'provider_return', 'symbol', 'order_qty', 'price'):
+            variable = getattr(self, name, None)
+            if variable is not None: variable.set('')
+        for name, value in (('live', False), ('alerts_live', False), ('delivery_enabled', False),
+                            ('provider_environment', 'paper'), ('host_environment', 'paper'), ('alerts_environment', 'paper'),
+                            ('mode', 'exact_limit'), ('slippage', '0.02'), ('bps', '100'), ('age', '10'), ('quantity_cap', '1000')):
+            variable = getattr(self, name, None)
+            if variable is not None: variable.set(value)
+        self.provider_available = set()
+        for button in self.provider_buttons.values(): button.configure(state='disabled')
+        self.provider_status.set('Check provider availability for this connection.')
+        # Route-bound editors cannot remain open while their selected account changes.
+        for child in self.root.winfo_children():
+            if isinstance(child, tk.Toplevel): child.destroy()
+        self.support_window = None
+        self.practice_window = None
+        self.clear_delivery_list('alerts')
+        self.clear_delivery_list('receivers')
+        self.notice.set('Selected connection. Other connections continue running.')
+        def selected_status(state):
+            settings = (state.get('execution') or {}).get('settings', {})
+            for name, key in (('mode', 'mode'), ('slippage', 'max_slippage_amount'), ('bps', 'max_slippage_bps'),
+                              ('age', 'max_age_seconds'), ('quantity_cap', 'max_quantity')):
+                if key in settings: getattr(self, name).set(str(settings[key]))
+            self.render(state)
+        self.submit('status', callback=selected_status)
+
+    def select_route(self, event=None):
+        self.worker.connections.select(self.route_rows[self.route_choice.current()]['id'])
+        self.reset_route_view()
+
+    def add_route(self):
+        label = simpledialog.askstring('Add connection', 'Name this host/account connection:', parent=self.root)
+        if label is None: return
+        try:
+            self.worker.connections.add(label)
+            self.refresh_routes()
+            self.reset_route_view()
+        except (ValueError, OSError) as exc:
+            self.notice.set(str(exc))
+
+    def current_route_future(self, future):
+        connections = getattr(self.worker, 'connections', None)
+        return connections is None or getattr(future, 'route_id', connections.selected) == connections.selected
 
     def _start(self, frame):
         ttk.Label(frame, text='What would you like to do?', font=('Segoe UI', 16, 'bold')).pack(anchor='w', pady=12)
@@ -975,6 +1041,8 @@ class DesktopApp:
             if not future.done():
                 remaining.append((future, callback)); continue
             self.connection_jobs.discard(future)
+            if not self.current_route_future(future):
+                continue
             try:
                 result = future.result()
                 if callback: callback(result)
@@ -988,7 +1056,8 @@ class DesktopApp:
         if self.poll is None:
             self.poll = self.worker.call('status')
         elif self.poll.done():
-            try: self.render(self.poll.result())
+            try:
+                if self.current_route_future(self.poll): self.render(self.poll.result())
             except Exception: self.notice.set('Cannot read local status.')
             self.poll = None
         self.root.after(250, self.refresh)
@@ -1057,7 +1126,7 @@ class DesktopApp:
     def build_updates(self,frame):
         from .desktop_updates import DesktopUpdates
         ttk.Label(frame,text='Crier updates',style='Title.TLabel').pack(anchor='w')
-        profile=getattr(getattr(self.worker,'session',None),'folder',None)
+        profile=getattr(getattr(self.worker,'connections',None),'folder',None) or getattr(getattr(self.worker,'session',None),'folder',None)
         if profile is None:
             self.updater=None
             ttk.Label(frame,text='Updates require the installed desktop profile.').pack(anchor='w')
@@ -1156,8 +1225,10 @@ class DesktopApp:
             self.root.withdraw()
             self.notice.set('Crier is still running. Use Show Crier or Quit Crier in the tray.')
             return
-        if self.connected and not update and not messagebox.askokcancel('Close Crier',
-                'Mirroring will stop. Existing broker orders remain active. Close Crier?', parent=self.root):
+        connections = getattr(self.worker, 'connections', None)
+        active_connections = self.connected or (connections is not None and any(session.broker is not None for session in connections.sessions.values()))
+        if active_connections and not update and not messagebox.askokcancel('Close Crier',
+                'All connections will stop. Existing broker orders remain active. Close Crier?', parent=self.root):
             return
         self.update_requested=update
         self.closing = True
@@ -1166,7 +1237,7 @@ class DesktopApp:
             cancel=getattr(self.updater,'cancel',None)
             if cancel:cancel()
         self.notice.set('Stopping receiver and waiting for in-flight broker work…')
-        future = self.worker.call('disconnect')
+        future = self.worker.call('disconnect_all' if hasattr(self.worker, 'connections') else 'disconnect')
         def finish():
             if not future.done():
                 self.root.after(100, finish); return

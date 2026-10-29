@@ -2,7 +2,7 @@
 
 These are proposed enhancements, not implemented capabilities or changes to execution defaults. External release/provider/device dependencies are tracked in [remaining work](remaining-work.md). Donor source references and limitations are in the [Sentinel inventory](sentinel-feature-inventory.md).
 
-## D.1 — Multiple Hosts, Connections, and Cross-Broker Copying
+## D.1 â€” Multiple Hosts, Connections, and Cross-Broker Copying
 
 Retain the [deferred research](deferred/multi-host-cross-broker.md): multiple private host subscriptions, simultaneous brokerage sessions and explicit host-to-destination-account routing. For example, a receiver could follow an Alpaca host through an authorized Webull account while another connection follows a different host through Tradier.
 
@@ -13,9 +13,9 @@ Retain the [deferred research](deferred/multi-host-cross-broker.md): multiple pr
 - Per-host ownership when several hosts use the same instrument/account, plus shared cash and exit-quantity reservations.
 - Explicit contract mapping and broker capability checks. An unavailable broker must not silently redirect an order to another account.
 
-Status: deferred by owner request. No multi-host or cross-broker execution is activated.
+Status: implementation resumed October 29. Concurrent independent Alpaca account routes are being implemented; shared-account reservations and arbitrary cross-broker execution remain future work. See [current multiple connections guide](multiple-connections.md).
 
-## D.2 — Independent Trading Policies and Stock/Option Allocation
+## D.2 â€” Independent Trading Policies and Stock/Option Allocation
 
 ### Authority and independent entries/exits
 

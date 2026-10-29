@@ -3,10 +3,24 @@ import SwiftUI
 /// Original native SwiftUI shell: five primary tabs, with account settings
 /// available from Home instead of consuming a permanent tab.
 struct CrierCommandCenter: View {
-    @StateObject private var model = AlpacaWorkspace()
+    @ObservedObject var model: AlpacaWorkspace
+    @ObservedObject var routes: ConnectionRoutes
+    @State private var routeError = ""
     @StateObject private var connections = ProviderConnections()
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Picker("Connection", selection: Binding(get: { routes.selected }, set: { id in
+                    do { try routes.select(id) } catch { routeError = error.localizedDescription }
+                })) {
+                    ForEach(routes.registry.routes) { route in Text(route.name).tag(route.id) }
+                }.disabled(connections.busy)
+                Button("Add") { do { try routes.add() } catch { routeError = error.localizedDescription } }.disabled(connections.busy)
+                Button("Stop all") { Task { await routes.stopAll() } }
+            }.padding(.horizontal)
+            if !routeError.isEmpty { Text(routeError).font(.caption) }
+            if !model.legacyRoute { Text("Alpaca API-key route · OAuth, Webull and Discord delivery remain on the original connection.").font(.caption).padding(.horizontal) }
         TabView {
             GuidedSetupView()
                 .tabItem { Label("Home", systemImage: "house") }
@@ -18,22 +32,27 @@ struct CrierCommandCenter: View {
             }
             CrierPositionsView()
                 .tabItem { Label("Positions", systemImage: "square.stack.3d.up") }
-            CrierExecutionsView()
+            CrierExecutionsView().disabled(!model.legacyRoute)
                 .tabItem { Label("Alerts", systemImage: "bell") }
+        }
+        .id(routes.selected)
         }
         .environmentObject(model)
         .environmentObject(connections)
         .onOpenURL { url in
-            Task { await connections.receive(url, environment: model.environment, purpose: model.purpose == .alerts ? "alerts" : "trade") }
+            // Provider callbacks always belong to the original route, never the visible editor.
+            if let original = routes.sessions["legacy"] {
+                Task { await connections.receive(url, environment: original.environment, purpose: original.purpose == .alerts ? "alerts" : "trade") }
+            }
         }
         .preferredColorScheme(.dark)
         .task(id: scenePhase) {
             connections.suspend(scenePhase != .active)
-            await model.sceneActive(scenePhase == .active)
+            await routes.sceneActive(scenePhase == .active)
             guard scenePhase == .active else { return }
             while !Task.isCancelled {
-                await model.refresh()
-                let paired = (try? MirrorPairing.load()) != nil
+                await routes.refresh()
+                let paired = routes.sessions.values.contains { $0.intent?.connected == true }
                 do { try await Task.sleep(nanoseconds: paired ? 2_000_000_000 : 15_000_000_000) } catch { return }
             }
         }
@@ -177,7 +196,7 @@ struct CrierConnectionsView: View {
                 Text("Connect Alpaca and save a webhook to publish new broker fills to Discord while Crier is open. The first connection starts from a saved baseline; earlier fills are not posted.").font(.footnote)
                 Text("Deliver or close outstanding alerts before changing destination. Closing keeps fill evidence in the journal.").font(.caption)
                 if let feedback { Text(feedback).font(.footnote) }
-            }
+            }.disabled(!model.legacyRoute)
         }
         .navigationTitle("Connections")
     }

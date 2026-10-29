@@ -15,7 +15,16 @@ final class AlpacaWorkspace: ObservableObject {
     private var healthTicket: NativeHealth.Ticket?
     private var healthBaseScope = ""
     private var legacyHealth = false
-    private let defaults: UserDefaults
+    let defaults: UserDefaults
+    let routeStorage: ConnectionRouteStorage?
+    private let routeRegistry: ConnectionRouteRegistry?
+    var legacyRoute: Bool { routeStorage?.route.legacy ?? true }
+    func savedPairing() throws -> IntentPairing? { try loadIntentPairing() }
+    func savePairing(_ pair: IntentPairing) throws {
+        if let pinned = intent?.state.pairingID, !pinned.isEmpty, pinned != pair.fingerprint { throw AlpacaError.invalid("This journal is pinned to its original host. Add another connection.") }
+        if let routeStorage { try routeStorage.save(pair) } else { try pair.save() }
+        if legacyRoute { MirrorPairing.remove() }
+    }
     private var effectPermit = OAuthEffectPermit()
     private var scopeGeneration = UUID() { didSet { effectPermit.invalidate(); effectPermit = OAuthEffectPermit(); if let healthTicket { health.stop(healthTicket) }; healthTicket = nil } }
     private var discordScope: String?
@@ -123,7 +132,7 @@ final class AlpacaWorkspace: ObservableObject {
     private let loadCustomer: () -> CustomerSession?
     private let loadCredentials: (AlpacaEnvironment) throws -> AlpacaCredentials
     private let saveCredentials: (AlpacaCredentials, AlpacaEnvironment) throws -> Void
-    init(journal suppliedJournal: AlpacaJournal? = nil, intentController: IntentController? = nil,
+    init(routeStorage: ConnectionRouteStorage? = nil, routeRegistry: ConnectionRouteRegistry? = nil, journal suppliedJournal: AlpacaJournal? = nil, intentController: IntentController? = nil,
          defaults: UserDefaults = .standard, health suppliedHealth: NativeHealth? = nil,
          testDiscord: @escaping () async throws -> String = { try await DiscordAlertSettings.test() },
          webhook: @escaping () -> URL? = StandaloneConfiguration.webhook,
@@ -133,16 +142,29 @@ final class AlpacaWorkspace: ObservableObject {
          loadCredentials: @escaping (AlpacaEnvironment) throws -> AlpacaCredentials = AlpacaKeychain.load,
          loadCustomer: @escaping () -> CustomerSession? = { CustomerSessionVault().load() },
          saveCredentials: @escaping (AlpacaCredentials, AlpacaEnvironment) throws -> Void = { try AlpacaKeychain.save($0, environment: $1) }) {
-        self.loadIntentPairing = loadIntentPairing
+        self.routeStorage = routeStorage; self.routeRegistry = routeRegistry
+        let defaults = routeStorage?.defaults ?? defaults
+        if let storage = routeStorage {
+            self.loadIntentPairing = { try storage.pairing() }
+            self.loadCredentials = { try storage.credentials($0) }
+            self.saveCredentials = { try storage.save($0, environment: $1) }
+        } else {
+            self.loadIntentPairing = loadIntentPairing
+            self.loadCredentials = loadCredentials
+            self.saveCredentials = saveCredentials
+        }
         self.health = suppliedHealth ?? NativeHealth(storage: DefaultsHealthStorage(defaults: defaults))
-        self.defaults = defaults; self.testDiscord = testDiscord; self.webhook = webhook; self.deliverDiscord = deliverDiscord
+        self.defaults = defaults; self.testDiscord = testDiscord; self.webhook = routeStorage?.route.legacy == false ? { nil } : webhook; self.deliverDiscord = deliverDiscord
         purpose = defaults.string(forKey: "guidedPurpose").flatMap(GuidedPurpose.init(rawValue:))
-        self.loadCustomer = loadCustomer; self.makeClient = makeClient; self.loadCredentials = loadCredentials; self.saveCredentials = saveCredentials
+        self.loadCustomer = loadCustomer; self.makeClient = makeClient
         do {
-            let journal = try suppliedJournal ?? AlpacaJournal.local()
-            self.journal = journal; publisher = AlpacaDiscordDelivery(journal: journal)
-            if suppliedJournal == nil { mirrorSender = try MirrorSender.local() }
-            intent = try intentController ?? IntentController.local()
+            let folder: URL?
+            if let storage = routeStorage, !storage.route.legacy { folder = try storage.folder() } else { folder = nil }
+            let journal = try suppliedJournal ?? (folder.map { try AlpacaJournal(file: $0.appendingPathComponent("alpaca-journal.json")) } ?? AlpacaJournal.local())
+            self.journal = journal; publisher = AlpacaDiscordDelivery(journal: journal, webhook: self.webhook, defaults: defaults)
+            if suppliedJournal == nil && legacyRoute { mirrorSender = try MirrorSender.local() }
+            intent = try intentController ?? (folder.map { try IntentController(file: $0.appendingPathComponent("intent-v1.json")) } ?? IntentController.local())
+            if let bound = routeStorage?.route.environment { environment = bound }
         }
         catch { message = "Trading disabled: durable journal could not be read. Preserve it for recovery." }
     }
@@ -176,19 +198,20 @@ final class AlpacaWorkspace: ObservableObject {
         let client = makeClient(environment, credentials)
         let current = try await client.account()
         guard foreground, generation == scopeGeneration, environment == selectedEnvironment, !Task.isCancelled else { throw AlpacaError.invalid("Connection interrupted. Reconnect explicitly.") }
-        if let intent, !intent.state.accountID.isEmpty, intent.state.accountID != current.id {
+        if executionJourney, let intent, !intent.state.accountID.isEmpty, intent.state.accountID != current.id {
             throw AlpacaError.invalid("Saved channel belongs to another account. Reconnect its original keys and resolve its journal before changing accounts.")
         }
         let savedPairing = try loadIntentPairing()
-        if let pairing = savedPairing {
+        if executionJourney, let pairing = savedPairing {
             try intent?.validateIdentity(account: current.id, environment: environment, pairing: pairing)
         }
+        if let routeStorage { try routeRegistry?.bind(routeStorage.route.id, account: current.id, environment: selectedEnvironment) }
         // Verify candidate credentials and journal identity before replacing working keys.
         intent?.disconnect()
         if supplied { try saveCredentials(credentials, environment) }
         review = nil; positions = []; contracts = []
         account = current; api = client; readiness.verified = true
-        let legacy = executionJourney && savedPairing == nil ? try? MirrorPairing.load() : nil
+        let legacy = legacyRoute && executionJourney && savedPairing == nil ? try? MirrorPairing.load() : nil
         legacyHealth = legacy != nil
         healthBaseScope = NativeHealth.scope([environment.rawValue, current.id, purpose?.rawValue ?? "", savedPairing?.fingerprint ?? "", legacy?.fingerprint ?? "", credentials.owner ?? "", credentials.serviceURL ?? ""])
         bindHealth(); healthNote(healthTicket, .broker, .healthy, .verified)
@@ -227,7 +250,7 @@ final class AlpacaWorkspace: ObservableObject {
         guard !busy else { throw AlpacaError.invalid("Wait for the current connection operation to finish.") }
         busy = true
         defer { busy = false }
-        let selectedEnvironment = environment
+        let selectedEnvironment = environment; let pairingGeneration = scopeGeneration
         var saved = try loadIntentPairing()
         let created = saved == nil
         if let existing = saved {
@@ -241,8 +264,8 @@ final class AlpacaWorkspace: ObservableObject {
             let pair: IntentPairing
             if host { pair = try await QuickConnection.host(service: service, environment: selectedEnvironment) }
             else { pair = try await QuickConnection.receive(QuickConnection.invitation(invitation, service: service), environment: selectedEnvironment) }
-            guard environment == selectedEnvironment else { throw AlpacaError.invalid("Environment changed during pairing. Retry with the original environment.") }
-            try pair.save(); MirrorPairing.remove(); saved = pair
+            guard foreground, pairingGeneration == scopeGeneration, !Task.isCancelled, environment == selectedEnvironment else { throw AlpacaError.invalid("Pairing interrupted. Reconnect explicitly.") }
+            try savePairing(pair); saved = pair
         }
         var link: String?
         var invitationFailure: String?
@@ -251,6 +274,7 @@ final class AlpacaWorkspace: ObservableObject {
             catch { invitationFailure = error.localizedDescription }
         }
         do {
+            guard foreground, pairingGeneration == scopeGeneration, !Task.isCancelled else { throw AlpacaError.invalid("Connection interrupted. Reconnect explicitly.") }
             guard let intent else { throw AlpacaError.invalid("Intent journal unavailable.") }
             if let api, let account {
                 if let pairing = saved { try intent.validateIdentity(account: account.id, environment: environment, pairing: pairing) }
@@ -268,7 +292,7 @@ final class AlpacaWorkspace: ObservableObject {
     func disconnect(removeCredentials: Bool = false) {
         guard !busy else { return }
         readiness.invalidate(); scopeGeneration = UUID()
-        if removeCredentials { AlpacaKeychain.remove(environment) }
+        if removeCredentials { if let routeStorage { routeStorage.remove(environment) } else { AlpacaKeychain.remove(environment) } }
         api?.invalidate(); intent?.disconnect()
         suspended = false
         api = nil; account = nil; review = nil; positions = []; contracts = []; submissions = []; deliveries = []; updatedAt = nil
@@ -280,8 +304,13 @@ final class AlpacaWorkspace: ObservableObject {
         api = nil; account = nil; review = nil; positions = []; contracts = []; suspended = false
         discordConfigurationChanged()
     }
+    func drainStoppedWork() async {
+        await intent?.drainStoppedWork()
+        while busy { await Task.yield() }
+    }
     func oauthLogout() {
         oauthStopWorkers()
+        guard legacyRoute else { return }
         for value in AlpacaEnvironment.allCases {
             if (try? loadCredentials(value))?.owner != nil { AlpacaKeychain.remove(value) }
         }
@@ -291,6 +320,7 @@ final class AlpacaWorkspace: ObservableObject {
         discordConfigurationChanged()
     }
     func installOAuthGrant(_ grant: ProviderGrant, owner: String, serviceURL: String, stillCurrent: () -> Bool) async throws {
+        guard legacyRoute else { throw AlpacaError.invalid("Provider OAuth is available only on the original connection. Use this connection’s Alpaca API keys.") }
         guard !busy, foreground, account == nil, stillCurrent(), grant.environment == environment.rawValue,
               grant.purpose == (grant.provider == "discord" ? "alerts" : (purpose == .alerts ? "alerts" : "trade")),
               purpose != nil, UUID(uuidString: owner) != nil, (try? ProviderAPI(base: serviceURL)) != nil else { throw AlpacaError.invalid("Disconnect and restore the requested purpose and environment before installation.") }
@@ -319,9 +349,15 @@ final class AlpacaWorkspace: ObservableObject {
     func sceneActive(_ active: Bool) async {
         foreground = active
         if !active {
-            suspended = account != nil
-            readiness.invalidate(); scopeGeneration = UUID()
-            api?.invalidate(); intent?.disconnect()
+            if routeRegistry != nil {
+                oauthStopWorkers()
+                await drainStoppedWork()
+                suspended = false
+            } else {
+                suspended = account != nil
+                readiness.invalidate(); scopeGeneration = UUID()
+                api?.invalidate(); intent?.disconnect()
+            }
             review = nil
             lifecycle = "Background / suspended • automatic execution stopped; open Crier to reconcile"
             return
@@ -337,12 +373,14 @@ final class AlpacaWorkspace: ObservableObject {
         lifecycle = suspended ? "Reconnect required • reconciliation failed" : "Foreground • keep Crier open for delivery"
     }
     func changeChannel() throws {
+        guard routeRegistry == nil else { throw AlpacaError.invalid("Connections keep their original pairing and history. Add another connection to use another host.") }
         guard !busy, account == nil else { throw AlpacaError.invalid("Disconnect before changing channel.") }
         try intent?.archiveResolvedChannel()
         message = "Resolved channel archived. You can host or join a new channel."
     }
     /// Shared manual/OAuth destination guard. An await must never allow a stale write.
     private func storeDiscordWebhook(_ raw: String?, stillCurrent: () -> Bool) async throws {
+        guard legacyRoute else { throw AlpacaError.invalid("Discord publishing is available only on the original connection.") }
         guard let journal else { throw AlpacaError.invalid("Delivery journal unavailable.") }
         let previous = StandaloneConfiguration.webhook()
         let outstanding = await journal.hasOutstandingDeliveries()
@@ -563,7 +601,7 @@ struct AlpacaConnectionForm: View {
         }
         if model.purpose == .trade || model.purpose == .follow {
             IntentConnectionForm()
-            if (try? IntentPairing.load()) == nil { MirrorConnectionForm() }
+            if model.legacyRoute && (try? model.savedPairing()) == nil { MirrorConnectionForm() }
         }
     }
 }

@@ -1,8 +1,10 @@
-# D.1 — Multiple Hosts, Connections, and Cross-Broker Copying
+# D.1 â€” Multiple Hosts, Connections, and Cross-Broker Copying
 
-Status: **Deferred at the owner's request. Research and future scope only. Not implemented or activated.**
+Status: **Implementation resumed October 29, 2026. Concurrent independent Alpaca routes are being implemented on Windows, iOS and Android. Shared-account coordination and additional execution adapters remain unfinished.**
 
-Researched October 26, 2026. This is outside the completed E–L implementation phases. Recheck broker documentation and granted application permissions before starting implementation. No brokerage requests, orders, customer messages or runtime changes were made for this research.
+See [current routing guide](../multiple-connections.md) and [implementation plan](../superpowers/plans/2026-10-29-multiple-connections.md). The research below describes the full requested scope, not a claim that every broker/route is available.
+
+Researched October 26, 2026. This is outside the completed Eâ€“L implementation phases. Recheck broker documentation and granted application permissions before starting implementation. No brokerage requests, orders, customer messages or runtime changes were made for this research.
 
 ## Intended customer experience
 
@@ -18,7 +20,7 @@ Example future routing:
 | Dave and Alice | The same Carol account | Preserve separate host allocations while sharing account-level reservations and reconciliation. |
 | Dave | Several explicitly selected Carol accounts | Fan out one instruction once per configured destination, with independent outcomes. |
 
-These are requirements to build and test, not descriptions of current broker execution support. Current native execution is Alpaca-based. Tradier is a read-only Python observer; Webull Connect approval and a working native execution adapter remain pending. Current native runtime permits one active pairing, and Windows prevents a second instance for the same user.
+These are requirements to build and test, not descriptions of current broker execution support. Current native execution is Alpaca-based. Tradier is a read-only Python observer; Webull Connect approval and a working native execution adapter remain pending. Each new route runtime retains one pairing; the connection manager permits several independent account routes within the existing application instance.
 
 ## Connection models researched
 

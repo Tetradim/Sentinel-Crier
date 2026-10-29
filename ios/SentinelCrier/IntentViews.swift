@@ -3,7 +3,7 @@ import UIKit
 
 struct IntentConnectionForm: View {
     @EnvironmentObject var model: AlpacaWorkspace
-    @AppStorage("connection-service-url") private var service = QuickConnection.defaultService
+    @State private var service = QuickConnection.defaultService
     @State private var pairing = ""
     @State private var invitation = ""
     @State private var shareLink = ""
@@ -26,7 +26,7 @@ struct IntentConnectionForm: View {
         Task { @MainActor in
             defer { working = false }
             do {
-                guard let pair = try IntentPairing.load() else { throw AlpacaError.invalid("Connect a host first.") }
+                guard let pair = try model.savedPairing() else { throw AlpacaError.invalid("Connect a host first.") }
                 if let receiver { try await QuickConnection.revoke(receiver, pairing: pair) }
                 receivers = try await QuickConnection.receivers(pair)
                 message = receiver == nil ? "Receiver list refreshed." : "Receiver revoked. Existing broker orders still require reconciliation."
@@ -41,7 +41,7 @@ struct IntentConnectionForm: View {
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .disabled(model.busy || working)
             Button("Receive") { connect(host: false) }.disabled(model.busy || working)
-            if (try? IntentPairing.load())?.role == "host" {
+            if (try? model.savedPairing())?.role == "host" {
                 Button("Invite another receiver") { connect(host: true, newInvite: true) }.disabled(model.busy || working)
                 Button("Refresh receivers") { receiverAction() }.disabled(working)
                 ForEach(receivers) { receiver in
@@ -73,15 +73,16 @@ struct IntentConnectionForm: View {
                 SecureField("Paste intent pairing JSON", text: $pairing).textInputAutocapitalization(.never).autocorrectionDisabled()
                 Button("Save host / follower pairing") {
                     do {
-                        guard try IntentPairing.load() == nil else { throw AlpacaError.invalid("A pairing is already saved. Preserve its pinned journal; use Host or Receive to reconnect.") }
+                        guard try model.savedPairing() == nil else { throw AlpacaError.invalid("A pairing is already saved. Preserve its pinned journal; use Host or Receive to reconnect.") }
                         let value = try IntentPairing.decode(pairing)
                         guard value.environment == model.environment else { throw AlpacaError.invalid("Select the pairing's broker environment first.") }
-                        try value.save(); MirrorPairing.remove(); pairing = ""; message = "Pairing saved. Press Host or Receive to activate."
+                        try model.savePairing(value); pairing = ""; message = "Pairing saved. Press Host or Receive to activate."
                     } catch { message = error.localizedDescription }
                 }.disabled(model.account != nil || model.busy || working)
             }
             if let intent = model.intent { IntentSettingsView(controller: intent) }
-        }
+        }.onAppear { service = model.defaults.string(forKey: "connection-service-url") ?? QuickConnection.defaultService }
+        .onChange(of: service) { value in model.defaults.set(value, forKey: "connection-service-url") }
     }
 }
 struct IntentSettingsView: View {

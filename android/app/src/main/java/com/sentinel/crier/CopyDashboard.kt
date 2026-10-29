@@ -4,18 +4,17 @@ import org.json.JSONObject
 import java.time.Instant
 
 object CopyDashboardCache {
- private var scope=""
- private var snapshot:JSONObject?=null
+ private val snapshots=mutableMapOf<String,JSONObject>()
  private fun key(config:JSONObject)=listOf("url","token","role","environment","account").joinToString("|") { config.optString(it) }
  @Synchronized fun accept(config:JSONObject,value:JSONObject) {
   require(value.getInt("version")==1 && value.getString("environment")==config.getString("environment") && value.getString("role")==config.getString("role"))
   require(value.getJSONArray("events").length()<=50 && value.getJSONArray("statuses").length()<=200 && value.getJSONArray("members").length()<=200 && value.getJSONArray("diagnostics").length()<=200)
   val generated=Instant.parse(value.getString("generated_at")); val nextScope=key(config)
-  if(scope==nextScope && snapshot?.let { !generated.isAfter(Instant.parse(it.getString("generated_at"))) }==true) return
-  scope=nextScope; snapshot=JSONObject(value.toString())
+  if(snapshots[nextScope]?.let { !generated.isAfter(Instant.parse(it.getString("generated_at"))) }==true) return
+  snapshots[nextScope]=JSONObject(value.toString())
  }
- @Synchronized fun read(config:JSONObject):JSONObject?=if(scope==key(config)) snapshot?.let { JSONObject(it.toString()) } else null
- @Synchronized fun clear() { scope=""; snapshot=null }
+ @Synchronized fun read(config:JSONObject):JSONObject?=snapshots[key(config)]?.let { JSONObject(it.toString()) }
+ @Synchronized fun clear() { snapshots.clear() }
  fun describe(value:JSONObject):String=buildString {
   append("${value.getString("role")} · ${value.getString("environment")}\nAs of ${value.getString("generated_at")} · device-reported broker evidence\n")
   if(value.optBoolean("truncated")) append("Partial snapshot: some rows omitted. No complete portfolio total.\n")

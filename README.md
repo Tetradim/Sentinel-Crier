@@ -4,7 +4,7 @@
 
 Crier is an open-source app for iPhone, Android and Windows. A host originates stock or option orders inside Crier; paired receivers follow through their own brokerage accounts. Discord publishing is a separate, optional workflow. Copying does not require another bot to parse Discord messages.
 
-The current active native trading integration is **Alpaca**, with paper and live environments. A candidate **Webull iPhone host → Alpaca-paper Windows receiver** screen and server gateway are now included; Webull approval, the approved resource adapter and activation remain unfinished. See the [route implementation and setup status](docs/webull-iphone-host.md). Signed iPhone distribution and real-device/broker acceptance also remain unfinished.
+The current active native trading integration is **Alpaca**, with paper and live environments. A candidate **Webull iPhone host â†’ Alpaca-paper Windows receiver** screen and server gateway are now included; Webull approval, the approved resource adapter and activation remain unfinished. See the [route implementation and setup status](docs/webull-iphone-host.md). Signed iPhone distribution and real-device/broker acceptance also remain unfinished.
 
 ## Choose a workflow
 
@@ -52,13 +52,13 @@ The current per-trade budget is **not** a recurring stock-card allocation or sha
 
 Alerts offer configurable fields and card/plain-text formats. iOS and the Python publisher also support Homebrew-style layouts. Instrument, side, quantity, fill price, timestamp and provenance appear when supported and available. Manual receipts remain user-confirmed evidence rather than broker-verified fills.
 
-Choose **Alerts only** on iPhone, **Alerts** on Android, or **Start here → Send my fills to Discord** on Windows. Configure the destination, inspect a preview and explicitly enable publishing. These routes need no pairing and do not activate trading workers. Reconnect/restart requires fresh publishing permission. See [monitor/publisher operation](docs/monitor-publisher.md).
+Choose **Alerts only** on iPhone, **Alerts** on Android, or **Start here â†’ Send my fills to Discord** on Windows. Configure the destination, inspect a preview and explicitly enable publishing. These routes need no pairing and do not activate trading workers. Reconnect/restart requires fresh publishing permission. See [monitor/publisher operation](docs/monitor-publisher.md).
 
 The read-only **Copy dashboard** shows instructions, device results, quantities, fill averages and remaining units. Actual host/receiver price comparisons, eligible P&L calculations, clock-adjusted delivery estimates and JSON/CSV exports require appropriate evidence. Missing prices or fees are not invented. See [execution diagnostics](docs/execution-diagnostics.md) and [dashboard calculation and privacy limits](docs/push-dashboard.md).
 
 Windows 0.3.1 adds a startup-only, dismissible update notice, persistent connection status, **Test my connection (read-only)** and a **Support** dialog with version details and sanitized export. The test checks account/environment and relay connectivity without orders or Discord posts; peer execution remains untested. Updates require explicit download and installation. See [updates and connection checks](docs/customer-updates.md).
 
-Windows now adds bounded background technical error logs and **Health → Export support bundle**, with safe stack locations, validated trade/order IDs and packaged build metadata. Secret messages and raw account databases are excluded. Writer failure and evidence loss are visible. See [unattended diagnostics](docs/unattended-diagnostics.md); this does not enable remote outage notification or automatic trading restart.
+Windows now adds bounded background technical error logs and **Health â†’ Export support bundle**, with safe stack locations, validated trade/order IDs and packaged build metadata. Secret messages and raw account databases are excluded. Writer failure and evidence loss are visible. See [unattended diagnostics](docs/unattended-diagnostics.md); this does not enable remote outage notification or automatic trading restart.
 
 ## Platforms and installation
 
@@ -69,10 +69,10 @@ Windows now adds bounded background technical error logs and **Health → Export
 | Windows | Alpaca desktop app, alerts, Host/Receive, dashboard, health, optional tray/startup and signed update/recovery flow. | Installer/portable candidates produced; installer lifecycle tested. Ed25519 update trust is configured; Microsoft publisher signing remains separate. Keep the PC awake. Startup and post-update launch begin disconnected. |
 | Python | Local monitor/publisher console, manual receipt review and separately configured intent execution. | Python 3.11+; optional local or hosted connection service. |
 
-- [iPhone build](ios/BUILD.md) · [distribution checklist](docs/iphone-release-checklist.md)
-- [Android setup](android/README.md) · [release packages](docs/android-release.md)
-- [Windows setup](desktop/README.md) · [installer and updates](docs/windows-release.md)
-- [Windows 0.3.0 installer](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.3.0/SentinelCrier-0.3.0-Windows-Setup.exe) · [signed updates and recovery](docs/customer-updates.md)
+- [iPhone build](ios/BUILD.md) Â· [distribution checklist](docs/iphone-release-checklist.md)
+- [Android setup](android/README.md) Â· [release packages](docs/android-release.md)
+- [Windows setup](desktop/README.md) Â· [installer and updates](docs/windows-release.md)
+- [Windows 0.3.0 installer](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.3.0/SentinelCrier-0.3.0-Windows-Setup.exe) Â· [signed updates and recovery](docs/customer-updates.md)
 - [Customer setup, paper practice and recovery](docs/customer-acceptance.md)
 
 The current iPhone target has no ReplayKit extension and does not continuously observe other brokerage apps' screens. Submission-time mirroring applies to orders placed **inside Crier**. Supported fill monitoring can observe activity originating elsewhere later; it cannot infer that other app's original button press instantly. Mobile background execution remains constrained by the operating system.
@@ -86,7 +86,7 @@ The current iPhone target has no ReplayKit extension and does not continuously o
 | Webull Trading API | Experimental Python SDK observer with separate access and verification requirements. |
 | Webull Connect | Candidate iPhone Webull Host workflow, authenticated server gateway, durable source-order ledger and composed authorization/token-custody service. The approved account/contract/order adapter, deployment and sandbox acceptance remain unfinished; no real Webull trading is activated. |
 
-Multiple hosts, simultaneous broker-account routing and copying across different brokers remain [deferred D.1](docs/deferred/multi-host-cross-broker.md). A donor bot's adapter name does not establish working support in Crier.
+Concurrent independent Alpaca Host/Receive routes are implemented in the app runtimes; see [multiple connections](docs/multiple-connections.md). Several hosts sharing one account and execution across different broker types remain unfinished [D.1](docs/deferred/multi-host-cross-broker.md). A donor bot's adapter name does not establish working support in Crier.
 
 ## Run the Python console
 

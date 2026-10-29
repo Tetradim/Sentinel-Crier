@@ -526,7 +526,7 @@ struct IntentPairing: Codable {
         var next = state; try change(&next)
         try JSONEncoder().encode(next).write(to: file, options: [.atomic, .completeFileProtection])
         state = next
-        if connected { Task { await reportCopyStatus() } }
+        if connected { enqueueWork { [self] in await reportCopyStatus() } }
     }
     func settings(_ p: IntentPreferences) throws {
         _ = try p.price("1", sell: false); try p.execution_policy?.validate(market: p.mode == "market")
@@ -565,7 +565,32 @@ struct IntentPairing: Codable {
         diagnosticWorker = Task { while !Task.isCancelled { await syncDiagnostics(); try? await Task.sleep(nanoseconds: 5_000_000_000) } }
         message = "\(pair.role.capitalized) connected. Keep Crier open for delivery."
     }
-    func disconnect() { copyReportingEnabled = false; copyGeneration = UUID(); copyReporter?.cancel(); copyReporter = nil; for task in copyMetadataTasks.values { task.cancel() }; copyMetadataTasks = [:]; copyMetadataRecovery.reset(); copyBindings = [:]; brokerObserved = [:]; copyDashboard = nil; copyTransport = "connecting"; processPending = false; message = "Disconnected; execution journals retained."; diagnosticSession = UUID(); diagnosticWorker?.cancel(); diagnosticWorker = nil; diagnosticClock = nil; receiver?.cancel(); worker?.cancel(); transmitter?.cancel(); receiver = nil; worker = nil; transmitter = nil; api?.invalidate(); api = nil; pair = nil }
+    private var stoppedTasks: [Task<Void, Never>] = []
+    private var oneShotJobs: [UUID: Task<Void, Never>] = [:]
+    /// Keep every spawned job under the same shutdown barrier as loop workers.
+    func enqueueWork(_ operation: @escaping @MainActor () async -> Void) {
+        let id = UUID()
+        oneShotJobs[id] = Task {
+            defer { oneShotJobs.removeValue(forKey: id) }
+            guard !Task.isCancelled else { return }
+            await operation()
+        }
+    }
+    func drainStoppedWork() async {
+        while !stoppedTasks.isEmpty || !oneShotJobs.isEmpty || processing || publishing || reporting {
+            let tasks = stoppedTasks + Array(oneShotJobs.values); stoppedTasks = []
+            for task in tasks { await task.value }
+            // Also wait for callers that directly awaited process/publish rather
+            // than entering through a scheduled worker or one-shot job.
+            if processing || publishing || reporting { await Task.yield() }
+        }
+    }
+    func disconnect() {
+        for task in oneShotJobs.values { task.cancel() }
+        stoppedTasks += Array(oneShotJobs.values)
+        stoppedTasks += [copyReporter, diagnosticWorker, receiver, worker, transmitter].compactMap { $0 }
+        stoppedTasks += Array(copyMetadataTasks.values)
+        copyReportingEnabled = false; copyGeneration = UUID(); copyReporter?.cancel(); copyReporter = nil; for task in copyMetadataTasks.values { task.cancel() }; copyMetadataTasks = [:]; copyMetadataRecovery.reset(); copyBindings = [:]; brokerObserved = [:]; copyDashboard = nil; copyTransport = "connecting"; processPending = false; message = "Disconnected; execution journals retained."; diagnosticSession = UUID(); diagnosticWorker?.cancel(); diagnosticWorker = nil; diagnosticClock = nil; receiver?.cancel(); worker?.cancel(); transmitter?.cancel(); receiver = nil; worker = nil; transmitter = nil; api?.invalidate(); api = nil; pair = nil }
     func archiveResolvedChannel() throws {
         guard !processing, !publishing, api == nil else { throw AlpacaError.invalid("Disconnect before changing channel.") }
         guard state.unresolved.isEmpty, state.outgoing.isEmpty else { throw AlpacaError.invalid("Resolve tracked holdings, pending orders and relay outbox before changing channel. Reconnect to the original account to recover.") }
@@ -582,7 +607,7 @@ struct IntentPairing: Codable {
         let e = IntentEvent.make(trade: id, sequence: (state.trades[id]?.desired?.sequence ?? 0) + 1, action: action, environment: pair.environment, symbol: symbol, asset: asset, quantity: quantity, price: price)
         try commit { s in var t = s.trades[id] ?? IntentTrade(); if t.policySnapshot == nil { t.policySnapshot = .legacy(e) }; try t.accept(e); s.trades[id] = t; s.outgoing.append(e) }
         beginDiagnostic(e, stage: "sender", observed: IntentEvent.date(e.created_at) ?? Date())
-        Task { await publish() }; Task { await process() }
+        enqueueWork { [self] in await publish() }; enqueueWork { [self] in await process() }
         return id
     }
     private func relay(_ query: String = "", body: Data? = nil, resource: String = "events") async throws -> Data {
@@ -694,14 +719,14 @@ struct IntentPairing: Codable {
             struct Ready: Decodable { var version: Int; var transport: String }
             let ready = try JSONDecoder().decode(Ready.self, from: frame.data)
             guard ready.version == 1, ready.transport == "push" else { throw AlpacaError.invalid("Invalid stream ready.") }
-            copyTransport = "push"; Task { await reportCopyStatus(presence: true) }
+            copyTransport = "push"; enqueueWork { [self] in await reportCopyStatus(presence: true) }
         case "events":
             // A host observes the channel but never ingests remote execution intents.
             guard pair.role == "follower" else { return }
             var accepted: [IntentEvent] = []
             try commit { accepted = try $0.ingestPage(frame.data, environment: pair.environment) }
             for event in accepted { beginDiagnostic(event, stage: "receiver", observed: Date()) }
-            if !accepted.isEmpty { Task { await process() } }
+            if !accepted.isEmpty { enqueueWork { [self] in await process() } }
             onHealth?(.relayReceive, .healthy, .checked)
         case "dashboard":
             let snapshot = try JSONDecoder().decode(CopyDashboard.self, from: frame.data)
@@ -770,7 +795,7 @@ struct IntentPairing: Codable {
         defer {
             processing = false
             if processPending, generation == copyGeneration, connected {
-                processPending = false; Task { await process() }
+                processPending = false; enqueueWork { [self] in await process() }
             }
         }
         let observed = onHealth; var needsReconciliation = false
@@ -810,7 +835,7 @@ struct IntentPairing: Codable {
         quoteCaptures.insert(event.event_id)
         let session = diagnosticSession
         // Independent task: neither quote capture nor diagnostics gates broker dispatch.
-        Task {
+        enqueueWork { [self] in
             defer { quoteCaptures.remove(event.event_id) }
             do {
                 let quote = try await api.diagnosticQuote(symbol: event.symbol, option: event.asset == "option")
@@ -1086,7 +1111,7 @@ struct IntentPairing: Codable {
         let mutation = IntentMutation(clientID: clientID, eventID: e.event_id, sell: sell, quantity: quantity)
         try commit { $0.trades[id]!.mutations.append(mutation) }
         let dispatched = Date()
-        Task { diagnosticStep(e.event_id, "order_dispatch", "client=\(clientID) quantity=\(quantity) limit=\(price ?? "market")", at: dispatched) }
+        enqueueWork { [self] in diagnosticStep(e.event_id, "order_dispatch", "client=\(clientID) quantity=\(quantity) limit=\(price ?? "market")", at: dispatched) }
         var refusal = checkedBinding == nil ? "operation_stopped" : "metadata_or_operation_stopped"
         do {
             let order = try await api.submitIntent(symbol: e.symbol, quantity: quantity, price: price, sell: sell, option: e.asset == "option", clientID: clientID, policyBinding: checkedBinding, canSubmit: { [self] in
@@ -1180,7 +1205,7 @@ extension IntentController {
         if reporting { reportPending = true; return }
         guard copyReportingEnabled, let pair, let api else { return }
         reporting = true; let generation = copyGeneration
-        defer { reporting = false; if reportPending, generation == copyGeneration { reportPending = false; Task { await reportCopyStatus(presence: true) } } }
+        defer { reporting = false; if reportPending, generation == copyGeneration { reportPending = false; enqueueWork { [self] in await reportCopyStatus(presence: true) } } }
         do {
             for (id, trade) in state.trades {
                 guard let event = trade.desired else { continue }

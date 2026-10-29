@@ -28,8 +28,8 @@ struct GuidedSetupView: View {
                 }
                 Section("Account overview") {
                     NavigationLink("Connection health and recovery", destination: NativeHealthView())
-                    NavigationLink("Provider connections and Crier sign-in", destination: ProviderConnectionsView())
-                    NavigationLink("Webull host → Alpaca PAPER", destination: WebullHostView())
+                    NavigationLink("Provider connections and Crier sign-in", destination: ProviderConnectionsView()).disabled(!model.legacyRoute)
+                    NavigationLink("Webull host → Alpaca PAPER", destination: WebullHostView()).disabled(!model.legacyRoute)
                     NavigationLink("Account balances and saved positions", destination: BrokerageOverview())
                 }
                 Section("1 · Choose your purpose") {
@@ -46,10 +46,10 @@ struct GuidedSetupView: View {
                         NavigationLink("Configure destination, preview and test", destination: CrierConnectionsView())
                         NavigationLink("Preview, test and enable delivery", destination: CrierExecutionsView())
                         Text("Preview, a synthetic test acknowledgement and permission to publish fills are separate steps. A test is optional; it never authorizes trading.").font(.footnote)
-                    }
+                    }.disabled(!model.legacyRoute)
                 }
                 Section("Foreground operation") {
-                    Text("Keep Crier open and unlocked. iOS suspension stops monitoring and following. Returning reconciles a connected account; explicitly re-enable Discord delivery. On restart, reconnect using saved keys; saved configuration does not resume delivery permission.")
+                    Text("Keep Crier open and unlocked. iOS suspension stops monitoring and following. Returning requires an explicit broker reconnect and new delivery permission. On restart, reconnect using saved keys; saved configuration does not resume delivery permission.")
                     Text(model.lifecycle).font(.caption)
                 }
                 Section("Advanced and recovery") {
