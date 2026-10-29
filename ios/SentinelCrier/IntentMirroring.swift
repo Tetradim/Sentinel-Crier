@@ -668,7 +668,7 @@ struct IntentPairing: Codable {
         for event in accepted { beginDiagnostic(event, stage: "receiver", observed: Date()) }
         let invalid = (state.quarantine?.count ?? 0) > previousQuarantine
         observed?(.relayReceive, invalid ? .degraded : .healthy, invalid ? .invalidEvents : .checked)
-        message = "Receiver connected â€¢ cursor \(state.cursor) â€¢ \(state.quarantine?.count ?? 0) quarantined"
+        message = "Receiver connected • cursor \(state.cursor) • \(state.quarantine?.count ?? 0) quarantined"
     }
     private func receiveLoop() async {
         let generation = copyGeneration

@@ -1,10 +1,10 @@
-# D.1 â€” Multiple Hosts, Connections, and Cross-Broker Copying
+# D.1 — Multiple Hosts, Connections, and Cross-Broker Copying
 
 Status: **Implementation resumed October 29, 2026. Concurrent independent Alpaca routes are being implemented on Windows, iOS and Android. Shared-account coordination and additional execution adapters remain unfinished.**
 
 See [current routing guide](../multiple-connections.md) and [implementation plan](../superpowers/plans/2026-10-29-multiple-connections.md). The research below describes the full requested scope, not a claim that every broker/route is available.
 
-Researched October 26, 2026. This is outside the completed Eâ€“L implementation phases. Recheck broker documentation and granted application permissions before starting implementation. No brokerage requests, orders, customer messages or runtime changes were made for this research.
+Researched October 26, 2026. This is outside the completed E–L implementation phases. Recheck broker documentation and granted application permissions before starting implementation. No brokerage requests, orders, customer messages or runtime changes were made for this research.
 
 ## Intended customer experience
 
@@ -100,4 +100,4 @@ Matching a contract does not guarantee matching fills, premiums or outcomes acro
 6. Exercise all nine directional pairs among Alpaca, Tradier and Webull where supported. Cover two hosts buying the same contract, partial fills, replacements, cancellation races, unknown submissions, manual position changes, revoked access, expired tokens, restarts, reconnects and simultaneous cash reservations. Verify one-to-many routes and no duplicates or cross-host sells.
 7. Use supported broker sandboxes for accounting/protocol checks; keep synthetic, delayed-paper and real cross-network timing evidence distinct. Physical/mobile lifecycle, real broker-UI reconciliation and provider acceptance remain separate gates.
 
-Deferred means no adapters, live multi-host execution, connection discovery or automatic brokerage switching are activated by this document. The recommended direction is a single app with several explicit routes and direct approved broker connections, while preserving the host's instructions and each receiver's actual order ownership.
+The initial implementation supports independent Alpaca routes within one app. Shared-account coordination, additional execution adapters, public discovery and automatic brokerage switching remain unfinished. Preserve each host's instructions and each receiver's actual order ownership.

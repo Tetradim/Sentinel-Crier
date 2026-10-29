@@ -10,6 +10,8 @@ Crier can retain several independent Alpaca Host/Receive connections in one inst
 4. Inspect its sizing, price and exit settings, then explicitly enable entries when ready.
 5. Select another connection and repeat. Each route retains separate credentials, pairing, trade history, cursors and execution controls.
 
+Support exports the selected Windows route's technical log. Select and export each affected route when reporting a multi-connection issue; do not share raw recovery snapshots.
+
 Windows: use the **Connection (Alpaca)** selector and **Add connection** above the main tabs. The normal Disconnect action stops only the selected route. Quit and installer update drain all routes. Update recovery snapshots retain the complete root profile, including every route's journals.
 
 iPhone: use the connection picker and **Add**. The original session remains retained while another is displayed. **Stop all** and app backgrounding revoke and drain all retained runtimes. Additional connections currently support Alpaca API-key trading/Host/Receive; customer OAuth, candidate Webull and Discord Alerts remain restricted to the original connection. Keep the app foregrounded; this does not bypass iOS suspension.

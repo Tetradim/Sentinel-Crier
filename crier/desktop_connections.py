@@ -126,7 +126,7 @@ class DesktopConnections:
     def add(self, label):
         label = str(label).strip()
         if not label or len(label) > 80:
-            raise ValueError('Enter a connection name of 1Ã¢â‚¬â€œ80 characters.')
+            raise ValueError('Enter a connection name of 1–80 characters.')
         with self.guard:
             if self.stopping:
                 raise ValueError('Connections are shutting down.')

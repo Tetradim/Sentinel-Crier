@@ -19,7 +19,7 @@ internal class RouteRuntime(context:Context,override val routeId:String,private 
   val components=mutableSetOf("broker","execution",if(config.optString("role")=="host") "relay_send" else "relay_receive")
   if(config.optString("discordWebhook").isNotBlank()) components.add("discord")
   healthTicket=health?.begin(ComponentHealth.scope(config,"intent"),components,"intent")
-  journal.setMeta("service","Reconnecting Â· reconciling before new work")
+  journal.setMeta("service","Reconnecting · reconciling before new work")
   if(!config.has("account")) { stop(); return }
   val customerSession=EncryptedCustomerSessions(this).read()
   val customerService=runCatching { CustomerOAuth.sibling(QuickConnection.defaultOrigin(this)) }.getOrDefault("")
@@ -63,7 +63,7 @@ internal class RouteRuntime(context:Context,override val routeId:String,private 
    if(config.getString("role")=="host" && journal.events(true).isEmpty()) note("relay_send","idle","no_work")
    if(config.getString("role")=="host") for(e in journal.events(true).sortedBy { if(it.getString("action") in setOf("cancel","exit")) 0 else 1 }) {
     val revision=journal.revision(e.getString("trade_id")); if(e.getString("action") in setOf("enter","replace") && (revision.second || e.getInt("sequence")<revision.first || java.time.Instant.now()>java.time.Instant.parse(e.getString("expires_at")))) { journal.mark(e.getString("event_id"),true); continue }
-    try { Network.request("$url/api/sync/events","POST",headers,e); journal.evidence(e.getString("event_id"),"relay_ack"); journal.mark(e.getString("event_id"),true); note("relay_send","healthy","delivered"); journal.setMeta("connection","Connected Â· last publish ${java.time.Instant.now()}") }
+    try { Network.request("$url/api/sync/events","POST",headers,e); journal.evidence(e.getString("event_id"),"relay_ack"); journal.mark(e.getString("event_id"),true); note("relay_send","healthy","delivered"); journal.setMeta("connection","Connected · last publish ${java.time.Instant.now()}") }
     catch(error:HttpError) { if(error.status in setOf(400,409,422)) { journal.diagnostic(e.getString("event_id"),"relay_rejected","HTTP ${error.status}; rejected event retained in history"); journal.mark(e.getString("event_id"),true); journal.setMeta("connection","Publish rejected HTTP ${error.status}; see diagnostics") } else throw error }
    }
    JournalWakes.outbox.await(1000)
@@ -105,7 +105,7 @@ internal class RouteRuntime(context:Context,override val routeId:String,private 
    if(!reconciled) {
     require(observedBroker.account()==config.getString("account")) { "Account changed; execution blocked" }
     for(e in journal.events(false)) if(!engine.reconcile(e)) needsReconciliation=true
-    reconciled=true; journal.setMeta("service","Running Â· resume reconciliation completed")
+    reconciled=true; journal.setMeta("service","Running · resume reconciliation completed")
    }
    for(e in journal.events(false)) { try { engine.step(e); if(!engine.reconciliationHealthy) needsReconciliation=true } catch(error:Exception) { engine.reconnect(); needsReconciliation=true; journal.diagnostic(e.getString("event_id"),"reconciliation_error",if(error is HttpError) "HTTP ${error.status}" else "Broker reconciliation needs attention"); journal.setMeta("status","Reconciliation needed: ${error.message}") } }
    note("execution",if(needsReconciliation) "blocked" else "healthy",if(needsReconciliation) "reconciliation_required" else "checked")
