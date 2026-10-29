@@ -10,7 +10,9 @@
 - [x] iOS multi-connection runtime and selection UI with independent secure storage, journal, cursors and task cancellation.
 - [x] Android multi-connection runtime and selection UI with scoped vault/settings/journal and foreground lifecycle.
 - [x] Test same event across accounts, account collision refusal, selection during work, pause/restart, unresolved history retention and migration.
-- [ ] Review implementation and run appropriate Python/native/CI checks; direct main commit/push.
+- [x] Review implementation and run appropriate Python/native/CI checks; direct main commit/push.
 - [ ] Follow-up: shared-account reservations, arbitrary cross-broker adapters and real device/broker acceptance. Keep explicit exclusions while these are unimplemented; do not call all D.1 complete.
 
 The owner approved D.1 implementation on October 29. Initial safe routing supports the existing executable Alpaca adapter. Webull authentication is separately verified; it is not an executable Crier resource adapter. Tradier execution remains unimplemented. The full request remains in progress until native/runtime and adapter gaps are closed.
+
+Accepted initial independent-account scope: [verification evidence](../../acceptance/2026-10-29/multiple-connections/README.md). Full D.1 shared-account/cross-broker scope remains unfinished.

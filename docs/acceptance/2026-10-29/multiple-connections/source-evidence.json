@@ -1,0 +1,74 @@
+{
+  "runtime_source": "1f48e403753b4a06daf8aa42939c49eac1e1ec63",
+  "version": "0.4.0",
+  "windows_python_tests": {
+    "passed": 1205,
+    "skipped": 1
+  },
+  "ios_native_tests": {
+    "passed": 181,
+    "run": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40940195020"
+  },
+  "ci_runs": [
+    {
+      "conclusion": "success",
+      "databaseId": 40940214998,
+      "headSha": "1f48e403753b4a06daf8aa42939c49eac1e1ec63",
+      "name": "Windows release",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40940214998"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40940195088,
+      "headSha": "1f48e403753b4a06daf8aa42939c49eac1e1ec63",
+      "name": "Android build and intent tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40940195088"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40940195085,
+      "headSha": "1f48e403753b4a06daf8aa42939c49eac1e1ec63",
+      "name": "Backend tests",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40940195085"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40940195073,
+      "headSha": "1f48e403753b4a06daf8aa42939c49eac1e1ec63",
+      "name": "iOS build",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40940195073"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40940195049,
+      "headSha": "1f48e403753b4a06daf8aa42939c49eac1e1ec63",
+      "name": "Windows desktop",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40940195049"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40940195020,
+      "headSha": "1f48e403753b4a06daf8aa42939c49eac1e1ec63",
+      "name": "Crier live-trading safety checks",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40940195020"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40940194994,
+      "headSha": "1f48e403753b4a06daf8aa42939c49eac1e1ec63",
+      "name": "Customer acceptance",
+      "status": "completed",
+      "url": "https://github.com/Tetradim/Sentinel-Crier/actions/runs/40940194994"
+    }
+  ],
+  "physical_broker_acceptance": "deferred",
+  "orders_submitted": false,
+  "discord_messages_sent": false,
+  "earlier_failures": "Initial source encoding and Windows packaged support-bundle startup evidence failures were repaired before accepted runtime source; superseded checks are not accepted proof."
+}
