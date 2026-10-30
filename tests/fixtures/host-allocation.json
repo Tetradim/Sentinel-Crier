@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "purpose": "Non-executing cross-platform allocation arithmetic; not brokerage evidence",
+  "common": {
+    "broker": "alpaca",
+    "account": "synthetic-account",
+    "environment": "paper",
+    "host_id": "synthetic-host",
+    "equity": "10000",
+    "spendable_cash": "1000",
+    "currency": "USD",
+    "observed_at": "2026-10-29T15:00:00+00:00",
+    "snapshot_revision": "synthetic-snapshot-1",
+    "asset": "option",
+    "multiplier": 100,
+    "buy_limit": "0.20",
+    "fee_reserve": "0",
+    "max_units": 1000
+  },
+  "cases": [
+    {
+      "name": "fixed_contracts",
+      "pool": {
+        "mode": "dollars",
+        "value": "2000"
+      },
+      "sizing": {
+        "mode": "units",
+        "value": "3"
+      },
+      "expected": {
+        "decision": "eligible",
+        "target_units": 3,
+        "reserved_notional": "60"
+      }
+    },
+    {
+      "name": "dollar_entry",
+      "pool": {
+        "mode": "dollars",
+        "value": "2000"
+      },
+      "sizing": {
+        "mode": "dollars",
+        "value": "300"
+      },
+      "expected": {
+        "decision": "eligible",
+        "target_units": 15,
+        "reserved_notional": "300"
+      }
+    },
+    {
+      "name": "destination_equity_percent",
+      "pool": {
+        "mode": "equity_percent",
+        "value": "20"
+      },
+      "sizing": {
+        "mode": "equity_percent",
+        "value": "2"
+      },
+      "expected": {
+        "decision": "eligible",
+        "target_units": 10,
+        "reserved_notional": "200",
+        "remaining_pool": "2000"
+      }
+    },
+    {
+      "name": "pending_units_with_explicit_downsize",
+      "pool": {
+        "mode": "units",
+        "value": "5"
+      },
+      "sizing": {
+        "mode": "units",
+        "value": "3"
+      },
+      "usage_units": 4,
+      "usage_notional": "80",
+      "allow_downsize": true,
+      "expected": {
+        "decision": "eligible",
+        "target_units": 1,
+        "reserved_notional": "20",
+        "remaining_pool": 1
+      }
+    },
+    {
+      "name": "pending_money_is_not_free",
+      "pool": {
+        "mode": "dollars",
+        "value": "100"
+      },
+      "sizing": {
+        "mode": "units",
+        "value": "3"
+      },
+      "usage_units": 2,
+      "usage_notional": "80",
+      "expected": {
+        "decision": "skip",
+        "reason": "allocation_capacity",
+        "target_units": 0
+      }
+    }
+  ]
+}

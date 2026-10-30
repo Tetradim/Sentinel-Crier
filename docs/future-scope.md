@@ -71,3 +71,7 @@ For Crier, consider reusable per-card allocations, independent buy/sell threshol
 - Measured cross-network delivery/acknowledgement/fill timelines with clock uncertainty, stream/poll status and suspension gaps.
 
 Suggested sequence: define authority/accounting; establish the common reservation/reconciliation boundary; adapt pure stop/trailing decisions; add optional fallback and asset pools; evaluate recurring cards; resume D.1 only when selected. Each item needs its own implementation and acceptance scope.
+
+## Host allocation implementation started October 29
+
+[Sentinel source review](reviews/2026-10-29-sentinel-allocations.md) prioritizes Pulse reusable allocations, independent per-entry sizing, explicit account identities and host-owned fills. [The plan](superpowers/plans/2026-10-29-host-allocations.md) tracks the implementation. A tested preview-only unit/dollar/destination-equity-percentage reference exists; shared ledger, runtime integration and native controls remain unfinished. The same-account execution guard remains active.
