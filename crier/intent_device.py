@@ -84,6 +84,8 @@ class IntentDevice:
     def fingerprint(self): return sha256(json.dumps(self.pair,sort_keys=True).encode()).hexdigest() if self.pair else ''
     def _engine(self):
         self.engine=IntentEngine(self.folder/('intent-'+self.fingerprint+'.sqlite3'),self.broker,pairing_id=self.fingerprint,role=self.pair['role'],error_log=self.error_log) if self.broker and self.pair else None
+        if self.engine and hasattr(self.broker,'attach_journal'):
+            self.broker.attach_journal(self.engine.path,self.fingerprint)
     def configure(self,pair):
         if set(pair)!={'url','token','environment','role'}: raise ValueError('Paste a complete intent pairing')
         service_url(pair['url'], allow_local=True)

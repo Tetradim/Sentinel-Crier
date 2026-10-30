@@ -13,7 +13,7 @@ Retain the [deferred research](deferred/multi-host-cross-broker.md): multiple pr
 - Per-host ownership when several hosts use the same instrument/account, plus shared cash and exit-quantity reservations.
 - Explicit contract mapping and broker capability checks. An unavailable broker must not silently redirect an order to another account.
 
-Status: implementation resumed October 29. Concurrent independent Alpaca account routes are being implemented; shared-account reservations and arbitrary cross-broker execution remain future work. See [current multiple connections guide](multiple-connections.md).
+Status: October 29 main implements concurrent independent Alpaca routes and an opt-in Windows [account ID bank](account-id-bank.md) with shared-account reservations and per-host stock/option pools. Native shared-account receiver parity and arbitrary cross-broker execution remain future work. See [current multiple connections guide](multiple-connections.md).
 
 ## D.2 — Independent Trading Policies and Stock/Option Allocation
 

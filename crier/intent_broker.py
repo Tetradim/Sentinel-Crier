@@ -121,3 +121,29 @@ class AlpacaIntentBroker:
         if not quantity.is_finite(): raise ValueError('Invalid position quantity')
         return max(Decimal(0),quantity)
     def close(self): self.client.close()
+
+    def allocation_funds(self):
+        from datetime import datetime, timezone
+        from .host_allocation import _amount, _format
+        observed=datetime.now(timezone.utc)
+        account=self._account(self.environment)
+        if account.get('currency')!='USD': raise ValueError('USD account funds required')
+        # Use cash and available non-margin buying power, never margin leverage.
+        amounts=[_amount(str(account['cash'])),_amount(str(account['non_marginable_buying_power']))]
+        if account.get('options_buying_power') is not None:
+            amounts.append(_amount(str(account['options_buying_power'])))
+        return dict(account=self.account,environment=self.environment,currency='USD',
+                    cash=_format(min(amounts)),equity=_format(_amount(str(account['equity']))),observed_at=observed)
+
+    def allocation_positions(self):
+        rows=self._request('GET','/v2/positions')
+        if not isinstance(rows,list): raise ValueError('Complete positions required')
+        positions={}
+        for row in rows:
+            symbol=row.get('symbol');quantity=Decimal(str(row.get('qty')))
+            if (not isinstance(symbol,str) or not symbol or symbol in positions or
+                    row.get('side')!='long' or row.get('asset_class') not in ('us_equity','us_option') or
+                    not quantity.is_finite() or quantity<0 or quantity!=quantity.to_integral_value()):
+                raise ValueError('Managed account requires verified whole long positions')
+            positions[symbol]=int(quantity)
+        return positions

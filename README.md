@@ -86,7 +86,7 @@ The current iPhone target has no ReplayKit extension and does not continuously o
 | Webull Trading API | Experimental Python SDK observer with separate access and verification requirements. |
 | Webull Connect | Candidate iPhone Webull Host workflow, authenticated server gateway, durable source-order ledger and composed authorization/token-custody service. The approved account/contract/order adapter, deployment and sandbox acceptance remain unfinished; no real Webull trading is activated. |
 
-Concurrent independent Alpaca Host/Receive routes are implemented in the app runtimes; see [multiple connections](docs/multiple-connections.md). Several hosts sharing one account and execution across different broker types remain unfinished [D.1](docs/deferred/multi-host-cross-broker.md). A donor bot's adapter name does not establish working support in Crier.
+Concurrent independent Alpaca Host/Receive routes are implemented in the app runtimes; see [multiple connections](docs/multiple-connections.md). Windows main also supports an explicit [account ID bank](docs/account-id-bank.md) for multiple hosts sharing one Alpaca account, with host-owned lots and reusable unit/dollar/equity-percentage pools. Native shared-account receivers and execution across different broker types remain unfinished [D.1](docs/deferred/multi-host-cross-broker.md). A donor bot's adapter name does not establish working support in Crier.
 
 ## Run the Python console
 

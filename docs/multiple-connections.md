@@ -6,7 +6,7 @@ Crier can retain several independent Alpaca Host/Receive connections in one inst
 
 1. Keep the original connection and its journals. Add a new connection for each different host/account route.
 2. Create a Host pairing or accept the intended host's private invitation in that connection.
-3. Verify that connection's own Alpaca account and paper/live environment. Use a different destination account/environment for each route.
+3. Verify that connection's own Alpaca account and paper/live environment. Use separate destinations, or explicitly enable the Windows [account ID bank](account-id-bank.md) before sharing an Alpaca destination between hosts.
 4. Inspect its sizing, price and exit settings, then explicitly enable entries when ready.
 5. Select another connection and repeat. Each route retains separate credentials, pairing, trade history, cursors and execution controls.
 
@@ -20,7 +20,7 @@ Android: use **Select connection / account**; create another Host or Receive con
 
 ## Ownership and recovery
 
-A broker/account/environment remains assigned to its original connection even after disconnect. Reuse that route to recover existing orders. Crier refuses assigning the same destination account/environment to another route; it does not silently merge holdings or allow one host's exits to sell another host's allocation. Existing legacy journal ownership is reserved in place, including when saved credentials are absent. No route deletion or automatic journal migration is offered. Preserve the entire profile before reinstalling or recovering.
+A broker/account/environment remains assigned to its original connection even after disconnect. Reuse that route to recover existing orders. Sharing it requires the explicit Windows account-bank setup; native receivers and unmanaged Windows scopes retain the exclusive-account guard. Existing legacy journal ownership is preserved in place, including when saved credentials are absent. No route deletion or automatic journal migration is offered. Preserve the entire profile before reinstalling or recovering.
 
 One source event can execute independently in two different authorized accounts. Duplicate delivery within a route remains idempotent. A failure or disconnect in one route does not authorize a retry or change credentials in another. Existing broker orders remain active when Crier stops.
 
@@ -28,6 +28,6 @@ One source event can execute independently in two different authorized accounts.
 
 This implements concurrent routes using the existing Alpaca executor. Webull OpenAPI account authentication was separately verified on the owner's PC; Webull resource execution and customer Connect activation are not completed by this feature. Tradier remains a read-only observer. Unavailable brokers never redirect trades to an Alpaca account.
 
-Several hosts sharing the same destination account, shared cash/quantity reservations, arbitrary cross-broker execution and multi-hop feedback-loop routing remain unfinished D.1 work. There is no public host directory, unsolicited invitation broadcast, independent strategy or automatic market fallback. This is not completion of all D.1 scope.
+Windows main now provides opt-in shared Alpaca account reservations and per-host lots through the account ID bank. Native shared-account receivers, arbitrary cross-broker execution and multi-hop feedback-loop routing remain unfinished D.1 work. There is no public host directory, unsolicited invitation broadcast, independent strategy or automatic market fallback. This is not completion of all D.1 scope.
 
 Automated tests use synthetic accounts/events and intercepted transports. Native signing, physical cross-network/lifecycle tests and independent broker-UI reconciliation remain external acceptance work.

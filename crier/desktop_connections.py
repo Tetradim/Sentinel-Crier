@@ -11,6 +11,9 @@ from uuid import uuid4
 
 from .desktop_runtime import DesktopSession
 from .error_log import ErrorLog, emit_event
+from .allocation_bank import AccountBank, BankConflict
+from .host_allocation import Scope
+from .managed_account import ManagedAccount, verify_legacy_journal
 
 
 class DesktopConnections:
@@ -18,6 +21,7 @@ class DesktopConnections:
         self.folder = Path(folder)
         self.folder.mkdir(parents=True, exist_ok=True)
         self.factory = session_factory
+        self.bank = AccountBank(self.folder/'account-bank.sqlite3')
         self.guard = threading.RLock()
         self.operations = asyncio.Lock()
         self.sessions = {}
@@ -68,6 +72,13 @@ class DesktopConnections:
             if not route['legacy'] and folder.resolve() != self.folder.resolve() / 'connections' / identity:
                 raise ValueError('Connection directory redirects outside its private route.')
             session = self.factory(folder, error_log=ErrorLog(folder / 'logs'))
+            raw_factory=session.broker_factory
+            session._bank_raw_factory=raw_factory
+            def managed_factory(environment,key,secret,account,_factory=raw_factory,_route=identity,**kwargs):
+                raw=_factory(environment,key,secret,account,**kwargs)
+                scope=Scope('alpaca',account,environment)
+                return ManagedAccount(self.bank,scope,_route,raw) if self.bank.enabled(scope) else raw
+            session.broker_factory=managed_factory
             for name in ('account_lookup', 'alerts_lookup'):
                 lookup = getattr(session, name)
                 credentials = session.credentials if name == 'account_lookup' else session.alerts_credentials
@@ -114,7 +125,7 @@ class DesktopConnections:
             db.execute('BEGIN IMMEDIATE')
             owner = db.execute('SELECT route FROM ownership WHERE broker=? AND environment=? AND account=?',
                                ('alpaca', environment, account)).fetchone()
-            if owner and owner[0] != identity:
+            if owner and owner[0] != identity and not self.bank.enabled(Scope('alpaca',account,environment)):
                 raise ValueError('This Alpaca account and environment belongs to another route. Its journal must be retained.')
             db.execute('INSERT OR IGNORE INTO ownership VALUES (?, ?, ?, ?)', ('alpaca', environment, account, identity))
 
@@ -149,6 +160,10 @@ class DesktopConnections:
             self.selected = identity
 
     async def invoke(self, identity, method, *args, **kwargs):
+        if method in ('bank_enable','bank_status','bank_configure'):
+            async with self.operations:
+                if self.stopping: raise ValueError('Connections are shutting down.')
+                return await self.bank_operation(identity,method,*args,**kwargs)
         if method in ('disconnect_all', 'shutdown'):
             async with self.operations:
                 if method == 'shutdown': self.stopping = True
@@ -165,6 +180,68 @@ class DesktopConnections:
                 return await self._invoke(self.sessions[identity], method, *args, **kwargs)
         if self.stopping: raise ValueError('Connections are shutting down.')
         return await self._invoke(self.sessions[identity], method, *args, **kwargs)
+
+    def bank_scope(self,identity):
+        session=self.sessions[identity]
+        if not session.credentials.exists(): raise ValueError('Connect and save an Alpaca trade account first.')
+        saved=json.loads(load_secret(session.credentials))
+        return Scope('alpaca',saved['account'],saved['pair']['environment']),saved
+
+    async def bank_operation(self,identity,method,*args,**kwargs):
+        scope,saved=self.bank_scope(identity)
+        if method=='bank_status':
+            enabled=self.bank.enabled(scope)
+            return dict(enabled=enabled,account=scope.account,environment=scope.environment,
+                balance=self.bank.account(scope) if enabled else {},
+                active=self.bank.active(scope) if enabled else [],
+                history=self.bank.history_rows(scope) if enabled else [],
+                fees={asset:self.bank.fee(scope,identity,asset) for asset in ('stock','option')} if enabled else {},
+                policies={asset:self.bank.policy(scope,identity,asset) for asset in ('stock','option')} if enabled else {})
+        if method=='bank_configure':
+            asset,mode,value,fee=args
+            self.bank.configure(scope,identity,asset,dict(mode=mode,value=value),fee)
+            return await self.bank_operation(identity,'bank_status')
+        # Drain every worker before transitioning an exclusive account to banked
+        # execution. The user's existing enable-orders settings are not restored.
+        for session in self.sessions.values():
+            await session.disconnect()
+        session=self.sessions[identity]
+        if saved.get('bearer'): session.require_oauth_owner(saved)
+        raw=session._bank_raw_factory(scope.environment,saved.get('key',''),saved.get('secret',''),scope.account,
+                **({'bearer':saved['bearer']} if saved.get('bearer') else {}))
+        try:
+            def setup():
+                with self.bank.locked(scope):
+                    raw.verify(scope.environment)
+                    journals=[]
+                    for route,other in self.sessions.items():
+                        for path in (other.folder/'journal').glob('intent-*.sqlite3'):
+                            if path.name=='intent-device.sqlite3': continue
+                            with sqlite3.connect(path.resolve().as_uri()+'?mode=ro',uri=True) as db:
+                                pin=db.execute('SELECT environment,account FROM intent_pin WHERE id=1').fetchone()
+                            if pin and tuple(pin)==(scope.environment,scope.account):
+                                verify_legacy_journal(path,raw,scope,self.bank,route)
+                                journals.append((route,path))
+                    funds=raw.allocation_funds()
+                    if (funds.get('account'),funds.get('environment'),funds.get('currency'))!=(scope.account,scope.environment,'USD'):
+                        raise BankConflict('Verified destination USD funds required')
+                    from datetime import datetime,timezone
+                    if not 0<=(datetime.now(timezone.utc)-funds['observed_at']).total_seconds()<=10:
+                        raise BankConflict('Fresh account funds required')
+                    positions=raw.allocation_positions()
+                    for route,path in journals:
+                        self.bank.register_journal(scope,route,path,path.stem[len('intent-'):])
+                    self.bank.enable(scope,funds['cash'],funds['equity'])
+                    self.bank.inventory(scope,positions)
+            task=asyncio.create_task(asyncio.to_thread(setup))
+            try:
+                await asyncio.shield(task)
+            except asyncio.CancelledError:
+                await task
+                raise
+        finally:
+            raw.close()
+        return await self.bank_operation(identity,'bank_status')
 
     async def _invoke(self, session, method, *args, **kwargs):
         tracked = method.startswith('provider_') or method in ('customer_login', 'customer_refresh')

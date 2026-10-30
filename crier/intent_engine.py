@@ -225,6 +225,8 @@ class IntentEngine(PolicyJournal):
                 db.execute('INSERT OR REPLACE INTO intent_decisions VALUES (?,?,?)',
                            (event['event_id'],tid,json.dumps(dict(state=state,reason=saved_reason))))
         self._trace(tid,'execution_decision',event.get('event_id'),state=state)
+        if hasattr(self.broker,'settled_intent'):
+            self.broker.settled_intent(event,state)
         return {'trade_id':tid,'state':state}
     def _step(self, tid):
         with self._db() as db: row=db.execute('SELECT * FROM intent_trades WHERE id=?',(tid,)).fetchone()
@@ -236,6 +238,8 @@ class IntentEngine(PolicyJournal):
             pin=db.execute('SELECT environment,account FROM intent_pin WHERE id=1').fetchone()
             if pin and tuple(pin)!=(e['environment'],account): raise ValueError('Persisted account/environment mismatch')
             if not pin: db.execute('INSERT INTO intent_pin VALUES (1,?,?)',(e['environment'],account))
+        if hasattr(self.broker,'observe_intent'):
+            self.broker.observe_intent(e)
         snapshot=self.policy_for(tid,e,account)
         reconciled=set(); failures=[]
         for order in self._orders(tid):
@@ -320,6 +324,8 @@ class IntentEngine(PolicyJournal):
             qty=Decimal(e['quantity'])-bought
         qty=qty.to_integral_value(rounding=ROUND_DOWN)
         cid='si-'+e['event_id']+('-s'+str(len(revision_exits)) if side=='sell' else '-b')
+        if hasattr(self.broker,'make_order_id'):
+            cid=self.broker.make_order_id(e,side,len(revision_exits) if side=='sell' else 0)
         if side=='sell' and qty<=0: return {'trade_id':tid,'state':'waiting_for_availability'}
         if any(o['cid']==cid and o['status']=='rejected' for o in orders): return self._settle(tid,e,'rejected')
         if (qty<=0 and not snapshot) or any(o['cid']==cid for o in orders): return self._settle(tid,e,'settled')
@@ -393,7 +399,9 @@ class IntentEngine(PolicyJournal):
             return True
         self._trace(tid,'broker_submit_started',e['event_id'],client_order_id=cid,side=side,quantity=str(qty),order_type=request['type'],limit_price=request.get('limit_price'))
         try:
-            if hasattr(self.broker,'submit_checked'):
+            if hasattr(self.broker,'submit_intent_checked'):
+                self.broker.submit_intent_checked(request,can_submit,event=e,trade_id=tid,ordinal=len(revision_exits) if side=='sell' else 0)
+            elif hasattr(self.broker,'submit_checked'):
                 self.broker.submit_checked(request, can_submit)
             elif not snapshot:
                 if not can_submit(): raise BrokerSuperseded('Instruction changed')

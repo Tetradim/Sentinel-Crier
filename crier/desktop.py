@@ -58,6 +58,7 @@ class DesktopApp:
             self.route_choice.pack(side='left', padx=8)
             self.route_choice.bind('<<ComboboxSelected>>', self.select_route)
             ttk.Button(routes, text='Add connection', command=self.add_route).pack(side='left')
+            ttk.Button(routes, text='Account ID bank', command=self.account_bank).pack(side='left',padx=8)
             self.refresh_routes()
         self.summary = tk.StringVar(value='Disconnected • Choose a setup to begin')
         self.connection_title=tk.StringVar(value='Disconnected')
@@ -193,6 +194,44 @@ class DesktopApp:
     def current_route_future(self, future):
         connections = getattr(self.worker, 'connections', None)
         return connections is None or getattr(future, 'route_id', connections.selected) == connections.selected
+
+    def account_bank(self):
+        self.submit('bank_status',callback=self.show_account_bank)
+
+    def show_account_bank(self,result):
+        window=tk.Toplevel(self.root)
+        window.title('Account ID bank')
+        window.geometry('850x560')
+        frame=ttk.Frame(window,padding=16);frame.pack(fill='both',expand=True)
+        ttk.Label(frame,text='Shared Alpaca account • '+result['environment'].upper(),font=('Segoe UI',14,'bold')).pack(anchor='w')
+        if not result['enabled']:
+            ttk.Label(frame,text='Enable separate host IDs for this account. Setup disconnects all routes and checks that older Crier orders and holdings are fully reconciled and closed. Reconnect afterward; orders remain paused. Each host starts with zero allocation.',wraplength=780).pack(anchor='w',pady=16)
+            ttk.Button(frame,text='Set up account ID bank',command=lambda:(window.destroy(),self.submit('bank_enable',callback=self.show_account_bank))).pack(anchor='w')
+            return
+        blocked=result['balance'].get('blocked')
+        ttk.Label(frame,text='New entries blocked: '+blocked if blocked else 'Account bank enabled. Configure this connection’s reusable pools, then reconnect and explicitly enable orders.',wraplength=780).pack(anchor='w',pady=8)
+        for asset in ('stock','option'):
+            row=ttk.Frame(frame);row.pack(fill='x',pady=4)
+            ttk.Label(row,text=asset.title()+' pool',width=14).pack(side='left')
+            policy=result['policies'][asset]
+            mode=tk.StringVar(value=policy['mode']);value=tk.StringVar(value=policy['value']);fee=tk.StringVar(value=result['fees'][asset])
+            ttk.Combobox(row,textvariable=mode,values=('units','dollars','equity_percent'),state='readonly',width=18).pack(side='left')
+            ttk.Entry(row,textvariable=value,width=12).pack(side='left',padx=5)
+            ttk.Label(row,text='Fee reserve $').pack(side='left')
+            ttk.Entry(row,textvariable=fee,width=8).pack(side='left',padx=5)
+            ttk.Button(row,text='Save pool',command=lambda a=asset,m=mode,v=value,f=fee:self.submit('bank_configure',a,m.get(),v.get(),f.get(),callback=lambda updated:(window.destroy(),self.show_account_bank(updated)))).pack(side='left')
+        ttk.Label(frame,text='Limit orders only. Units = aggregate shares/contracts held + pending. Dollars and equity % include held cost and pending buy limits. Fees are reserved per order. Lowering a pool never sells a position.',wraplength=780).pack(anchor='w',pady=8)
+        table=ttk.Treeview(frame,columns=('id','host','symbol','units','buy','sell','state'),show='headings',height=10)
+        for name in table['columns']:
+            table.heading(name,text=name.title());table.column(name,width=95 if name!='symbol' else 180)
+        table.pack(fill='both',expand=True)
+        active={row['id'] for row in result['active']}
+        labels={row['id']:row['label'] for row in self.worker.connections.routes()}
+        rows=result['active']+[row for row in result['history'] if row['id'] not in active]
+        for row in rows:
+            table.insert('','end',values=(row['id'],labels.get(row['route'],row['route']),row['symbol'],row['units'],row['pending_buy_units'],row['pending_exit_units'],'Active' if row['id'] in active else 'Archived'))
+        ttk.Label(frame,text='Showing the latest 100 IDs. Empty sold/canceled IDs archive automatically. Unknown orders and partial fills retain their IDs. IDs and audit history are never reused or erased.',wraplength=780).pack(anchor='w',pady=8)
+        ttk.Button(frame,text='Refresh',command=lambda:(window.destroy(),self.account_bank())).pack(anchor='e')
 
     def _start(self, frame):
         ttk.Label(frame, text='What would you like to do?', font=('Segoe UI', 16, 'bold')).pack(anchor='w', pady=12)
