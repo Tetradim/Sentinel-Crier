@@ -617,8 +617,29 @@ struct AlpacaTradingView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("\(model.environment.rawValue.uppercased()) • day limit order") {
-                    Toggle("Options", isOn: $options)
+                Section {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("ORDER TICKET").font(.caption.weight(.semibold)).tracking(1.5).foregroundStyle(.secondary)
+                            Text(sell ? "Close position" : "Open position").font(.title2.weight(.bold))
+                        }
+                        Spacer()
+                        Text(model.environment.rawValue.uppercased())
+                            .font(.caption.weight(.bold)).padding(8)
+                            .background(Color.blue.opacity(0.16), in: Capsule())
+                    }
+                    Text("Alpaca • Limit order • Day duration")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if model.account == nil {
+                        Label("Connect an account before reviewing an order", systemImage: "info.circle")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                }
+                Section("Instrument") {
+                    Picker("Asset type", selection: $options) {
+                        Text("Stocks").tag(false)
+                        Text("Options").tag(true)
+                    }.pickerStyle(.segmented)
                     TextField("Underlying / stock symbol", text: $symbol).textInputAutocapitalization(.characters).autocorrectionDisabled()
                     if options {
                         TextField("Expiration YYYY-MM-DD", text: $expiration).keyboardType(.numbersAndPunctuation)
@@ -628,16 +649,29 @@ struct AlpacaTradingView: View {
                             ForEach(model.contracts) { Text($0.name).tag($0.id) }
                         }
                     }
-                    Toggle(options ? "Sell to close" : "Sell existing shares", isOn: $sell)
-                    Stepper("Quantity: \(quantity)", value: $quantity, in: 1...1000)
-                    TextField("Limit price per share", text: $limit).keyboardType(.decimalPad)
+                }.disabled(model.busy || model.review != nil)
+                Section("Order details") {
+                    Picker("Order side", selection: $sell) {
+                        Text(options ? "Buy to open" : "Buy shares").tag(false)
+                        Text(options ? "Sell to close" : "Sell shares").tag(true)
+                    }.pickerStyle(.segmented)
+                    Stepper("\(options ? "Contracts" : "Shares"): \(quantity)", value: $quantity, in: 1...1000)
+                        .monospacedDigit()
+                    TextField(options ? "Limit premium per share" : "Limit price per share", text: $limit).keyboardType(.decimalPad)
+                    if options {
+                        Text("Standard contracts represent 100 shares. Premium × 100 × contracts determines limit notional, before fees.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     Button("Review order") {
                         Task { await model.prepare(symbol: symbol, quantity: quantity, limit: limit, sell: sell, contract: options ? model.contracts.first(where: { $0.id == contractID }) : nil) }
-                    }.disabled(model.account == nil || (options && !model.contracts.contains(where: { $0.id == contractID })))
+                    }.buttonStyle(.borderedProminent).controlSize(.large)
+                        .accessibilityIdentifier("crier.order.review")
+                        .disabled(model.account == nil || (options && !model.contracts.contains(where: { $0.id == contractID })))
                 }.disabled(model.busy || model.review != nil)
                 if let ticket = model.review {
                     Section("Final confirmation • \(ticket.environment.rawValue.uppercased())") {
                         Text("\(ticket.side.uppercased()) \(ticket.quantity) \(ticket.symbol) @ $\(NSDecimalNumber(decimal: ticket.limitPrice).stringValue)")
+                            .font(.headline).monospacedDigit().textSelection(.enabled)
                         Text("Limit notional: $\(NSDecimalNumber(decimal: ticket.limitPrice * Decimal(ticket.quantity * ticket.multiplier)).stringValue). Fees excluded; execution not guaranteed.")
                         Text("Account: \(ticket.accountID)").font(.caption).textSelection(.enabled)
                         Text("Client ID: \(ticket.id)").font(.caption).textSelection(.enabled)
@@ -658,7 +692,10 @@ struct AlpacaTradingView: View {
                         }
                     }
                 }
-            }.navigationTitle("Trade").refreshable { await model.refresh() }
+            }.scrollContentBackground(.hidden)
+                .background(Color(red: 0.035, green: 0.045, blue: 0.06))
+                .navigationTitle("Trade").navigationBarTitleDisplayMode(.inline)
+                .refreshable { await model.refresh() }
         }
     }
 }

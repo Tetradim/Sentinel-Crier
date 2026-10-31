@@ -13,3 +13,5 @@ Per-order guided repairs and mobile recovery views remain unfinished. The iOS sh
 Recovery dialogs are tied to the connection selected when opened. Switching connections requires reopening the assistant before running its check. The comparison table has a regression test for visible broker differences and refusal to dispatch against a different selected route.
 
 The iOS Positions screen now uses a compact dark list, symbol search, separate market-value and quantity/average columns, and explicit last-loaded-snapshot empty-state guidance. These values come from the existing broker model; the presentation does not add simulated prices, P&L or execution actions. Native compilation and visual acceptance for each revision are separate checks.
+
+Order-ticket presentation is tracked in [iOS trading UI](ios-trading-ui.md); mobile recovery remains a distinct unfinished integration, not an inference from Windows support.
