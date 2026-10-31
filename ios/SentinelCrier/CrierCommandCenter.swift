@@ -27,8 +27,10 @@ struct CrierCommandCenter: View {
                     do { try routes.select(id) } catch { routeError = error.localizedDescription }
                 })) {
                     ForEach(routes.registry.routes) { route in Text(route.name).tag(route.id) }
-                }.pickerStyle(.menu).disabled(connections.busy).frame(minHeight: 44)
-                Spacer(minLength: 0)
+                }.pickerStyle(.menu).labelsHidden()
+                    .font(.subheadline).lineLimit(1)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .layoutPriority(1).disabled(connections.busy)
                 Button { do { try routes.add() } catch { routeError = error.localizedDescription } } label: {
                     Image(systemName: "plus.circle").frame(minWidth: 44, minHeight: 44)
                 }.accessibilityLabel("Add connection").disabled(connections.busy)

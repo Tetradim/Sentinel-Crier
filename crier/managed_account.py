@@ -137,7 +137,7 @@ class ManagedAccount:
                 expected=owned.get(symbol,0)+baseline.get(symbol,0),broker=positions.get(symbol,0),
                 difference=positions.get(symbol,0)-owned.get(symbol,0)-baseline.get(symbol,0))
                 for symbol in sorted(set(positions)|set(baseline)|set(owned))]
-            if any(row['difference'] for row in comparison): result='unresolved'
+            if any(row['difference'] for row in comparison) or self.bank.account(self.scope)['blocked']: result='unresolved'
         report=recovery_report(self.bank,self.scope)
         from datetime import datetime,timezone
         report.update(broker_checked=result=='verified',check_result=result,positions=comparison,

@@ -57,7 +57,7 @@ struct GuidedSetupView: View {
                     NavigationLink("Saved positions and account", destination: BrokerageOverview())
                     NavigationLink("Orders and tracked trade recovery", destination: AlpacaTradingView())
                 }
-            }.navigationTitle("Home and setup")
+            }.navigationTitle("Home and setup").navigationBarTitleDisplayMode(.inline)
         }
     }
 }

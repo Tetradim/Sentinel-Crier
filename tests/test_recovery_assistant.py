@@ -49,3 +49,12 @@ def test_comparison_includes_external_baseline_without_claiming_host_ownership(t
     assert report['positions']==[dict(symbol=SYMBOL,host_owned=0,external_baseline=10,expected=10,broker=9,difference=-1)]
     assert report['check_result']=='unresolved'
     assert broker.posts==0
+
+
+def test_matching_inventory_cannot_present_evidence_block_as_resolved(tmp_path):
+    from crier.managed_account import ManagedAccount
+    from test_managed_account import Broker
+    bank=setup_bank(tmp_path);bank.block(SCOPE,'broker_evidence_conflict')
+    report=ManagedAccount(bank,SCOPE,'alice',Broker()).recovery_check()
+    assert report['check_result']=='unresolved'
+    assert report['state']=='needs_reconciliation'

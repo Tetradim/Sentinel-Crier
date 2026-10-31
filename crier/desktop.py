@@ -826,6 +826,16 @@ class DesktopApp:
             self.submit('receive',self.invitation.get(),self.service.get(),callback=ready)
 
     def _activity(self, frame):
+        canvas=tk.Canvas(frame,highlightthickness=0)
+        scrollbar=ttk.Scrollbar(frame,orient='vertical',command=canvas.yview)
+        scrollbar.pack(side='right',fill='y')
+        canvas.pack(side='left',fill='both',expand=True)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        content=ttk.Frame(canvas)
+        item=canvas.create_window((0,0),window=content,anchor='nw')
+        content.bind('<Configure>',lambda event:canvas.configure(scrollregion=canvas.bbox('all')))
+        canvas.bind('<Configure>',lambda event:canvas.itemconfigure(item,width=event.width))
+        frame=content
         controls = ttk.Frame(frame); controls.pack(fill='x', pady=(0,10))
         self.execution_buttons = []
         for label, enabled in [('Enable new entries', True), ('Pause new entries', False)]:

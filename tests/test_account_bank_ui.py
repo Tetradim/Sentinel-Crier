@@ -5,6 +5,16 @@ from crier.desktop import DesktopApp
 from test_desktop_policy_ui import Worker,descendants
 
 
+def test_trading_activity_has_scrollable_controls(desktop_tk_root):
+    root=tk.Toplevel(desktop_tk_root);root.withdraw()
+    try:
+        app=DesktopApp(root,Worker())
+        widgets=list(descendants(app.activity))
+        assert any(isinstance(w,tk.Canvas) for w in widgets)
+        assert any(isinstance(w,ttk.Scrollbar) for w in widgets)
+    finally:root.destroy()
+
+
 def test_bank_editor_keeps_active_old_ids_and_saved_fee(desktop_tk_root):
     root=tk.Toplevel(desktop_tk_root);root.withdraw();worker=Worker();app=DesktopApp(root,worker)
     worker.connections=SimpleNamespace(routes=lambda:[dict(id='alice',label='Alice')])
