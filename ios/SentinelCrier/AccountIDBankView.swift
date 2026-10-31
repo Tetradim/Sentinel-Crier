@@ -18,6 +18,14 @@ struct AccountIDBankView: View {
             message = "Local evidence loaded. Broker recovery requires reconnecting the original route."
         } catch { snapshot = nil; message = error.localizedDescription }
     }
+    private func check(repair: Bool) {
+        working = true
+        Task { @MainActor in
+            defer { working = false }
+            do { try await routes.checkBank(repair: repair); refresh(); message = routes.model.message }
+            catch { refresh(); message = error.localizedDescription }
+        }
+    }
     var body: some View {
         NavigationStack {
             Form {
@@ -51,6 +59,9 @@ struct AccountIDBankView: View {
                         }.disabled(working)
                     }
                     Section("Account evidence") {
+                        Button("Check original broker IDs and holdings") { check(repair: false) }.disabled(working)
+                        Button("Repair after verified flat reconciliation") { check(repair: true) }.disabled(working)
+                        Text("Repair stops all routes and verifies every original order and unchanged external inventory. It refuses unresolved orders or any host holdings; it retains every ID and source identity.").font(.caption)
                         Text("Local cash ledger: " + NSDecimalNumber(decimal: snapshot.available).stringValue)
                         Text("Ledger amounts require current broker reconciliation before order admission.").font(.caption)
                         Text(snapshot.blocked.isEmpty ? "No retained account block" : "Blocked: " + snapshot.blocked)

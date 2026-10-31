@@ -21,10 +21,21 @@ import Foundation
     }
     /// Admission scans actual retained journals; callers cannot assert a flat flag.
     static func verifyJournal(_ file: URL, api: AlpacaREST, scope: BankScope, bank: AccountIDBank?, route: String, undispatched: String? = nil) async throws {
-        guard FileManager.default.fileExists(atPath: file.path) else { return }
+        guard FileManager.default.fileExists(atPath: file.path) else {
+            if let bank, try bank.snapshot(scope).journals[route + "|" + file.path] != nil { throw AlpacaError.invalid("Original managed journal is missing; preserve bank for recovery.") }
+            return
+        }
         let state = try JSONDecoder().decode(IntentState.self, from: Data(contentsOf: file))
         guard state.accountID.isEmpty || state.accountID == scope.account else { throw AlpacaError.invalid("Retained journal belongs to another account.") }
         var failures: [String] = []
+        if let bank, try bank.enabled(scope) {
+            let retained = try bank.snapshot(scope)
+            for lot in retained.lots where lot.route == route {
+                for order in retained.orders where order.bankID == lot.id {
+                    guard state.trades[lot.trade]?.mutations.contains(where: { $0.clientID == order.cid && $0.eventID == order.event && $0.sell == order.sell && $0.quantity == order.quantity }) == true else { throw AlpacaError.invalid("Original managed order evidence is missing from its journal.") }
+                }
+            }
+        }
         for trade in state.trades.values {
             guard let event = trade.desired else { continue }
             guard event.environment == scope.environment else { throw AlpacaError.invalid("Retained journal environment mismatch.") }
@@ -32,6 +43,12 @@ import Foundation
             for mutation in trade.mutations {
                 do {
                     try mutation.validateLocalDisposition()
+                    if mutation.notSubmitted == true {
+                        if let bank, let registered = try bank.order(scope, cid: mutation.clientID) {
+                            guard registered.brokerID?.hasPrefix("local-no-post:") == true, registered.filled == 0, AccountIDBank.terminal.contains(registered.status) else { throw AlpacaError.invalid("Local refusal conflicts with retained bank evidence.") }
+                        }
+                        continue
+                    }
                     if mutation.clientID.hasPrefix("sc-") {
                         if mutation.clientID == undispatched, mutation.order == nil {
                             if try bank?.order(scope, cid: mutation.clientID) == nil { continue }
@@ -40,7 +57,6 @@ import Foundation
                               let lot = try bank.snapshot(scope).lots.first(where: { $0.id == row.bankID }), lot.route == route, lot.trade == event.trade_id, lot.symbol == event.symbol, lot.asset == event.asset, row.event == mutation.eventID, row.sell == mutation.sell, row.quantity == mutation.quantity else { throw AlpacaError.invalid("Managed order missing from original account bank.") }
                         continue
                     }
-                    if mutation.notSubmitted == true { continue }
                     let proof = try await api.order(clientID: mutation.clientID)
                     try mutation.validate(proof, symbol: event.symbol)
                     guard AccountIDBank.terminal.contains(proof.status), let filled = try? AccountIDBank.whole(proof.filled_qty) else { throw AlpacaError.invalid("Legacy order needs original-route recovery.") }
@@ -93,6 +109,23 @@ import Foundation
         do { try bank.inventory(scope, positions: Self.positions(await api.positions())) }
         catch { failures.append(error.localizedDescription) }
         guard failures.isEmpty else { throw AlpacaError.invalid("Account recovery required:\n" + failures.joined(separator: "\n")) }
+    }
+    func check(api: AlpacaREST, repair: Bool, canRepair: () -> Bool = { true }) async throws {
+        let lease = try bank.lease(scope)
+        defer { withExtendedLifetime(lease) {} }
+        let initial = try await api.account()
+        guard initial.id == scope.account, api.environment == scope.environment else { throw AlpacaError.invalid("Original broker account and environment required.") }
+        try await reconcile(api: api)
+        if repair {
+            // Reconciliation queried every original broker ID, including retired
+            // orders. Do not turn a failed/404/corrected proof into a reset.
+            let positions = try Self.positions(await api.positions())
+            try bank.inventory(scope, positions: positions)
+            let current = try await api.account(); let observed = Date()
+            guard canRepair(), current.id == scope.account, api.environment == scope.environment else { throw AlpacaError.invalid("Account identity changed during repair.") }
+            let funds = try Self.funds(current)
+            try bank.repairVerifiedFlat(scope, cash: funds.cash, equity: funds.equity, positions: positions, observedAt: observed)
+        }
     }
     func prepare(api: AlpacaREST, event: IntentEvent, cid: String, quantity: Int, price: String?, sell: Bool, ordinal: Int, canSubmit: () -> Bool) async throws -> Date {
         do {

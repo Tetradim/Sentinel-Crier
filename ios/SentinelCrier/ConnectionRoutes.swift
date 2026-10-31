@@ -17,6 +17,15 @@ struct ConnectionRoute: Codable, Identifiable {
     @Published private(set) var selected: String
     private let file: URL
     let bank: AccountIDBank?
+    private(set) var bankTransition = false
+    func beginBankTransition() throws {
+        guard !bankTransition else { throw AlpacaError.invalid("Account bank setup or repair is already running.") }
+        bankTransition = true
+    }
+    func endBankTransition() { bankTransition = false }
+    func requireExecutionAdmission() throws {
+        guard !bankTransition else { throw AlpacaError.invalid("Account bank setup or repair is running. Wait for it to finish, then reconnect explicitly.") }
+    }
     private func admitted(_ route: String, _ account: String, _ environment: AlpacaEnvironment) -> Bool {
         guard let bank, let snapshot = try? bank.snapshot(BankScope(account: account, environment: environment)) else { return false }
         return snapshot.journals.keys.contains { $0.hasPrefix(route + "|") }
@@ -184,9 +193,22 @@ struct ConnectionRouteStorage {
         selected = route.id
     }
     func setupBank() async throws {
+        try registry.beginBankTransition()
+        defer { registry.endBankTransition() }
         let selectedModel = model
         await stopAll()
         try await selectedModel.setupAccountBank(journals: Array(sessions.values))
+    }
+    func checkBank(repair: Bool) async throws {
+        if repair { try registry.beginBankTransition() }
+        defer { if repair { registry.endBankTransition() } }
+        let selectedModel = model
+        if repair {
+            do { for model in sessions.values { try model.intent?.pauseEntriesForBankTransition() } }
+            catch { await stopAll(); throw error }
+            await stopAll()
+        }
+        try await selectedModel.checkAccountBank(repair: repair)
     }
     func stopAll() async {
         for model in sessions.values { model.oauthStopWorkers() }

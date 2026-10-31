@@ -29,6 +29,7 @@ struct BankScope: Codable, Equatable {
         var baseline: [String: Int]; var policies: [String: Policy] = [:]; var pnl: [String: Decimal] = [:]
         var lots: [Lot] = []; var orders: [Order] = []
         var journals: [String: String] = [:]
+        var audit: [String]? = nil
     }
     private struct State: Codable { var version = 1; var nextID = 1; var accounts: [String: Account] = [:] }
     final class Lease {
@@ -70,7 +71,7 @@ struct BankScope: Codable, Equatable {
         return "sc-" + digest(String(decoding: encoded, as: UTF8.self)).prefix(40)
     }
     static func money(_ value: String) throws -> Decimal {
-        guard !value.isEmpty, value.count <= 32, value.allSatisfy({ $0.isASCII && ($0.isNumber || $0 == ".") }),
+        guard !value.isEmpty, value.count <= 32, value.allSatisfy({ $0.isASCII && ($0.isNumber || $0 == ".") }), value.filter({ $0 == "." }).count <= 1,
               let number = Decimal(string: value, locale: Locale(identifier: "en_US_POSIX")), !number.isNaN, number >= 0 else { throw AlpacaError.invalid("Invalid account-bank amount.") }
         return number
     }
@@ -166,13 +167,14 @@ struct BankScope: Codable, Equatable {
                 charge = try Self.checked(Self.product(Decimal(quantity), price, Decimal(multiplier)), fee)
                 if policy.mode == "units" { guard Decimal(units + quantity) <= capacity else { throw AlpacaError.invalid("Host unit pool exhausted.") } }
                 else { capacity = max(0, capacity + min(0, account.pnl[policyKey] ?? 0)); guard exposure + charge <= capacity else { throw AlpacaError.invalid("Host monetary pool exhausted.") } }
-                guard charge <= min(cash, account.available) else { throw AlpacaError.invalid("Account cash is reserved or unavailable.") }
+                guard charge <= min(cash, equity, account.available) else { throw AlpacaError.invalid("Account cash is reserved or unavailable.") }
             }
             let identity: Int
             if let index { identity = account.lots[index].id }
             else { identity = state.nextID; state.nextID += 1; account.lots.append(Lot(id: identity, route: route, trade: trade, symbol: symbol, asset: asset, multiplier: multiplier)) }
             var order = Order(cid: cid, bankID: identity, event: event, sell: sell, ordinal: ordinal, quantity: quantity, price: price, fee: fee)
             order.charge = charge; account.available -= charge; account.equity = equity; account.orders.append(order)
+            account.audit = (account.audit ?? []) + [Date().description + " reserved " + cid]
             state.accounts[scope.key] = account
         }
     }
@@ -238,6 +240,18 @@ struct BankScope: Codable, Equatable {
             if held.units == 0 && account.orders.filter({ $0.bankID == account.lots[index].id }).allSatisfy({ Self.terminal.contains($0.status) }) { account.lots[index].active = false }
         }
     }
+    func settleIfFlat(_ scope: BankScope, route: String, trade: String) throws {
+        try update(scope) { account in
+            guard let index = account.lots.firstIndex(where: { $0.route == route && $0.trade == trade }) else { return }
+            let identity = account.lots[index].id
+            let held = try Self.lot(account, identity)
+            guard held.units == 0, held.pendingBuy == 0, held.pendingSell == 0,
+                  account.orders.filter({ $0.bankID == identity }).allSatisfy({ Self.terminal.contains($0.status) }) else { return }
+            account.lots[index].active = false; account.lots[index].invalid = true
+            if account.lots[index].reason.isEmpty { account.lots[index].reason = "settled_empty" }
+            account.audit = (account.audit ?? []) + [Date().description + " retired_settled_empty id=" + String(identity)]
+        }
+    }
     func retire(_ scope: BankScope, route: String, trade: String, reason: String) throws {
         let account = try snapshot(scope)
         guard let lot = account.lots.first(where: { $0.route == route && $0.trade == trade }) else { throw AlpacaError.invalid("Unknown owned ID.") }
@@ -257,9 +271,22 @@ struct BankScope: Codable, Equatable {
         }
         if mismatch { throw AlpacaError.invalid("Broker inventory differs from host ownership and external baseline. Entries blocked.") }
     }
+    func repairVerifiedFlat(_ scope: BankScope, cash: Decimal, equity: Decimal, positions: [String: Int], observedAt: Date, now: Date = Date()) throws {
+        guard (0...10).contains(now.timeIntervalSince(observedAt)), cash >= 0, equity > 0 else { throw AlpacaError.invalid("Fresh account funds required for explicit repair.") }
+        try update(scope) { account in
+            guard ["", "capacity_deficit", "late_terminal_fill", "broker_evidence_conflict", "position_discrepancy"].contains(account.blocked),
+                  account.orders.allSatisfy({ Self.terminal.contains($0.status) }),
+                  try account.lots.allSatisfy({ try Self.lot(account, $0.id).units == 0 }),
+                  Set(account.baseline.keys).union(positions.keys).allSatisfy({ account.baseline[$0, default: 0] == positions[$0, default: 0] }) else { throw AlpacaError.invalid("Repair requires verified flat Crier holdings, terminal original orders and unchanged external baseline.") }
+            let previous = account.blocked
+            account.available = min(cash, equity); account.equity = equity; account.blocked = ""
+            for index in account.lots.indices { account.lots[index].active = false; account.lots[index].invalid = true; if account.lots[index].reason.isEmpty { account.lots[index].reason = "verified_flat_repair" } }
+            account.audit = (account.audit ?? []) + [Date().description + " explicit_verified_flat_repair previous=" + previous]
+        }
+    }
     func rebaseIfFlat(_ scope: BankScope, cash: Decimal, equity: Decimal) throws {
         try update(scope) { account in
-            if (account.blocked.isEmpty || account.blocked == "capacity_deficit") && !account.lots.contains(where: { $0.active }) && account.orders.allSatisfy({ Self.terminal.contains($0.status) }) { account.available = min(cash, equity); account.equity = equity; account.blocked = "" }
+            if account.blocked.isEmpty && !account.lots.contains(where: { $0.active }) && account.orders.allSatisfy({ Self.terminal.contains($0.status) }) { account.available = min(cash, equity); account.equity = equity }
         }
     }
 }

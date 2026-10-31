@@ -466,6 +466,7 @@ struct IntentPairing: Codable {
     private var copyFile: URL { file.appendingPathExtension("reports") }
     var onHealth: NativeHealthObserver?
     private let file: URL
+    var executionAdmission: () -> Bool = { true }
     var accountBank: AccountIDBank?
     var bankRoute = "legacy"
     var journalFile: URL { file }
@@ -477,6 +478,7 @@ struct IntentPairing: Codable {
         }
     }
     func persistBankJournal() throws { try commit { _ in } }
+    func pauseEntriesForBankTransition() throws { try commit { $0.preferences.paused = true } }
     private func managedBank(_ api: AlpacaREST) throws -> ManagedAccountBank? {
         let scope = BankScope(account: state.accountID, environment: api.environment)
         guard let bank = accountBank, try bank.enabled(scope) else { return nil }
@@ -557,6 +559,7 @@ struct IntentPairing: Codable {
         guard state.accountID.isEmpty || (state.accountID == account && state.pairingID == pair.fingerprint) else { throw AlpacaError.invalid("Intent journal is pinned to its original account and pairing. Recover its trades before changing channels.") }
     }
     func connect(api: AlpacaREST, account: String, pairing: IntentPairing? = nil, startWorkers: Bool = true) throws {
+        guard executionAdmission() else { throw AlpacaError.invalid("Account bank transition is running; reconnect afterward.") }
         guard let pair = try pairing ?? IntentPairing.load() else { return }
         try validateIdentity(account: account, environment: api.environment, pairing: pair)
         try commit { $0.accountID = account; $0.pairingID = pair.fingerprint; $0.pairingRole = pair.role }
@@ -620,7 +623,7 @@ struct IntentPairing: Codable {
     var hosting: Bool { pair?.role == "host" }
     var connected: Bool { api != nil && pair != nil }
     func host(symbol: String, asset: String, quantity: Int, price: String, tradeID: String? = nil, action: String = "enter") throws -> String {
-        guard let pair, hosting else { throw AlpacaError.invalid("Connect an intent host pairing first.") }
+        guard executionAdmission(), let pair, hosting else { throw AlpacaError.invalid("Connect an intent host pairing after account bank setup finishes.") }
         let id = tradeID ?? UUID().uuidString.lowercased()
         let e = IntentEvent.make(trade: id, sequence: (state.trades[id]?.desired?.sequence ?? 0) + 1, action: action, environment: pair.environment, symbol: symbol, asset: asset, quantity: quantity, price: price)
         try commit { s in var t = s.trades[id] ?? IntentTrade(); if t.policySnapshot == nil { t.policySnapshot = .legacy(e) }; try t.accept(e); s.trades[id] = t; s.outgoing.append(e) }
@@ -996,9 +999,13 @@ struct IntentPairing: Codable {
                   trade.mutations.allSatisfy({ $0.notSubmitted == true || ($0.order.map(terminal) ?? false) }) else { return }
             state.trades[id]!.completed = eventID
         }
+        if state.trades[id]?.completed == eventID, let api, let managed = try managedBank(api) {
+            try managed.bank.settleIfFlat(managed.scope, route: bankRoute, trade: id)
+        }
     }
     private func terminal(_ order: AlpacaOrder) -> Bool { ["filled", "canceled", "expired", "rejected", "replaced"].contains(order.status) }
     private func execute(_ id: String, api: AlpacaREST, observe: NativeHealthObserver? = nil) async throws {
+        guard executionAdmission() else { throw AlpacaError.invalid("Account bank transition is running; execution stopped.") }
         guard let initial = state.trades[id], let desired = initial.desired else { return }
         let managed = try managedBank(api)
         let accountLease = try managed.map { try $0.bank.lease($0.scope) }
@@ -1156,11 +1163,12 @@ struct IntentPairing: Codable {
             var bankObserved: Date?
             if let managed {
                 bankObserved = try await managed.prepare(api: api, event: e, cid: clientID, quantity: quantity, price: price, sell: sell, ordinal: existing.count, canSubmit: { [self] in
-                    !Task.isCancelled && self.api === api && pair != nil && state.trades[id]?.desired?.event_id == e.event_id
+                    executionAdmission() && !Task.isCancelled && self.api === api && pair != nil && state.trades[id]?.desired?.event_id == e.event_id
                 })
                 try managed.bank.markDispatching(managed.scope, cid: clientID)
             }
             let order = try await api.submitIntent(symbol: e.symbol, quantity: quantity, price: price, sell: sell, option: e.asset == "option", clientID: clientID, policyBinding: checkedBinding, canSubmit: { [self] in
+                guard executionAdmission() else { refusal = "bank_transition"; return false }
                 if let bankObserved, !(0...10).contains(Date().timeIntervalSince(bankObserved)) { refusal = "stale_bank_funds"; return false }
                 guard !Task.isCancelled, self.api === api, pair != nil else { refusal = "operation_stopped"; return false }
                 guard state.trades[id]?.desired?.event_id == e.event_id else { refusal = "revision_changed"; return false }
