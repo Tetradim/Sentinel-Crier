@@ -30,6 +30,29 @@ def test_fresh_check_reconciles_without_submitting(tmp_path):
     assert report['can_clear'] is False
 
 
+def test_missing_options_capacity_does_not_block_stock_funds_or_flat_repair(tmp_path):
+    from crier.managed_account import ManagedAccount
+    from test_managed_account import Broker
+    bank=setup_bank(tmp_path);bank.inventory(SCOPE,{})
+    bank.block(SCOPE,'capacity_deficit')
+    broker=Broker();original=broker.allocation_funds
+    broker.allocation_funds=lambda:dict(original(),options_cash=None)
+    assert ManagedAccount(bank,SCOPE,'alice',broker).repair_flat_account()['check_result']=='verified'
+
+
+def test_option_entry_requires_its_own_capacity_without_changing_common_cash(tmp_path):
+    import pytest
+    from crier.managed_account import ManagedAccount
+    from crier.intent_broker import BrokerNotSubmitted
+    from test_managed_account import Broker,request
+    bank=setup_bank(tmp_path);broker=Broker();original=broker.allocation_funds
+    broker.allocation_funds=lambda:dict(original(),options_cash='0')
+    managed=ManagedAccount(bank,SCOPE,'alice',broker);event,order=request(managed)
+    with pytest.raises(BrokerNotSubmitted):managed.submit_intent_checked(order,lambda:True,event=event,trade_id=event['trade_id'],ordinal=0)
+    assert broker.posts==0
+    assert bank.account(SCOPE)['available']=='1000'
+
+
 def test_unknown_check_retains_cash_and_reports_unresolved(tmp_path):
     from crier.managed_account import ManagedAccount
     from test_managed_account import Broker

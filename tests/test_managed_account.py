@@ -20,7 +20,7 @@ class Broker:
                     asset='option',currency='USD',multiplier=100)
     def allocation_funds(self):
         return dict(account=self.account,environment=self.environment,currency='USD',
-                    cash='1000',equity='10000',observed_at=datetime.now(timezone.utc))
+                    cash='1000',options_cash='1000',equity='10000',observed_at=datetime.now(timezone.utc))
     def allocation_positions(self): return self.positions
     def lookup(self,cid): return self.rows.get(cid)
     def cancel(self,broker_id):
@@ -130,6 +130,8 @@ def test_cancel_and_zero_pool_preserve_partial_fill_exit_authority(tmp_path):
     assert bank.active(SCOPE)[0]['units']==2
     assert bank.account(SCOPE)['available']=='960'
     bank.configure(SCOPE,'alice','option',dict(mode='dollars',value='0'))
+    original_funds=broker.allocation_funds
+    broker.allocation_funds=lambda:dict(original_funds(),options_cash='0')
     exit=event('exit',3,trade_id=entry['trade_id'],symbol=SYMBOL,asset='option',quantity=2,limit_price='0.20')
     engine.accept(exit);engine.tick()
     sell=next(row for row in broker.rows.values() if row['side']=='sell')
@@ -138,3 +140,20 @@ def test_cancel_and_zero_pool_preserve_partial_fill_exit_authority(tmp_path):
     engine.tick()
     assert bank.active(SCOPE)==[]
     assert bank.account(SCOPE)['available']=='1000'
+
+
+def test_stocks_and_options_share_cash_but_not_options_capacity(tmp_path):
+    bank=setup_bank(tmp_path);bank.configure(SCOPE,'alice','stock',dict(mode='dollars',value='1000'))
+    broker=Broker();original=broker.allocation_funds
+    broker.allocation_funds=lambda:dict(original(),options_cash='0')
+    broker.metadata=lambda e:dict(account=SCOPE.account,environment=SCOPE.environment,symbol=e['symbol'],asset=e['asset'],currency='USD',multiplier=100 if e['asset']=='option' else 1)
+    managed=ManagedAccount(bank,SCOPE,'alice',broker)
+    event,order=request(managed);event.update(symbol='SPY',asset='stock');order.update(symbol='SPY',asset='stock',limit_price='1')
+    managed.submit_intent_checked(order,lambda:True,event=event,trade_id=event['trade_id'],ordinal=0)
+    assert bank.account(SCOPE)['available']=='997'
+    option_event,option_order=request(managed)
+    with pytest.raises(BrokerNotSubmitted):managed.submit_intent_checked(option_order,lambda:True,event=option_event,trade_id=option_event['trade_id'],ordinal=0)
+    broker.allocation_funds=lambda:dict(original(),options_cash='100')
+    managed.submit_intent_checked(option_order,lambda:True,event=option_event,trade_id=option_event['trade_id'],ordinal=0)
+    assert bank.account(SCOPE)['available']=='937'
+    assert broker.posts==2

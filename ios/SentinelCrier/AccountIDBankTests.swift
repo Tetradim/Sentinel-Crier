@@ -171,6 +171,37 @@ import XCTest
         try controller.connect(api: api, account: "synthetic", pairing: pair, startWorkers: false)
         return controller
     }
+    func testStockUsesCommonCashAndOptionCapDebitsTheSameLedger() async throws {
+        let (folder, bank, api, session, fixture) = try fixture()
+        let scope = BankScope(account: "synthetic", environment: .paper)
+        fixture.optionsPower = "0"
+        try bank.configure(scope, route: "alice", asset: "stock", mode: "units", value: "10", fee: "0")
+        try bank.configure(scope, route: "alice", asset: "option", mode: "units", value: "10", fee: "0")
+        let controller = try controller(folder, bank: bank, api: api, session: session)
+        await controller.process()
+        XCTAssertEqual(fixture.posts, 1, controller.message)
+        XCTAssertEqual(try bank.snapshot(scope).available, 980)
+        let zeroOptions = try ManagedAccountBank.funds(await api.account())
+        XCTAssertEqual(zeroOptions.cash, 1000); XCTAssertEqual(zeroOptions.optionsCash, 0)
+        func reserveOption(event: String, quantity: Int, funds: ManagedAccountBank.Funds) throws {
+            let cid = AccountIDBank.clientID(scope, route: "alice", trade: event, event: event, sell: false, ordinal: 0)
+            try bank.reserve(scope, route: "alice", trade: event, event: event, cid: cid, symbol: "SPY270115C00600000", asset: "option", multiplier: 100, sell: false, quantity: quantity, price: "1", ordinal: 0, cash: funds.admissionCash(asset: "option"), equity: funds.equity)
+        }
+        XCTAssertThrowsError(try reserveOption(event: "zero-options", quantity: 1, funds: zeroOptions))
+        fixture.optionsPower = "100"
+        let limited = try ManagedAccountBank.funds(await api.account())
+        XCTAssertEqual(limited.cash, 1000); XCTAssertEqual(limited.optionsCash, 100)
+        XCTAssertThrowsError(try reserveOption(event: "over-options", quantity: 2, funds: limited))
+        try reserveOption(event: "one-option", quantity: 1, funds: limited)
+        XCTAssertEqual(try bank.snapshot(scope).available, 880, "Options debit the common ledger; its balance is not replaced by the options cap")
+        var account = try await api.account(); account.options_buying_power = nil
+        let missing = try ManagedAccountBank.funds(account)
+        XCTAssertEqual(try missing.admissionCash(asset: "stock"), 1000)
+        XCTAssertThrowsError(try missing.admissionCash(asset: "option"))
+        account.options_buying_power = "invalid"
+        XCTAssertThrowsError(try ManagedAccountBank.funds(account).admissionCash(asset: "option"))
+        controller.disconnect(); await controller.drainStoppedWork()
+    }
     func testActualIntentDispatchReservesBeforePostAndTimeoutNeverRepeatsAfterRestart() async throws {
         let (folder, bank, api, session, fixture) = try fixture()
         let scope = BankScope(account: "synthetic", environment: .paper)
@@ -245,6 +276,7 @@ private final class BankHTTPFixture {
     var timeoutPost = false
     var legacyProof: AlpacaOrder?
     var postStatus = "new"
+    var optionsPower = "1000"
     private var postProof: AlpacaOrder?
     var posts: Int { lock.lock(); defer { lock.unlock() }; return postCount }
     func respond(_ request: URLRequest) throws -> (Int, Data) {
@@ -264,7 +296,10 @@ private final class BankHTTPFixture {
             postProof = proof
             return (200, try JSONEncoder().encode(proof))
         }
-        if path == "/v2/account" { return (200, Data(#"{"id":"synthetic","status":"ACTIVE","buying_power":"4000","cash":"1000","equity":"1000","non_marginable_buying_power":"1000","options_buying_power":"1000","currency":"USD","trading_blocked":false,"account_blocked":false}"#.utf8)) }
+        if path == "/v2/account" {
+            let account: [String: Any] = ["id": "synthetic", "status": "ACTIVE", "buying_power": "4000", "cash": "1000", "equity": "1000", "non_marginable_buying_power": "1000", "options_buying_power": optionsPower, "currency": "USD", "trading_blocked": false, "account_blocked": false]
+            return (200, try JSONSerialization.data(withJSONObject: account))
+        }
         if path == "/v2/positions" { return (200, Data("[]".utf8)) }
         if path == "/v2/assets/AAPL" { return (200, Data(#"{"id":"stock-aapl","symbol":"AAPL","status":"active","tradable":true,"class":"us_equity","currency":"USD"}"#.utf8)) }
         if path == "/v2/orders:by_client_order_id" {

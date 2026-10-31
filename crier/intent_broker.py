@@ -130,10 +130,12 @@ class AlpacaIntentBroker:
         if account.get('currency')!='USD': raise ValueError('USD account funds required')
         # Use cash and available non-margin buying power, never margin leverage.
         amounts=[_amount(str(account['cash'])),_amount(str(account['non_marginable_buying_power']))]
+        options_cash=None
         if account.get('options_buying_power') is not None:
-            amounts.append(_amount(str(account['options_buying_power'])))
+            try:options_cash=_format(min(min(amounts),_amount(str(account['options_buying_power']))))
+            except ValueError:pass # Unusable options evidence never authorizes an option buy.
         return dict(account=self.account,environment=self.environment,currency='USD',
-                    cash=_format(min(amounts)),equity=_format(_amount(str(account['equity']))),observed_at=observed)
+                    cash=_format(min(amounts)),options_cash=options_cash,equity=_format(_amount(str(account['equity']))),observed_at=observed)
 
     def allocation_positions(self):
         rows=self._request('GET','/v2/positions')

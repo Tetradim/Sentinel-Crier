@@ -5,10 +5,22 @@ import Foundation
 @MainActor final class ManagedAccountBank {
     let bank: AccountIDBank; let scope: BankScope; let route: String
     init(bank: AccountIDBank, scope: BankScope, route: String) { self.bank = bank; self.scope = scope; self.route = route }
-    static func funds(_ account: AlpacaAccount) throws -> (cash: Decimal, equity: Decimal) {
+    struct Funds {
+        let cash: Decimal
+        let equity: Decimal
+        let optionsCash: Decimal?
+        func admissionCash(asset: String) throws -> Decimal {
+            if asset == "stock" { return cash }
+            guard asset == "option", let optionsCash else { throw AlpacaError.invalid("Verified options buying power required for an option reservation.") }
+            return optionsCash
+        }
+    }
+    static func funds(_ account: AlpacaAccount) throws -> Funds {
         guard account.currency == "USD", account.status == "ACTIVE", !account.account_blocked, !account.trading_blocked,
-              let cash = account.cash, let nonMargin = account.non_marginable_buying_power, let options = account.options_buying_power else { throw AlpacaError.invalid("Verified USD cash and non-margin/options buying power required for account bank.") }
-        return (min(try AccountIDBank.money(cash), try AccountIDBank.money(nonMargin), try AccountIDBank.money(options)), try AccountIDBank.money(account.equity))
+              let cash = account.cash, let nonMargin = account.non_marginable_buying_power else { throw AlpacaError.invalid("Verified USD cash and non-margin buying power required for account bank.") }
+        let common = min(try AccountIDBank.money(cash), try AccountIDBank.money(nonMargin))
+        let options = account.options_buying_power.flatMap { try? AccountIDBank.money($0) }
+        return Funds(cash: common, equity: try AccountIDBank.money(account.equity), optionsCash: options.map { min(common, $0) })
     }
     static func positions(_ rows: [AlpacaPosition]) throws -> [String: Int] {
         var result: [String: Int] = [:]
@@ -136,7 +148,7 @@ import Foundation
             guard account.id == scope.account, api.environment == scope.environment, canSubmit() else { throw IntentDispatchRefused() }
             let funds = try Self.funds(account)
             try bank.rebaseIfFlat(scope, cash: funds.cash, equity: funds.equity)
-            try bank.reserve(scope, route: route, trade: event.trade_id, event: event.event_id, cid: cid, symbol: event.symbol, asset: event.asset, multiplier: binding.multiplier, sell: sell, quantity: quantity, price: price, ordinal: ordinal, cash: funds.cash, equity: funds.equity)
+            try bank.reserve(scope, route: route, trade: event.trade_id, event: event.event_id, cid: cid, symbol: event.symbol, asset: event.asset, multiplier: binding.multiplier, sell: sell, quantity: quantity, price: price, ordinal: ordinal, cash: try funds.admissionCash(asset: event.asset), equity: funds.equity)
             return observed
         } catch {
             // A pre-admission refusal is definite. A registered reservation remains

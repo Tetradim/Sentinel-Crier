@@ -71,8 +71,9 @@ class ManagedAccount(private val bank:AccountBank,private val scope:String,priva
    require(binding.getString("account")==config.getString("account") && binding.getString("environment")==config.getString("environment") && binding.getString("symbol")==event.getString("symbol") && binding.getString("asset")==event.getString("asset") && binding.getString("currency")=="USD")
    val ordinal=(0..1000).singleOrNull { clientOrderId(event,it,sell)==client } ?: throw IllegalArgumentException("Client identity mismatch")
    reconcile(client); val f=funds(); bank.refreshFlatFunds(scope,f.getString("cash"),f.getString("equity"))
+   val admissionCash=if(!sell && event.getString("asset")=="option") AccountBank.amount(f.getString("cash")).min(AccountBank.amount(f.getString("options_cash"))).toPlainString() else f.getString("cash")
    if(!canSubmit()) throw Superseded()
-   require(bank.reserve(scope,route,event,ordinal,quantity,sell,plan.getString("price"),binding.getInt("multiplier"),f.getString("cash"),f.getString("equity"))==client); reserved=true
+   require(bank.reserve(scope,route,event,ordinal,quantity,sell,plan.getString("price"),binding.getInt("multiplier"),admissionCash,f.getString("equity"))==client); reserved=true
    val result=broker.submitPlanned(event,client,quantity,sell,plan) { Duration.between(Instant.parse(f.getString("observed_at")),clock()).toMillis() in 0..10000 && canSubmit() }
    bank.observe(scope,client,result); result
   } catch(e:Superseded) { if(reserved) bank.refuse(scope,client); throw e }

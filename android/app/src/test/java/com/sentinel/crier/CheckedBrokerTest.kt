@@ -30,4 +30,10 @@ class CheckedBrokerTest {
   val fake=EngineTest.Fake(); val port=object:BrokerPort by fake {}
   assertThrows(Superseded::class.java) { port.submitPlanned(event(),"client",1,false,JSONObject()) { true } }; assertEquals(0,fake.posts)
  }
+ @Test fun commonCashDoesNotRequireOrBorrowOptionsBuyingPower() {
+  for(options in listOf<String?>(null,"0","invalid")) {
+   val broker=Broker(config(),OAuthHttp { _,_,_,_ -> JSONObject().put("id","account").put("status","ACTIVE").put("currency","USD").put("trading_blocked",false).put("account_blocked",false).put("cash","1200").put("non_marginable_buying_power","1000").put("equity","2000").also { a -> options?.let { a.put("options_buying_power",it) } } })
+   assertEquals("1000",broker.allocationFunds().getString("cash"))
+  }
+ }
 }

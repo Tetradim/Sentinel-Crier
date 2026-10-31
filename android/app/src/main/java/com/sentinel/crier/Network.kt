@@ -29,8 +29,12 @@ class Broker(private val config: JSONObject, private val http:OAuthHttp=OAuthHtt
  override fun allocationFunds():JSONObject {
   val a=request("$base/v2/account",headers=headers)
   require(a.getString("id")==config.getString("account") && a.getString("currency")=="USD" && a.getString("status")=="ACTIVE" && !a.optBoolean("trading_blocked",true) && !a.optBoolean("account_blocked",true)) { "Fresh active pinned USD account required" }
-  val caps=listOf("cash","non_marginable_buying_power","options_buying_power").map { AccountBank.amount(a.getString(it)) }
-  return JSONObject().put("account",a.getString("id")).put("environment",config.getString("environment")).put("currency","USD").put("cash",caps.minOrNull()!!.toPlainString()).put("equity",AccountBank.amount(a.getString("equity")).toPlainString()).put("observed_at",java.time.Instant.now().toString())
+  val caps=listOf("cash","non_marginable_buying_power").map { AccountBank.amount(a.getString(it)) }
+  return JSONObject().put("account",a.getString("id")).put("environment",config.getString("environment")).put("currency","USD").put("cash",caps.minOrNull()!!.toPlainString()).put("equity",AccountBank.amount(a.getString("equity")).toPlainString()).put("observed_at",java.time.Instant.now().toString()).also { funds ->
+   // Optional options evidence never reduces stock/setup/flat-repair common cash.
+   // Preserve invalid/missing evidence so only option-buy admission refuses it.
+   if(a.has("options_buying_power")) funds.put("options_cash",a.get("options_buying_power"))
+  }
  }
  override fun allocationPositions():Map<String,Int> {
   val positions=Network.requestValue("$base/v2/positions",headers=headers) as org.json.JSONArray

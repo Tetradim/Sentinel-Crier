@@ -208,11 +208,16 @@ class ManagedAccount:
                 raise BrokerNotSubmitted('Managed instrument metadata mismatch')
             funds = self._funds()
             self.bank.rebase_if_flat(self.scope,funds['cash'],funds['equity'])
+            admission_cash=funds['cash']
+            if request['side']=='buy' and request['asset']=='option':
+                from .host_allocation import _amount,_format
+                try:admission_cash=_format(min(_amount(admission_cash),_amount(funds.get('options_cash'))))
+                except (ValueError,TypeError):raise BankConflict('Verified options buying capacity required')
             row = self.bank.reserve(self.scope, self.route, trade_id, event['event_id'],
                 request['client_order_id'], request['symbol'], request['asset'], metadata['multiplier'],
                 request['side'], int(quantity), request['limit_price'],
                 self.bank.fee(self.scope, self.route, request['asset']),
-                cash=funds['cash'], equity=funds['equity'], ordinal=ordinal)
+                cash=admission_cash, equity=funds['equity'], ordinal=ordinal)
             if row['existing']:
                 # A prior invocation may already have dispatched. Even a 404 is
                 # insufficient evidence to submit it again after a timeout.

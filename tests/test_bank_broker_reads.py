@@ -17,7 +17,7 @@ def test_funds_use_available_cash_without_margin_or_duplicate_order_credit():
     raw=broker([])
     try:
         funds=raw.allocation_funds()
-        assert funds['cash']=='600' and funds['equity']=='2000'
+        assert funds['cash']=='800' and funds['options_cash']=='600' and funds['equity']=='2000'
         assert funds['observed_at'].utcoffset() is not None
     finally:raw.close()
 
