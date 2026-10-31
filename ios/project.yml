@@ -22,6 +22,7 @@ targets:
       - path: SentinelCrier/AlpacaJournal.swift
       - path: SentinelCrier/ConnectionRoutes.swift
       - path: SentinelCrier/AlpacaWorkspace.swift
+      - path: SentinelCrier/RecoveryEvidence.swift
       - path: SentinelCrier/GuidedSetup.swift
       - path: SentinelCrier/PracticeGuide.swift
       - path: ../crier/customer-practice.json
@@ -99,6 +100,7 @@ targets:
       - path: SentinelCrier/NativeHealthTests.swift
       - path: SentinelCrier/EntryClockTests.swift
       - path: SentinelCrier/NativeHealthFlowTests.swift
+      - path: SentinelCrier/RecoveryEvidenceTests.swift
       - path: ../tests/fixtures/oauth-return.json
         buildPhase: resources
       - path: SentinelCrier/Phase2FlowTests.swift

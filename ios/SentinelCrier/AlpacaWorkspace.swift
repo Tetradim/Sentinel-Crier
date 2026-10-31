@@ -114,6 +114,7 @@ final class AlpacaWorkspace: ObservableObject {
     @Published private(set) var positions: [AlpacaPosition] = []
     @Published private(set) var contracts: [AlpacaContract] = []
     @Published private(set) var submissions: [AlpacaJournal.Submission] = []
+    @Published private(set) var recoverySnapshot: RecoveryBrokerSnapshot?
     @Published private(set) var deliveries: [AlpacaJournal.Delivery] = []
     @Published var review: AlpacaTicket?
     @Published private(set) var busy = false
@@ -414,6 +415,32 @@ final class AlpacaWorkspace: ObservableObject {
             if let account { try await publishFills(environment: environment, accountID: account.id) }
         }
     }
+    func checkRecoveryEvidence() async { await perform {
+        recoverySnapshot = nil
+        guard foreground, let api, let account else { throw AlpacaError.invalid("Reconnect the original account before checking broker evidence.") }
+        let generation = scopeGeneration
+        let selectedEnvironment = environment
+        func current() -> Bool {
+            foreground && generation == scopeGeneration && self.api === api && environment == selectedEnvironment && !Task.isCancelled
+        }
+        let verified = try await api.account()
+        guard current(), verified.id == account.id else { throw AlpacaError.invalid("Account or session changed; evidence discarded.") }
+        let brokerPositions = try await api.positions()
+        guard current() else { throw AlpacaError.invalid("Session changed; evidence discarded.") }
+        var evidence: [RecoveryOrderEvidence] = []
+        for submission in submissions.suffix(100) {
+            guard submission.ticket.accountID == account.id, submission.ticket.environment == selectedEnvironment else { throw AlpacaError.invalid("Saved order scope differs from this account.") }
+            let order: AlpacaOrder?
+            do { order = try await api.order(clientID: submission.id) }
+            catch AlpacaError.http(404) { order = nil }
+            guard current() else { throw AlpacaError.invalid("Session changed; evidence discarded.") }
+            if let order { try RecoveryOrderEvidence.validate(order, ticket: submission.ticket) }
+            evidence.append(RecoveryOrderEvidence(ticket: submission.ticket, order: order))
+        }
+        recoverySnapshot = RecoveryBrokerSnapshot(accountID: account.id, environment: selectedEnvironment, checkedAt: Date(), orders: evidence, positions: brokerPositions)
+        message = "Read-only broker evidence loaded. Missing orders remain unresolved; no orders or permissions changed."
+    } }
+
     func refresh() async { await perform {
         if let previous = api, !previous.permitsMutations {
             guard foreground, suspended else { lifecycle = "Reconnect required - previous broker session stopped"; return }

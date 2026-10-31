@@ -98,8 +98,35 @@ struct CrierRecoveryView: View {
                     Text("Last workspace update: " + updated.formatted(date: .abbreviated, time: .standard))
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Text("This screen does not submit, cancel, retry, clear IDs or resume trading. The shared-account ID bank and its broker-comparison check currently run on Windows.")
+                Text("This screen does not submit, cancel, retry, clear IDs or resume trading. The shared-account ID bank currently runs on Windows.")
                     .font(.footnote).foregroundStyle(.secondary)
+            }
+            Section("Read-only broker check") {
+                Button("Check latest 100 saved manual orders") { Task { await model.checkRecoveryEvidence() } }
+                    .disabled(model.busy || model.account == nil)
+                Text("Reads the connected account, positions and original order IDs. It does not reconcile paired trades, change the journal or grant execution permission. Positions and orders are separate timestamped reads, not an atomic broker snapshot.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Text(model.message).font(.footnote)
+                if let snapshot = model.recoverySnapshot, snapshot.accountID == model.account?.id,
+                   snapshot.environment == model.environment {
+                    Text("Check completed: " + snapshot.checkedAt.formatted(date: .abbreviated, time: .standard)).font(.caption)
+                    ForEach(snapshot.orders) { evidence in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(evidence.ticket.symbol).font(.headline)
+                            Text("Client ID: " + evidence.id).font(.caption).textSelection(.enabled)
+                            Text("Requested: \(evidence.ticket.quantity) · recorded locally: \(model.submissions.first(where: { $0.id == evidence.id })?.state ?? "unavailable")").font(.caption)
+                            if let order = evidence.order {
+                                Text("Broker: \(order.status) · filled \(order.filled_qty)").monospacedDigit()
+                            } else {
+                                Text("Not returned by broker. Outcome remains unresolved; do not resubmit.").foregroundStyle(.orange)
+                            }
+                        }
+                    }
+                    ForEach(snapshot.positions) { position in
+                        Text("Broker position: \(position.symbol) · \(position.qty)").font(.caption).monospacedDigit()
+                    }
+                    Text("Broker positions include all account activity. They are not assigned to a host by this check.").font(.caption)
+                }
             }
             Section("Recovery steps") {
                 Label("Pause new entries on affected connections", systemImage: "pause.circle")
