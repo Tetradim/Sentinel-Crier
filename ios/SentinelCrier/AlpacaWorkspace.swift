@@ -420,7 +420,7 @@ final class AlpacaWorkspace: ObservableObject {
         guard foreground, let api, let account else { throw AlpacaError.invalid("Reconnect the original account before checking broker evidence.") }
         let generation = scopeGeneration
         let selectedEnvironment = environment
-        func current() -> Bool {
+        @MainActor func current() -> Bool {
             foreground && generation == scopeGeneration && self.api === api && environment == selectedEnvironment && !Task.isCancelled
         }
         let verified = try await api.account()

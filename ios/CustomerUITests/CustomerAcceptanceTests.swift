@@ -1,6 +1,31 @@
 import XCTest
 
 final class CustomerAcceptanceTests: XCTestCase {
+    private func capture(_ name: String, app: XCUIApplication) {
+        let screenshot = app.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = name; attachment.lifetime = .keepAlways
+        add(attachment)
+        let encoded = Array(screenshot.pngRepresentation.base64EncodedString())
+        for offset in stride(from: 0, to: encoded.count, by: 4000) {
+            print("CRIER_SCREENSHOT|\(name)|\(offset)|" + String(encoded[offset..<min(offset + 4000, encoded.count)]))
+        }
+    }
+
+    func testCaptureDisconnectedWorkspace() {
+        let app = XCUIApplication(); app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 15))
+        capture("ios-home-disconnected", app: app)
+        app.tabBars.buttons["Positions"].tap()
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5))
+        capture("ios-positions-disconnected", app: app)
+        app.navigationBars.buttons["Recovery"].tap()
+        XCTAssertTrue(app.staticTexts["Local records, not a fresh broker check"].waitForExistence(timeout: 5))
+        capture("ios-recovery-disconnected", app: app)
+        app.tabBars.buttons["Markets"].tap()
+        capture("ios-markets-disconnected", app: app)
+    }
+
     func testOptionalGuidesReturnHomeWithoutConnecting() {
         let app = XCUIApplication()
         app.launch()
