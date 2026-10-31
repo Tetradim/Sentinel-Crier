@@ -9,6 +9,11 @@ class SyncService:Service() {
   private val reservations=mutableMapOf<String,String>()
   @Volatile private var service:SyncService?=null
   @Volatile private var closing=false
+  @Volatile private var bankTransition=false
+  fun <T> withBankTransition(beforeCheck:()->Unit={},action:()->T):T {
+   synchronized(this) { check(!closing && !bankTransition) { "Another account-bank change or sign out is in progress" }; bankTransition=true }
+   try { beforeCheck(); check(!active) { "Stop all connections and wait for workers to drain before changing the account bank" }; return action() } finally { synchronized(this) { bankTransition=false } }
+  }
   @Synchronized private fun gate(id:String)=gates.getOrPut(id) { ExecutionStartGate() }
   val active:Boolean get()=synchronized(this) { gates.values.any { it.active } }
   val authClosing:Boolean get()=closing
@@ -16,14 +21,16 @@ class SyncService:Service() {
   const val EXPLICIT_START="com.sentinel.crier.EXPLICIT_EXECUTION_START"
   fun acceptsStart(action:String?)=action==EXPLICIT_START
   fun requestStart(context:Context) {
-   check(!closing) { "Sign out is stopping workers" }
+   check(!closing && !bankTransition) { "Sign out or account-bank setup is stopping workers" }
    val id=RouteStorage.id(context); val config=Vault(context).read()
-   RouteAccounts.requireAvailable(id,config,Vault(context).profiles().map { it.getString("id") to it.getJSONObject("config") })
+   val managed=AndroidAccountBank.enabled(context,config)
+   RouteAccounts.requireAvailable(id,config,Vault(context).profiles().map { it.getString("id") to it.getJSONObject("config") },managed)
    val account=RouteStorage.accountKey(config)
    val ticket=synchronized(this) {
-   check(!closing) { "Sign out is stopping workers" }
-   require(reservations[account]==null || reservations[account]==id) { "This broker account and environment already belong to another running route. Stop it first." }
-   reservations[account]=id
+   check(!closing && !bankTransition) { "Account-bank setup or repair is in progress" }
+   require(managed==AndroidAccountBank.enabled(context,config)) { "Account-bank mode changed; explicitly reconnect again" }
+   require(managed || reservations[account]==null || reservations[account]==id) { "This broker account and environment already belong to another running route. Stop it first." }
+   reservations[if(managed) "$account:$id" else account]=id
    gate(id).reserve()
    }
    try { context.startForegroundService(Intent(context,SyncService::class.java).setAction(EXPLICIT_START).putExtra("route",id).putExtra("admission",ticket)) }

@@ -71,7 +71,8 @@ struct BankScope: Codable, Equatable {
         return "sc-" + digest(String(decoding: encoded, as: UTF8.self)).prefix(40)
     }
     static func money(_ value: String) throws -> Decimal {
-        guard !value.isEmpty, value.count <= 32, value.allSatisfy({ $0.isASCII && ($0.isNumber || $0 == ".") }), value.filter({ $0 == "." }).count <= 1,
+        guard value.count <= 24,
+              value.range(of: #"\A(?:0|[1-9][0-9]*)(?:\.[0-9]{1,8})?\z"#, options: .regularExpression) != nil,
               let number = Decimal(string: value, locale: Locale(identifier: "en_US_POSIX")), !number.isNaN, number >= 0 else { throw AlpacaError.invalid("Invalid account-bank amount.") }
         return number
     }

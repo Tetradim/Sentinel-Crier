@@ -26,6 +26,18 @@ class Broker(private val config: JSONObject, private val http:OAuthHttp=OAuthHtt
  private fun request(url:String,method:String="GET",headers:Map<String,String> = emptyMap(),body:JSONObject?=null)=http.request(url,method,headers,body)
  private val base = if(config.getString("environment") == "paper") "https://paper-api.alpaca.markets" else "https://api.alpaca.markets"
  private val headers = BrokerAuth.headers(config)
+ override fun allocationFunds():JSONObject {
+  val a=request("$base/v2/account",headers=headers)
+  require(a.getString("id")==config.getString("account") && a.getString("currency")=="USD" && a.getString("status")=="ACTIVE" && !a.optBoolean("trading_blocked",true) && !a.optBoolean("account_blocked",true)) { "Fresh active pinned USD account required" }
+  val caps=listOf("cash","non_marginable_buying_power","options_buying_power").map { AccountBank.amount(a.getString(it)) }
+  return JSONObject().put("account",a.getString("id")).put("environment",config.getString("environment")).put("currency","USD").put("cash",caps.minOrNull()!!.toPlainString()).put("equity",AccountBank.amount(a.getString("equity")).toPlainString()).put("observed_at",java.time.Instant.now().toString())
+ }
+ override fun allocationPositions():Map<String,Int> {
+  val positions=Network.requestValue("$base/v2/positions",headers=headers) as org.json.JSONArray
+  val result=mutableMapOf<String,Int>()
+  for(i in 0 until positions.length()) { val p=positions.getJSONObject(i); val s=p.getString("symbol"); val q=p.getString("qty").toBigDecimal().intValueExact(); require(q>=0 && p.getString("side")=="long" && p.getString("asset_class") in setOf("us_equity","us_option") && !result.containsKey(s)) { "Unsupported or contradictory account inventory" }; result[s]=q }
+  return result
+ }
  override fun account():String { val a=request("$base/v2/account", headers=headers); require(a.getString("status")=="ACTIVE" && !a.optBoolean("trading_blocked",true) && !a.optBoolean("account_blocked",true)) { "Broker account is not active for trading" }; return a.getString("id") }
  override fun order(client: String): JSONObject? = try { request("$base/v2/orders:by_client_order_id?client_order_id=$client", headers=headers) } catch(e: HttpError) { if(e.status == 404) null else throw e }
  override fun cancel(id: String) { try { request("$base/v2/orders/$id", "DELETE", headers) } catch(e: HttpError) { if(e.status !in setOf(404,422)) throw e } }

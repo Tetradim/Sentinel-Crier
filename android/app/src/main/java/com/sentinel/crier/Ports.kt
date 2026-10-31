@@ -25,6 +25,10 @@ interface IntentStore {
  fun create(action:String,symbol:String,asset:String,quantity:Int,price:String,environment:String,tradeId:String = java.util.UUID.randomUUID().toString()):JSONObject
 }
 interface BrokerPort {
+ fun clientOrderId(event:JSONObject,ordinal:Int,sell:Boolean):String="si-${event.getString("event_id")}-${if(sell) "s$ordinal" else "b"}"
+ fun observeIntent(event:JSONObject) {}
+ fun allocationFunds():JSONObject=throw IllegalArgumentException("Checked allocation funds unsupported")
+ fun allocationPositions():Map<String,Int> = throw IllegalArgumentException("Checked allocation inventory unsupported")
  fun binding(event:JSONObject):JSONObject = throw IllegalArgumentException("Checked broker metadata unsupported")
  fun submitPlanned(event:JSONObject,client:String,quantity:Int,sell:Boolean,plan:JSONObject,canSubmit:()->Boolean):JSONObject = throw Superseded()
  fun account():String

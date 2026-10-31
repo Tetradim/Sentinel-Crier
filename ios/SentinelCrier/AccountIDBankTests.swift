@@ -60,7 +60,7 @@ import XCTest
         _ = try reserve(bank)
     }
     func testCanonicalAmountsAndFallingEquityRefuseAdmission() throws {
-        for text in ["1.2.3", "1e2", "-1", "NaN", "1 trailing", " 1"] { XCTAssertThrowsError(try AccountIDBank.money(text)) }
+        for text in ["1.2.3", ".1", "1.", "01", "1e2", "-1", "NaN", "1 trailing", " 1", "0.123456789", "1234567890123456789012345"] { XCTAssertThrowsError(try AccountIDBank.money(text)) }
         let bank = try bank(); try setup(bank)
         _ = try reserve(bank)
         let cid = AccountIDBank.clientID(scope, route: "dave", trade: "new", event: "new", sell: false, ordinal: 0)

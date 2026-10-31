@@ -20,6 +20,6 @@ object RouteStorage {
  fun accountKey(config:JSONObject):String = RouteAccounts.key(config)
 }
 object RouteAccounts {
- fun requireAvailable(id:String,config:JSONObject,profiles:List<Pair<String,JSONObject>>) { val account=key(config); require(profiles.none { (owner,saved) -> owner!=id && saved.has("account") && key(saved)==account }) { "Account already owns retained execution history in another route. Select that route to recover it." } }
+ fun requireAvailable(id:String,config:JSONObject,profiles:List<Pair<String,JSONObject>>,managed:Boolean=false) { val account=key(config); require(managed || profiles.none { (owner,saved) -> owner!=id && saved.has("account") && key(saved)==account }) { "Account already owns retained execution history in another route. Select that route to recover it, or explicitly set up its account ID bank while all workers are stopped." } }
  fun key(config:JSONObject):String { val broker=config.optString("broker","alpaca").lowercase(); require(broker=="alpaca") { "Only Alpaca execution is supported" }; val account=config.getString("account").trim(); require(account.isNotBlank()); val env=config.getString("environment"); require(env in setOf("paper","live")); return "$broker:$env:$account" }
 }

@@ -17,6 +17,9 @@ class RouteAccountsTest {
  @Test fun unsupportedBrokerFailsClosed() {
   try { RouteAccounts.key(config().put("broker","webull")); fail("Unsupported adapter") } catch(_:IllegalArgumentException) {}
  }
+ @Test fun secondHostRequiresExplicitManagedBankAdmission() {
+  RouteAccounts.requireAvailable("another",config(),listOf("owner" to config()),managed=true)
+ }
  @Test fun independentGatesDoNotStopOtherRoutes() {
   val first=ExecutionStartGate(); val second=ExecutionStartGate(); val a=Any(); val b=Any()
   assertTrue(first.claim(first.reserve(),a,true)); assertTrue(second.claim(second.reserve(),b,true))

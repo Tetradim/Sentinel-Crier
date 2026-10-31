@@ -12,6 +12,7 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
 
  private val terminal=setOf("filled","canceled","expired","rejected","replaced","superseded")
  fun step(e:JSONObject) {
+  broker.observeIntent(e)
   journal.diagnostic(e.getString("event_id"),"execution_started","Account validation and reconciliation")
   val trade=e.getString("trade_id"); val seq=e.getInt("sequence"); val action=e.getString("action")
   val reconciled=reconcile(e)
@@ -114,7 +115,7 @@ class Engine(private val journal:IntentStore,private val config:JSONObject,priva
   if(qty==0 && sell && desiredExitDue>0 && filled>sold) return
   if(qty==0) { journal.mark(e.getString("event_id"),false); return }
   val ordinal=orders.count { it.sequence==seq && it.side=="sell" }
-  val client="si-${e.getString("event_id")}-${if(sell) "s$ordinal" else "b"}"
+  val client=broker.clientOrderId(e,ordinal,sell)
   synchronized(journal) {
    val latest=journal.revision(trade)
    if(latest.first!=seq || (!sell && latest.second)) return
