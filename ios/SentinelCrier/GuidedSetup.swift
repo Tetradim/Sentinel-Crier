@@ -53,6 +53,7 @@ struct GuidedSetupView: View {
                     Text(model.lifecycle).font(.caption)
                 }
                 Section("Advanced and recovery") {
+                    NavigationLink("Recovery assistant", destination: CrierRecoveryView())
                     NavigationLink("Saved positions and account", destination: BrokerageOverview())
                     NavigationLink("Orders and tracked trade recovery", destination: AlpacaTradingView())
                 }

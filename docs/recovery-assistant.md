@@ -15,3 +15,9 @@ Recovery dialogs are tied to the connection selected when opened. Switching conn
 The iOS Positions screen now uses a compact dark list, symbol search, separate market-value and quantity/average columns, and explicit last-loaded-snapshot empty-state guidance. These values come from the existing broker model; the presentation does not add simulated prices, P&L or execution actions. Native compilation and visual acceptance for each revision are separate checks.
 
 Order-ticket presentation is tracked in [iOS trading UI](ios-trading-ui.md); mobile recovery remains a distinct unfinished integration, not an inference from Windows support.
+
+## iOS observational entry point
+
+Home → Advanced and recovery → Recovery assistant, or Positions → Recovery, opens the native local-evidence view. It shows the selected environment/account, workspace update timestamp, loaded manual order client IDs and broker IDs/status/fill counts, and links to existing paired execution diagnostics. No records loaded is explicitly not proof of an empty broker account. Paired diagnostics observe their controller so newly recorded trades can appear while the screen remains open.
+
+The mobile view contains no order, cancellation, retry, reset or refresh action. The general workspace refresh is not reused as a read-only recovery operation. This view is not a port of the Windows account bank and does not provide its fresh broker inventory comparison or guided repairs. No new brokerage authority is granted by opening it. Native CI and physical visual/lifecycle acceptance remain separate checks.
