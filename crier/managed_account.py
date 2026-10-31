@@ -115,6 +115,19 @@ class ManagedAccount:
             raise BankConflict('Stale account funds cannot authorize an order')
         return funds
 
+    def recovery_check(self):
+        from .recovery_assistant import recovery_report
+        result='verified'
+        with self.bank.locked(self.scope):
+            try:
+                self.broker.verify(self.environment)
+                self._reconcile()
+            except BankConflict:
+                result='unresolved'
+        report=recovery_report(self.bank,self.scope)
+        report.update(broker_checked=result=='verified',check_result=result)
+        return report
+
     def submit_intent_checked(self, request, can_submit, *, event, trade_id, ordinal):
         try:
             return self._submit(request,can_submit,event=event,trade_id=trade_id,ordinal=ordinal)

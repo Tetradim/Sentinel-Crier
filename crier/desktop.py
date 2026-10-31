@@ -198,6 +198,17 @@ class DesktopApp:
     def account_bank(self):
         self.submit('bank_status',callback=self.show_account_bank)
 
+    def show_recovery_assistant(self,report):
+        window=tk.Toplevel(self.root);window.title('Recovery assistant')
+        frame=ttk.Frame(window,padding=16);frame.pack(fill='both',expand=True)
+        ttk.Label(frame,text=report['explanation'],wraplength=650).pack(anchor='w',pady=8)
+        ttk.Label(frame,text='Broker check: '+str(report.get('check_result','not checked'))+'. Entries are not automatically resumed.',wraplength=650).pack(anchor='w')
+        for index,step in enumerate(report['steps'],1):
+            ttk.Label(frame,text=str(index)+'. '+step,wraplength=650).pack(anchor='w',pady=4)
+        for row in report['ids']:
+            ttk.Label(frame,text=f"ID {row['id']} | {row['symbol']} | owned {row['units']} | pending buys {row['pending_buy_units']} | pending exits {row['pending_exit_units']}",wraplength=650).pack(anchor='w',pady=4)
+        ttk.Button(frame,text='Pause entries and check broker evidence',command=lambda:self.submit('bank_recovery',callback=lambda updated:(window.destroy(),self.show_recovery_assistant(updated)))).pack(anchor='w',pady=8)
+
     def show_account_bank(self,result):
         window=tk.Toplevel(self.root)
         window.title('Account ID bank')
@@ -209,6 +220,8 @@ class DesktopApp:
             ttk.Button(frame,text='Set up account ID bank',command=lambda:(window.destroy(),self.submit('bank_enable',callback=self.show_account_bank))).pack(anchor='w')
             return
         blocked=result['balance'].get('blocked')
+        if result.get('recovery'):
+            ttk.Button(frame,text='Recovery assistant',command=lambda:self.show_recovery_assistant(result['recovery'])).pack(anchor='w',pady=4)
         ttk.Label(frame,text='New entries blocked: '+blocked if blocked else 'Account bank enabled. Configure this connection’s reusable pools, then reconnect and explicitly enable orders.',wraplength=780).pack(anchor='w',pady=8)
         for asset in ('stock','option'):
             row=ttk.Frame(frame);row.pack(fill='x',pady=4)

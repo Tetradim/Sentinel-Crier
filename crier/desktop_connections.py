@@ -160,7 +160,7 @@ class DesktopConnections:
             self.selected = identity
 
     async def invoke(self, identity, method, *args, **kwargs):
-        if method in ('bank_enable','bank_status','bank_configure'):
+        if method in ('bank_enable','bank_status','bank_configure','bank_recovery'):
             async with self.operations:
                 if self.stopping: raise ValueError('Connections are shutting down.')
                 return await self.bank_operation(identity,method,*args,**kwargs)
@@ -189,9 +189,24 @@ class DesktopConnections:
 
     async def bank_operation(self,identity,method,*args,**kwargs):
         scope,saved=self.bank_scope(identity)
+        if method=='bank_recovery':
+            broker=self.sessions[identity].broker
+            if not isinstance(broker,ManagedAccount): raise ValueError('Reconnect this account with its ID bank enabled first.')
+            for session in self.sessions.values():
+                if isinstance(session.broker,ManagedAccount) and session.broker.scope==scope and session.device:
+                    session.device.engine.save_settings({'enabled':False})
+            async with self.sessions[identity].lifecycle:
+                if self.sessions[identity].broker is not broker: raise ValueError('Connection changed; reconnect before checking evidence.')
+                task=asyncio.create_task(asyncio.to_thread(broker.recovery_check))
+                try: return await asyncio.shield(task)
+                except asyncio.CancelledError:
+                    await task
+                    raise
         if method=='bank_status':
             enabled=self.bank.enabled(scope)
+            from .recovery_assistant import recovery_report
             return dict(enabled=enabled,account=scope.account,environment=scope.environment,
+                recovery=recovery_report(self.bank,scope) if enabled else None,
                 balance=self.bank.account(scope) if enabled else {},
                 active=self.bank.active(scope) if enabled else [],
                 history=self.bank.history_rows(scope) if enabled else [],
