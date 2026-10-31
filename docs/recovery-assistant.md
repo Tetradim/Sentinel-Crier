@@ -9,3 +9,7 @@ This action never posts or cancels an order, deletes IDs, releases an unknown re
 The fresh check includes a timestamped position comparison: symbol, host-owned quantity, separately recorded external baseline, expected total, actual broker quantity and difference. A difference remains unresolved; it never changes host ownership to make the numbers match. Network or identity failures do not produce a successful check. The snapshot is historical evidence, not a continuous position feed.
 
 Per-order guided repairs and mobile recovery views remain unfinished. The iOS shell has an initial dark, compact trading-workspace header with an environment badge and existing bottom navigation; detailed chart, order-ticket and position-screen redesign remains pending native visual acceptance. Existing broker orders and ongoing exits are not canceled by pausing entries.
+
+Recovery dialogs are tied to the connection selected when opened. Switching connections requires reopening the assistant before running its check. The comparison table has a regression test for visible broker differences and refusal to dispatch against a different selected route.
+
+The iOS Positions screen now uses a compact dark list, symbol search, separate market-value and quantity/average columns, and explicit last-loaded-snapshot empty-state guidance. These values come from the existing broker model; the presentation does not add simulated prices, P&L or execution actions. Native compilation and visual acceptance for each revision are separate checks.

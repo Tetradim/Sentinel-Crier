@@ -23,3 +23,21 @@ def test_bank_editor_keeps_active_old_ids_and_saved_fee(desktop_tk_root):
         assert worker.calls[-1][:2]==('bank_configure',('stock','dollars','100','1'))
         assert all(call[0] not in ('command','connect') for call in worker.calls)
     finally:root.destroy()
+
+
+def test_recovery_shows_difference_and_refuses_check_after_route_switch(desktop_tk_root):
+    root=tk.Toplevel(desktop_tk_root);root.withdraw();worker=Worker();app=DesktopApp(root,worker)
+    worker.connections=SimpleNamespace(selected='alice')
+    try:
+        app.show_recovery_assistant(dict(explanation='Unresolved',steps=[],ids=[],positions_checked_at='2026-10-31',
+            positions=[dict(symbol='SPY',host_owned=3,external_baseline=0,expected=3,broker=2,difference=-1)]))
+        dialog=next(w for w in root.winfo_children() if isinstance(w,tk.Toplevel))
+        widgets=list(descendants(dialog))
+        table=next(w for w in widgets if isinstance(w,ttk.Treeview))
+        assert table.item(table.get_children()[0])['values']==['SPY',3,0,3,2,-1]
+        buttons=[w for w in widgets if isinstance(w,ttk.Button)]
+        assert len(buttons)==1
+        worker.connections.selected='dave'
+        buttons[0].invoke()
+        assert not worker.calls
+    finally:root.destroy()

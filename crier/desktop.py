@@ -199,6 +199,8 @@ class DesktopApp:
         self.submit('bank_status',callback=self.show_account_bank)
 
     def show_recovery_assistant(self,report):
+        connections=getattr(self.worker,'connections',None)
+        original_route=getattr(connections,'selected',None)
         window=tk.Toplevel(self.root);window.title('Recovery assistant')
         frame=ttk.Frame(window,padding=16);frame.pack(fill='both',expand=True)
         ttk.Label(frame,text=report['explanation'],wraplength=650).pack(anchor='w',pady=8)
@@ -215,7 +217,12 @@ class DesktopApp:
             table.pack(fill='x',pady=4)
         for row in report['ids']:
             ttk.Label(frame,text=f"ID {row['id']} | {row['symbol']} | owned {row['units']} | pending buys {row['pending_buy_units']} | pending exits {row['pending_exit_units']}",wraplength=650).pack(anchor='w',pady=4)
-        ttk.Button(frame,text='Pause entries and check broker evidence',command=lambda:self.submit('bank_recovery',callback=lambda updated:(window.destroy(),self.show_recovery_assistant(updated)))).pack(anchor='w',pady=8)
+        def check_evidence():
+            if getattr(connections,'selected',None)!=original_route:
+                self.notice.set('Select the original connection and reopen its recovery assistant before checking.')
+                return
+            self.submit('bank_recovery',callback=lambda updated:(window.destroy(),self.show_recovery_assistant(updated)))
+        ttk.Button(frame,text='Pause entries and check broker evidence',command=check_evidence).pack(anchor='w',pady=8)
 
     def show_account_bank(self,result):
         window=tk.Toplevel(self.root)
