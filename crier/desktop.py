@@ -201,8 +201,14 @@ class DesktopApp:
     def show_recovery_assistant(self,report):
         connections=getattr(self.worker,'connections',None)
         original_route=getattr(connections,'selected',None)
-        window=tk.Toplevel(self.root);window.title('Recovery assistant')
-        frame=ttk.Frame(window,padding=16);frame.pack(fill='both',expand=True)
+        window=tk.Toplevel(self.root);window.title('Recovery assistant');window.geometry('900x650')
+        canvas=tk.Canvas(window,highlightthickness=0)
+        scroll=ttk.Scrollbar(window,orient='vertical',command=canvas.yview);scroll.pack(side='right',fill='y')
+        canvas.pack(fill='both',expand=True);canvas.configure(yscrollcommand=scroll.set)
+        frame=ttk.Frame(canvas,padding=16)
+        item=canvas.create_window((0,0),window=frame,anchor='nw')
+        frame.bind('<Configure>',lambda event:canvas.configure(scrollregion=canvas.bbox('all')))
+        canvas.bind('<Configure>',lambda event:canvas.itemconfigure(item,width=event.width))
         ttk.Label(frame,text=report['explanation'],wraplength=650).pack(anchor='w',pady=8)
         ttk.Label(frame,text='Broker check: '+str(report.get('check_result','not checked'))+'. Entries are not automatically resumed.',wraplength=650).pack(anchor='w')
         for index,step in enumerate(report['steps'],1):
@@ -217,12 +223,20 @@ class DesktopApp:
             table.pack(fill='x',pady=4)
         for row in report['ids']:
             ttk.Label(frame,text=f"ID {row['id']} | {row['symbol']} | owned {row['units']} | pending buys {row['pending_buy_units']} | pending exits {row['pending_exit_units']}",wraplength=650).pack(anchor='w',pady=4)
-        def check_evidence():
+        ordered=sorted(report.get('orders',[]),key=lambda row:row['result'] in ('verified','definite_no_submission'))
+        for order in ordered[:100]:
+            ttk.Label(frame,text=order['cid']+' · '+order['result']+' · '+order.get('status',''),wraplength=800).pack(anchor='w',pady=2)
+        if len(report.get('orders',[]))>100:
+            ttk.Label(frame,text='Showing first 100 order results; the check evaluated all retained orders.').pack(anchor='w')
+        def check_evidence(method='bank_recovery'):
             if getattr(connections,'selected',None)!=original_route:
                 self.notice.set('Select the original connection and reopen its recovery assistant before checking.')
                 return
-            self.submit('bank_recovery',callback=lambda updated:(window.destroy(),self.show_recovery_assistant(updated)))
+            self.submit(method,callback=lambda updated:(window.destroy(),self.show_recovery_assistant(updated)))
         ttk.Button(frame,text='Pause entries and check broker evidence',command=check_evidence).pack(anchor='w',pady=8)
+        if report.get('flat_repair_candidate'):
+            ttk.Label(frame,text='All recorded holdings appear flat. Repair rechecks every original order and fresh funds, rebuilds local cash capacity and retains IDs/history. Entries stay paused.',wraplength=800).pack(anchor='w',pady=8)
+            ttk.Button(frame,text='Recheck and repair verified-flat ledger',command=lambda:check_evidence('bank_repair')).pack(anchor='w',pady=8)
 
     def show_account_bank(self,result):
         window=tk.Toplevel(self.root)

@@ -4,6 +4,8 @@ The approved customer-ease phases E–I, live-policy phase J, reconciliation pha
 
 ## Owner/provider/device work still unpassed
 
+The owner explicitly deferred physical iPhone/Mac and Apple/Webull provider work on October 31; see the [recorded deferral](deferred/2026-10-31-owner-provider-acceptance.md). These checks remain unpassed and do not block independent implementation or Windows release work.
+
 Phase L's [completed plan](superpowers/plans/2026-10-26-push-dashboard.md) and [accepted evidence](acceptance/2026-10-26/push-dashboard/source-evidence.json) record push delivery, the read-only dashboard, hosted deployment and an isolated synthetic probe. See the [usage guide](push-dashboard.md). The following external work remains unpassed:
 
 - Webull Connect approval, issued integration details and real authorized integration testing.

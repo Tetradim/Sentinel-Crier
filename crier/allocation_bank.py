@@ -340,6 +340,28 @@ class AccountBank:
             db.execute("UPDATE bank_accounts SET available=?,equity=? WHERE scope=?",(_format(min(cash,equity)),_format(equity),scope_key(scope)))
             return True
 
+    def complete_flat_repair(self,scope,cash,equity,observed_at):
+        """Only the managed verifier calls this after a full authoritative sweep."""
+        cash=_amount(cash);equity=_amount(equity)
+        if equity<=0 or not 0<=(datetime.now(timezone.utc)-observed_at).total_seconds()<=10:
+            raise BankConflict('Fresh positive verified funds required for repair')
+        key=scope_key(scope)
+        with self.db(True) as db:
+            account=self._account(db,key)
+            if not db.execute('SELECT 1 FROM bank_inventory_initialized WHERE scope=?',(key,)).fetchone():
+                raise BankConflict('Retained inventory baseline required for repair')
+            if account['blocked'] not in ('','capacity_deficit','late_terminal_fill','broker_evidence_conflict'):
+                raise BankConflict('This block requires broker-side investigation')
+            ids=list(db.execute('SELECT * FROM bank_ids WHERE scope=?',(key,)))
+            for row in ids:
+                lot=self._lot(db,row['id'])
+                if lot['units'] or any(order['status'] not in TERMINAL for order in lot['orders']):
+                    raise BankConflict('Repair requires all owned holdings and orders to be flat and terminal')
+            for row in ids:
+                if row['state']!='closed':self._retire(db,row['id'],'verified_flat_repair')
+            db.execute("UPDATE bank_accounts SET available=?,equity=?,blocked='' WHERE scope=?",(_format(min(cash,equity)),_format(equity),key))
+            self._audit(db,None,'verified_flat_repair',scope=key,prior_block=account['blocked'],cash=_format(min(cash,equity)))
+
 
     def order(self,scope,cid):
         with self.db() as db:

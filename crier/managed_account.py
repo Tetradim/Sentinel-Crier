@@ -115,21 +115,55 @@ class ManagedAccount:
             raise BankConflict('Stale account funds cannot authorize an order')
         return funds
 
+    def _recovery_sweep(self):
+        results=[]
+        for path in self.bank.journals(self.scope):
+            try:verify_legacy_journal(path,self.broker,self.scope,self.bank)
+            except Exception:results.append(dict(cid='',result='legacy_journal_requires_recovery'))
+        for row in self.bank.orders(self.scope,active_only=False):
+            if row['status'] in TERMINAL and row['broker_id']=='local-no-post:'+row['cid']:
+                results.append(dict(cid=row['cid'],result='definite_no_submission'));continue
+            try:
+                snapshot=self.broker.lookup(row['cid'])
+                if snapshot is None:results.append(dict(cid=row['cid'],result='not_returned_unresolved'));continue
+                self.bank.observe(self.scope,row['cid'],snapshot)
+                results.append(dict(cid=row['cid'],result='verified',status=snapshot['status']))
+            except BankConflict:results.append(dict(cid=row['cid'],result='conflicting_evidence'))
+            except Exception:results.append(dict(cid=row['cid'],result='broker_unavailable'))
+        return results
+
+    def repair_flat_account(self):
+        with self.bank.locked(self.scope):
+            self.broker.verify(self.environment)
+            from .allocation_bank import scope_key
+            with self.bank.db() as db:
+                if not db.execute('SELECT 1 FROM bank_inventory_initialized WHERE scope=?',(scope_key(self.scope),)).fetchone():
+                    raise BankConflict('Retained inventory baseline required; repair cannot create a new baseline')
+            results=self._recovery_sweep()
+            if any(row['result'] not in ('verified','definite_no_submission') for row in results):
+                raise BankConflict('Original order evidence remains unresolved; no repair applied')
+            self.bank.inventory(self.scope,self.broker.allocation_positions())
+            funds=self._funds()
+            self.bank.complete_flat_repair(self.scope,funds['cash'],funds['equity'],funds['observed_at'])
+        return self.recovery_check()
+
     def recovery_check(self):
         from .recovery_assistant import recovery_report
         result='verified'
         with self.bank.locked(self.scope):
             self.broker.verify(self.environment)
-            try:
-                self._reconcile()
-            except BankConflict:
-                result='unresolved'
+            orders=self._recovery_sweep()
+            if any(row['result'] not in ('verified','definite_no_submission') for row in orders):result='unresolved'
             positions=self.broker.allocation_positions()
-            try: self.bank.inventory(self.scope,positions)
-            except BankConflict: result='unresolved'
             from .allocation_bank import scope_key
             with self.bank.db() as db:
+                initialized=db.execute('SELECT 1 FROM bank_inventory_initialized WHERE scope=?',(scope_key(self.scope),)).fetchone() is not None
                 baseline={row[0]:row[1] for row in db.execute('SELECT symbol,quantity FROM bank_baselines WHERE scope=?',(scope_key(self.scope),))}
+            if initialized:
+                try:self.bank.inventory(self.scope,positions)
+                except BankConflict:result='unresolved'
+            else:
+                result='unresolved';orders.append(dict(cid='',result='inventory_baseline_unavailable'))
             owned={}
             for row in self.bank.active(self.scope):
                 owned[row['symbol']]=owned.get(row['symbol'],0)+row['units']
@@ -140,7 +174,8 @@ class ManagedAccount:
             if any(row['difference'] for row in comparison) or self.bank.account(self.scope)['blocked']: result='unresolved'
         report=recovery_report(self.bank,self.scope)
         from datetime import datetime,timezone
-        report.update(broker_checked=result=='verified',check_result=result,positions=comparison,
+        report.update(broker_checked=result=='verified',check_result=result,positions=comparison,orders=orders,
+                      flat_repair_candidate=report['reason'] in ('capacity_deficit','late_terminal_fill','broker_evidence_conflict') and not any(any(row[key] for key in ('units','pending_buy_units','pending_exit_units')) for row in report['ids']) and all(row['result'] in ('verified','definite_no_submission') for row in orders) and not any(row['difference'] for row in comparison),
                       positions_checked_at=datetime.now(timezone.utc).isoformat())
         return report
 

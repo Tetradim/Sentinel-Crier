@@ -160,7 +160,7 @@ class DesktopConnections:
             self.selected = identity
 
     async def invoke(self, identity, method, *args, **kwargs):
-        if method in ('bank_enable','bank_status','bank_configure','bank_recovery'):
+        if method in ('bank_enable','bank_status','bank_configure','bank_recovery','bank_repair'):
             async with self.operations:
                 if self.stopping: raise ValueError('Connections are shutting down.')
                 return await self.bank_operation(identity,method,*args,**kwargs)
@@ -189,7 +189,7 @@ class DesktopConnections:
 
     async def bank_operation(self,identity,method,*args,**kwargs):
         scope,saved=self.bank_scope(identity)
-        if method=='bank_recovery':
+        if method in ('bank_recovery','bank_repair'):
             broker=self.sessions[identity].broker
             if not isinstance(broker,ManagedAccount): raise ValueError('Reconnect this account with its ID bank enabled first.')
             for session in self.sessions.values():
@@ -197,7 +197,7 @@ class DesktopConnections:
                     session.device.engine.save_settings({'enabled':False})
             async with self.sessions[identity].lifecycle:
                 if self.sessions[identity].broker is not broker: raise ValueError('Connection changed; reconnect before checking evidence.')
-                task=asyncio.create_task(asyncio.to_thread(broker.recovery_check))
+                task=asyncio.create_task(asyncio.to_thread(broker.repair_flat_account if method=='bank_repair' else broker.recovery_check))
                 try: return await asyncio.shield(task)
                 except asyncio.CancelledError:
                     await task
