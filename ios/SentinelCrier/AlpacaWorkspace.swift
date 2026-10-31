@@ -648,6 +648,21 @@ struct AlpacaTradingView: View {
                             Text("Choose contract").tag("")
                             ForEach(model.contracts) { Text($0.name).tag($0.id) }
                         }
+                        if let selected = model.contracts.first(where: { $0.id == contractID }) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    Text(selected.type.uppercased()).font(.caption.weight(.bold))
+                                    Spacer()
+                                    Text("Strike $" + selected.strike_price).monospacedDigit()
+                                }
+                                Text("Expires " + selected.expiration_date).font(.subheadline)
+                                Text(selected.symbol).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                            }.padding(.vertical, 6)
+                                .accessibilityElement(children: .combine)
+                        } else {
+                            Text("Discover and choose an exact contract before reviewing. No bid/ask quote is supplied by this selector.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                 }.disabled(model.busy || model.review != nil)
                 Section("Order details") {

@@ -54,6 +54,12 @@ struct TradingChartWorkspace: View {
 
     var body: some View {
         VStack(spacing: 12) {
+            HStack {
+                Text("Chart").font(.title3.weight(.bold))
+                Spacer()
+                Text(showOption ? "EXACT CONTRACT" : "STOCK")
+                    .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            }
             search
             Picker("Chart instrument", selection: $showOption) {
                 Text("Stock").tag(false)
@@ -68,16 +74,20 @@ struct TradingChartWorkspace: View {
                     .textFieldStyle(.roundedBorder)
                     .accessibilityHint("Select the exact contract from the live options chain when connected")
             }
-            HStack(spacing: 6) {
+            ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
                 ForEach(ChartTimeframe.allCases) { frame in
                     Button(frame.rawValue) { savedTimeframe = frame.rawValue }
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
+                        .font(.caption.weight(.semibold))
+                        .frame(minWidth: 48, minHeight: 44)
+                        .padding(.horizontal, 6)
                         .background(frame == timeframe ? Color.blue : Color.gray.opacity(0.15),
                                     in: RoundedRectangle(cornerRadius: 7))
                         .foregroundStyle(frame == timeframe ? .white : .primary)
+                        .accessibilityLabel("Chart timeframe " + frame.rawValue)
+                        .accessibilityValue(frame == timeframe ? "Selected" : "Not selected")
                 }
+            }
             }
             chartBody(height: 290)
             HStack {
@@ -87,6 +97,7 @@ struct TradingChartWorkspace: View {
                     Label("Indicators", systemImage: "slider.horizontal.3")
                 }
                 .font(.subheadline)
+                .frame(minHeight: 44)
                 Spacer()
                 Button {
                     fullscreen = true
@@ -94,6 +105,7 @@ struct TradingChartWorkspace: View {
                     Label("Expand", systemImage: "arrow.up.left.and.arrow.down.right")
                 }
                 .font(.subheadline)
+                .frame(minHeight: 44)
             }
             .padding(.horizontal, 2)
         }
@@ -101,13 +113,17 @@ struct TradingChartWorkspace: View {
         .sheet(isPresented: $showIndicators) { indicatorSheet }
         .fullScreenCover(isPresented: $fullscreen) {
             NavigationStack {
+                GeometryReader { geometry in
+                ScrollView {
                 VStack(spacing: 12) {
                     Text(instrument?.title ?? "Choose an instrument")
                         .font(.headline)
-                    chartBody(height: 490)
+                    chartBody(height: max(180, min(490, geometry.size.height - 100)))
                     Spacer(minLength: 0)
                 }
                 .padding()
+                }
+                }
                 .navigationTitle("Chart")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -128,7 +144,8 @@ struct TradingChartWorkspace: View {
                 .autocorrectionDisabled()
             if busy { ProgressView().controlSize(.small) }
         }
-        .padding(11)
+        .frame(minHeight: 44)
+        .padding(.horizontal, 12)
         .background(Color.gray.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
     }
 
