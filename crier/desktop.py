@@ -205,6 +205,14 @@ class DesktopApp:
         ttk.Label(frame,text='Broker check: '+str(report.get('check_result','not checked'))+'. Entries are not automatically resumed.',wraplength=650).pack(anchor='w')
         for index,step in enumerate(report['steps'],1):
             ttk.Label(frame,text=str(index)+'. '+step,wraplength=650).pack(anchor='w',pady=4)
+        if 'positions' in report:
+            ttk.Label(frame,text='Position snapshot: '+report['positions_checked_at'],wraplength=650).pack(anchor='w',pady=8)
+            table=ttk.Treeview(frame,columns=('symbol','host','external','expected','broker','difference'),show='headings',height=5)
+            for key,title in [('symbol','Symbol'),('host','Host owned'),('external','External'),('expected','Expected'),('broker','Broker'),('difference','Difference')]:
+                table.heading(key,text=title);table.column(key,width=105)
+            for row in report['positions']:
+                table.insert('','end',values=tuple(row[key] for key in ('symbol','host_owned','external_baseline','expected','broker','difference')))
+            table.pack(fill='x',pady=4)
         for row in report['ids']:
             ttk.Label(frame,text=f"ID {row['id']} | {row['symbol']} | owned {row['units']} | pending buys {row['pending_buy_units']} | pending exits {row['pending_exit_units']}",wraplength=650).pack(anchor='w',pady=4)
         ttk.Button(frame,text='Pause entries and check broker evidence',command=lambda:self.submit('bank_recovery',callback=lambda updated:(window.destroy(),self.show_recovery_assistant(updated)))).pack(anchor='w',pady=8)

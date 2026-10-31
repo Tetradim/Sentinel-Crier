@@ -38,3 +38,14 @@ def test_unknown_check_retains_cash_and_reports_unresolved(tmp_path):
     assert report['check_result']=='unresolved'
     assert bank.account(SCOPE)==before
     assert broker.posts==0
+
+
+def test_comparison_includes_external_baseline_without_claiming_host_ownership(tmp_path):
+    from crier.managed_account import ManagedAccount
+    from test_managed_account import Broker
+    bank=setup_bank(tmp_path);bank.inventory(SCOPE,{SYMBOL:10})
+    broker=Broker();broker.positions={SYMBOL:9}
+    report=ManagedAccount(bank,SCOPE,'alice',broker).recovery_check()
+    assert report['positions']==[dict(symbol=SYMBOL,host_owned=0,external_baseline=10,expected=10,broker=9,difference=-1)]
+    assert report['check_result']=='unresolved'
+    assert broker.posts==0

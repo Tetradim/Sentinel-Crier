@@ -10,15 +10,32 @@ struct CrierCommandCenter: View {
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("CRIER").font(.caption.weight(.semibold)).tracking(2).foregroundStyle(.secondary)
+                    Text("Trading workspace").font(.title2.weight(.bold))
+                }
+                Spacer()
+                Text(model.environment.rawValue.uppercased())
+                    .font(.caption.weight(.bold)).monospaced()
+                    .padding(.horizontal, 10).padding(.vertical, 7)
+                    .background(Color.blue.opacity(0.16), in: Capsule())
+                    .accessibilityLabel("Broker environment: " + model.environment.rawValue)
+            }.padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 8)
+            HStack(spacing: 12) {
                 Picker("Connection", selection: Binding(get: { routes.selected }, set: { id in
                     do { try routes.select(id) } catch { routeError = error.localizedDescription }
                 })) {
                     ForEach(routes.registry.routes) { route in Text(route.name).tag(route.id) }
-                }.disabled(connections.busy)
-                Button("Add") { do { try routes.add() } catch { routeError = error.localizedDescription } }.disabled(connections.busy)
-                Button("Stop all") { Task { await routes.stopAll() } }
-            }.padding(.horizontal)
+                }.pickerStyle(.menu).disabled(connections.busy).frame(minHeight: 44)
+                Spacer(minLength: 0)
+                Button { do { try routes.add() } catch { routeError = error.localizedDescription } } label: {
+                    Image(systemName: "plus.circle").frame(minWidth: 44, minHeight: 44)
+                }.accessibilityLabel("Add connection").disabled(connections.busy)
+                Button("Stop all", role: .destructive) { Task { await routes.stopAll() } }
+                    .frame(minHeight: 44)
+            }.padding(.horizontal, 16)
+            Divider()
             if !routeError.isEmpty { Text(routeError).font(.caption) }
             if !model.legacyRoute { Text("Alpaca API-key route · OAuth, Webull and Discord delivery remain on the original connection.").font(.caption).padding(.horizontal) }
         TabView {
@@ -36,7 +53,11 @@ struct CrierCommandCenter: View {
                 .tabItem { Label("Alerts", systemImage: "bell") }
         }
         .id(routes.selected)
+        .tint(Color(red: 0.20, green: 0.52, blue: 1.0))
+        .toolbarBackground(Color(red: 0.055, green: 0.065, blue: 0.085), for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
         }
+        .background(Color(red: 0.035, green: 0.045, blue: 0.06))
         .environmentObject(model)
         .environmentObject(connections)
         .onOpenURL { url in

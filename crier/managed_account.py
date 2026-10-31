@@ -119,13 +119,29 @@ class ManagedAccount:
         from .recovery_assistant import recovery_report
         result='verified'
         with self.bank.locked(self.scope):
+            self.broker.verify(self.environment)
             try:
-                self.broker.verify(self.environment)
                 self._reconcile()
             except BankConflict:
                 result='unresolved'
+            positions=self.broker.allocation_positions()
+            try: self.bank.inventory(self.scope,positions)
+            except BankConflict: result='unresolved'
+            from .allocation_bank import scope_key
+            with self.bank.db() as db:
+                baseline={row[0]:row[1] for row in db.execute('SELECT symbol,quantity FROM bank_baselines WHERE scope=?',(scope_key(self.scope),))}
+            owned={}
+            for row in self.bank.active(self.scope):
+                owned[row['symbol']]=owned.get(row['symbol'],0)+row['units']
+            comparison=[dict(symbol=symbol,host_owned=owned.get(symbol,0),external_baseline=baseline.get(symbol,0),
+                expected=owned.get(symbol,0)+baseline.get(symbol,0),broker=positions.get(symbol,0),
+                difference=positions.get(symbol,0)-owned.get(symbol,0)-baseline.get(symbol,0))
+                for symbol in sorted(set(positions)|set(baseline)|set(owned))]
+            if any(row['difference'] for row in comparison): result='unresolved'
         report=recovery_report(self.bank,self.scope)
-        report.update(broker_checked=result=='verified',check_result=result)
+        from datetime import datetime,timezone
+        report.update(broker_checked=result=='verified',check_result=result,positions=comparison,
+                      positions_checked_at=datetime.now(timezone.utc).isoformat())
         return report
 
     def submit_intent_checked(self, request, can_submit, *, event, trade_id, ordinal):
