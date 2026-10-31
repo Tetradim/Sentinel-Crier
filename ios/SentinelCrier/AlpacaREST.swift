@@ -64,10 +64,14 @@ struct AlpacaAccount: Codable {
     let trading_blocked: Bool; let account_blocked: Bool
     let options_trading_level: Int?
     var currency: String? = nil
+    var cash: String? = nil
+    var non_marginable_buying_power: String? = nil
+    var options_buying_power: String? = nil
 }
 struct AlpacaPosition: Codable, Identifiable {
     var id: String { symbol }
     let symbol: String; let qty: String; let qty_available: String?; let avg_entry_price: String; let market_value: String?
+    var asset_class: String? = nil
 }
 struct AlpacaContract: Codable, Identifiable, Hashable {
     let id: String; let symbol: String; let name: String; let status: String

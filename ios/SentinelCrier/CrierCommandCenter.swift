@@ -6,6 +6,7 @@ struct CrierCommandCenter: View {
     @ObservedObject var model: AlpacaWorkspace
     @ObservedObject var routes: ConnectionRoutes
     @State private var routeError = ""
+    @State private var showAccountBank = false
     @StateObject private var connections = ProviderConnections()
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
@@ -34,6 +35,7 @@ struct CrierCommandCenter: View {
                 Button { do { try routes.add() } catch { routeError = error.localizedDescription } } label: {
                     Image(systemName: "plus.circle").frame(minWidth: 44, minHeight: 44)
                 }.accessibilityLabel("Add connection").disabled(connections.busy)
+                Button { showAccountBank = true } label: { Image(systemName: "number.square").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Account ID bank")
                 Button("Stop all", role: .destructive) { Task { await routes.stopAll() } }
                     .frame(minHeight: 44)
             }.padding(.horizontal, 16)
@@ -60,6 +62,7 @@ struct CrierCommandCenter: View {
         .toolbarBackground(.visible, for: .tabBar)
         }
         .background(Color(red: 0.035, green: 0.045, blue: 0.06))
+        .sheet(isPresented: $showAccountBank) { AccountIDBankView(routes: routes) }
         .environmentObject(model)
         .environmentObject(connections)
         .onOpenURL { url in

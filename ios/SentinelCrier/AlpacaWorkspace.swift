@@ -127,6 +127,8 @@ final class AlpacaWorkspace: ObservableObject {
     private var foreground = true
     private var api: AlpacaREST?
     private var journal: AlpacaJournal?
+    private var manualJournalFile: URL?
+    var bank: AccountIDBank? { routeRegistry?.bank }
     private var publisher: AlpacaDiscordDelivery?
     private var mirrorSender: MirrorSender?
     private let makeClient: (AlpacaEnvironment, AlpacaCredentials) -> AlpacaREST
@@ -162,9 +164,11 @@ final class AlpacaWorkspace: ObservableObject {
             let folder: URL?
             if let storage = routeStorage, !storage.route.legacy { folder = try storage.folder() } else { folder = nil }
             let journal = try suppliedJournal ?? (folder.map { try AlpacaJournal(file: $0.appendingPathComponent("alpaca-journal.json")) } ?? AlpacaJournal.local())
+            self.manualJournalFile = folder?.appendingPathComponent("alpaca-journal.json") ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("alpaca-journal.json")
             self.journal = journal; publisher = AlpacaDiscordDelivery(journal: journal, webhook: self.webhook, defaults: defaults)
             if suppliedJournal == nil && legacyRoute { mirrorSender = try MirrorSender.local() }
             intent = try intentController ?? (folder.map { try IntentController(file: $0.appendingPathComponent("intent-v1.json")) } ?? IntentController.local())
+            try intent?.installAccountBank(bank, route: routeStorage?.route.id ?? "legacy")
             if let bound = routeStorage?.route.environment { environment = bound }
         }
         catch { message = "Trading disabled: durable journal could not be read. Preserve it for recovery." }
@@ -205,6 +209,17 @@ final class AlpacaWorkspace: ObservableObject {
         let savedPairing = try loadIntentPairing()
         if executionJourney, let pairing = savedPairing {
             try intent?.validateIdentity(account: current.id, environment: environment, pairing: pairing)
+        }
+        if let bank, try bank.enabled(BankScope(account: current.id, environment: selectedEnvironment)) {
+            guard let intent, let pairing = try loadIntentPairing() else { throw AlpacaError.invalid("Managed accounts require a pinned host or follower pairing for each route.") }
+            let scope = BankScope(account: current.id, environment: selectedEnvironment)
+            let lease = try bank.lease(scope)
+            defer { withExtendedLifetime(lease) {} }
+            try await ManagedAccountBank.verifyJournal(intent.journalFile, api: client, scope: scope, bank: bank, route: routeStorage?.route.id ?? "legacy")
+            if let manualJournalFile { try await ManagedAccountBank.verifyManual(manualJournalFile, api: client, scope: scope) }
+            guard foreground, generation == scopeGeneration else { throw AlpacaError.invalid("Bank admission interrupted.") }
+            try intent.persistBankJournal()
+            try bank.register(scope, route: routeStorage?.route.id ?? "legacy", journal: intent.journalFile, pairing: pairing.fingerprint)
         }
         if let routeStorage { try routeRegistry?.bind(routeStorage.route.id, account: current.id, environment: selectedEnvironment) }
         // Verify candidate credentials and journal identity before replacing working keys.
@@ -574,6 +589,7 @@ final class AlpacaWorkspace: ObservableObject {
                 return
             }
             if try loadIntentPairing() != nil { throw AlpacaError.invalid("Follower pairing cannot originate trades. Use a host pairing to submit mirrored orders.") }
+            if let bank, try bank.enabled(BankScope(account: account.id, environment: environment)) { throw AlpacaError.invalid("Account ID bank orders require a host pairing and tracked instruction. Connect a host before trading.") }
             try await journal.begin(ticket)
             guard foreground, generation == scopeGeneration, self.api === api, permit.isCurrent, !Task.isCancelled else { throw AlpacaError.invalid("Trading session ended; journal retained for recovery.") }
             review = nil // Consume before any network await.
@@ -597,6 +613,45 @@ final class AlpacaWorkspace: ObservableObject {
             try await api.cancel(orderID: order.id, permit: permit)
             message = "Cancellation requested. Refresh to confirm; a racing fill can still occur."
         }
+    }
+}
+
+extension AlpacaWorkspace {
+    func setupAccountBank(journals: [AlpacaWorkspace]) async throws {
+        guard !busy, account == nil, let bank, let route = routeRegistry?.routes.first(where: { $0.id == routeStorage?.route.id }),
+              let pinned = route.account, let pinnedEnvironment = route.environment, pinnedEnvironment == environment,
+              let intent, let pairing = try loadIntentPairing() else { throw AlpacaError.invalid("Connect and pair this route, then stop all connections before bank setup.") }
+        let scope = BankScope(account: pinned, environment: pinnedEnvironment)
+        let lease = try bank.lease(scope)
+        defer { withExtendedLifetime(lease) {} }
+        let client = makeClient(pinnedEnvironment, try loadCredentials(pinnedEnvironment))
+        defer { client.invalidate() }
+        let current = try await client.account()
+        guard current.id == pinned else { throw AlpacaError.invalid("Authenticated account changed. Setup refused.") }
+        for model in journals {
+            if let controller = model.intent, controller.state.accountID == pinned {
+                try await ManagedAccountBank.verifyJournal(controller.journalFile, api: client, scope: scope, bank: (try bank.enabled(scope)) ? bank : nil, route: model.routeStorage?.route.id ?? "legacy")
+            }
+            if let file = model.manualJournalFile { try await ManagedAccountBank.verifyManual(file, api: client, scope: scope) }
+        }
+        let positions = try ManagedAccountBank.positions(await client.positions())
+        let refreshed = try await client.account()
+        guard refreshed.id == pinned else { throw AlpacaError.invalid("Account changed during setup.") }
+        let funds = try ManagedAccountBank.funds(refreshed)
+        try bank.enable(scope, cash: funds.cash, equity: funds.equity, positions: positions)
+        try bank.inventory(scope, positions: positions)
+        try intent.persistBankJournal()
+        try bank.register(scope, route: route.id, journal: intent.journalFile, pairing: pairing.fingerprint)
+        for model in journals { try model.intent?.installAccountBank(bank, route: model.routeStorage?.route.id ?? "legacy") }
+        message = "Account ID bank enabled. Pools default to zero. Reconnect each route and explicitly resume entries after saving its pools."
+    }
+    func bankSnapshot() throws -> AccountIDBank.Account {
+        guard let bank, let route = routeRegistry?.routes.first(where: { $0.id == routeStorage?.route.id }), let account = route.account, let environment = route.environment else { throw AlpacaError.invalid("Connect this route first.") }
+        return try bank.snapshot(BankScope(account: account, environment: environment))
+    }
+    func configureBank(asset: String, mode: String, value: String, fee: String) throws {
+        guard let bank, let route = routeRegistry?.routes.first(where: { $0.id == routeStorage?.route.id }), let account = route.account, let environment = route.environment else { throw AlpacaError.invalid("Connect this route first.") }
+        try bank.configure(BankScope(account: account, environment: environment), route: route.id, asset: asset, mode: mode, value: value, fee: fee)
     }
 }
 

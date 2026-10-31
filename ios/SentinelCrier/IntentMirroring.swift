@@ -466,6 +466,24 @@ struct IntentPairing: Codable {
     private var copyFile: URL { file.appendingPathExtension("reports") }
     var onHealth: NativeHealthObserver?
     private let file: URL
+    var accountBank: AccountIDBank?
+    var bankRoute = "legacy"
+    var journalFile: URL { file }
+    func installAccountBank(_ bank: AccountIDBank?, route: String) throws {
+        accountBank = bank; bankRoute = route
+        if let bank, !state.accountID.isEmpty,
+           try AlpacaEnvironment.allCases.contains(where: { try bank.enabled(BankScope(account: state.accountID, environment: $0)) }) {
+            try commit { $0.preferences.paused = true }
+        }
+    }
+    func persistBankJournal() throws { try commit { _ in } }
+    private func managedBank(_ api: AlpacaREST) throws -> ManagedAccountBank? {
+        let scope = BankScope(account: state.accountID, environment: api.environment)
+        guard let bank = accountBank, try bank.enabled(scope) else { return nil }
+        let registered = try bank.snapshot(scope).journals[bankRoute + "|" + file.path]
+        guard registered == state.pairingID else { throw AlpacaError.invalid("Account bank admission required for this route and pairing.") }
+        return ManagedAccountBank(bank: bank, scope: scope, route: bankRoute)
+    }
     private let now: () -> Date
     private let monotonic: () -> TimeInterval
     private var entryClock: EntryClock
@@ -744,7 +762,12 @@ struct IntentPairing: Codable {
         let account = try await api.account()
         guard account.id == state.accountID, account.status == "ACTIVE", !account.account_blocked, !account.trading_blocked else { throw AlpacaError.invalid("Reconnect account is changed or blocked.") }
         observed?(.broker, .healthy, .verified)
-        var failures: [String] = []; var freshByTrade: [String: Set<Int>] = [:]; var failedTrades = Set<String>()
+        let managed = try managedBank(api)
+        let accountLease = try managed.map { try $0.bank.lease($0.scope) }
+        defer { withExtendedLifetime(accountLease) {} }
+        var bankFailures: [String] = []
+        if let managed { do { try await managed.reconcile(api: api) } catch { bankFailures.append(error.localizedDescription) } }
+        var failures: [String] = bankFailures; var freshByTrade: [String: Set<Int>] = [:]; var failedTrades = Set<String>()
         for id in state.trades.keys.sorted() {
             guard let trade = state.trades[id], let event = trade.desired else { continue }
             if settled(trade) { continue }
@@ -905,6 +928,7 @@ struct IntentPairing: Codable {
         }
     }
     private func recordReconciliation(id: String, index: Int, order: AlpacaOrder) throws {
+        if let api, let managed = try managedBank(api), try managed.bank.order(managed.scope, cid: order.client_order_id) != nil { try managed.bank.observe(managed.scope, order) }
         brokerObserved[id] = IntentDiagnosticRecord.timestamp()
         let uptime = monotonic(); let session = timerSession
         try commit { state in
@@ -940,6 +964,11 @@ struct IntentPairing: Codable {
             try Task.checkCancellation()
             guard self.api === api, let pairing = pair else { throw AlpacaError.invalid("Cancellation interrupted.") }
             let attemptTime = now()
+            if let managed = try managedBank(api), mutation.clientID.hasPrefix("sc-") {
+                guard let registered = try managed.bank.order(managed.scope, cid: mutation.clientID),
+                      let owner = try managed.bank.snapshot(managed.scope).lots.first(where: { $0.id == registered.bankID }),
+                      owner.route == bankRoute, owner.trade == id, registered.brokerID == order.id else { throw AlpacaError.invalid("Cancellation is not owned by this host route.") }
+            }
             if mutation.mayRetryCancellation(now: attemptTime) {
                 try commit {
                     $0.trades[id]!.mutations[index].cancelUnknown = true
@@ -971,7 +1000,16 @@ struct IntentPairing: Codable {
     private func terminal(_ order: AlpacaOrder) -> Bool { ["filled", "canceled", "expired", "rejected", "replaced"].contains(order.status) }
     private func execute(_ id: String, api: AlpacaREST, observe: NativeHealthObserver? = nil) async throws {
         guard let initial = state.trades[id], let desired = initial.desired else { return }
-        if settled(initial) { return }
+        let managed = try managedBank(api)
+        let accountLease = try managed.map { try $0.bank.lease($0.scope) }
+        defer { withExtendedLifetime(accountLease) {} }
+        var bankFailure: Error?
+        if let managed {
+            // Recovery includes terminal and retired IDs before the settled shortcut.
+            do { try await managed.reconcile(api: api) } catch { bankFailure = error }
+            if desired.action == "exit" || desired.action == "cancel" { try managed.bank.invalidate(managed.scope, route: bankRoute, trade: id, reason: desired.action) }
+        }
+        if settled(initial) { if let bankFailure { throw bankFailure }; return }
         let account = try await api.account()
         guard account.id == state.accountID, desired.environment == api.environment, account.status == "ACTIVE", !account.account_blocked, !account.trading_blocked else { throw AlpacaError.invalid("Account is changed or blocked.") }
         observe?(.broker, .healthy, .verified)
@@ -1005,6 +1043,7 @@ struct IntentPairing: Codable {
             return
         }
         if !failures.isEmpty { throw AlpacaError.invalid("Broker reconciliation required: " + failures.joined(separator: "; ")) }
+        if let bankFailure { throw bankFailure }
         if e.action == "cancel" || ((trade.invalidated || trade.entryClosed == true) && e.action != "exit") {
             diagnosticStep(e.event_id, "entry_invalidated", "Entry remainder canceled or superseded; tracked fills retained")
             try completeTerminalInstruction(id, eventID: e.event_id)
@@ -1107,14 +1146,22 @@ struct IntentPairing: Codable {
         guard state.trades[id]?.desired?.event_id == e.event_id, sell || state.trades[id]?.invalidated == false else { return }
         try Task.checkCancellation()
         guard self.api === api, pair != nil else { return }
-        let clientID = "si-" + e.event_id + (sell ? "-s\(existing.count)" : "-b")
+        let clientID = managed.map { AccountIDBank.clientID($0.scope, route: bankRoute, trade: id, event: e.event_id, sell: sell, ordinal: existing.count) } ?? ("si-" + e.event_id + (sell ? "-s\(existing.count)" : "-b"))
         let mutation = IntentMutation(clientID: clientID, eventID: e.event_id, sell: sell, quantity: quantity)
         try commit { $0.trades[id]!.mutations.append(mutation) }
         let dispatched = Date()
         enqueueWork { [self] in diagnosticStep(e.event_id, "order_dispatch", "client=\(clientID) quantity=\(quantity) limit=\(price ?? "market")", at: dispatched) }
         var refusal = checkedBinding == nil ? "operation_stopped" : "metadata_or_operation_stopped"
         do {
+            var bankObserved: Date?
+            if let managed {
+                bankObserved = try await managed.prepare(api: api, event: e, cid: clientID, quantity: quantity, price: price, sell: sell, ordinal: existing.count, canSubmit: { [self] in
+                    !Task.isCancelled && self.api === api && pair != nil && state.trades[id]?.desired?.event_id == e.event_id
+                })
+                try managed.bank.markDispatching(managed.scope, cid: clientID)
+            }
             let order = try await api.submitIntent(symbol: e.symbol, quantity: quantity, price: price, sell: sell, option: e.asset == "option", clientID: clientID, policyBinding: checkedBinding, canSubmit: { [self] in
+                if let bankObserved, !(0...10).contains(Date().timeIntervalSince(bankObserved)) { refusal = "stale_bank_funds"; return false }
                 guard !Task.isCancelled, self.api === api, pair != nil else { refusal = "operation_stopped"; return false }
                 guard state.trades[id]?.desired?.event_id == e.event_id else { refusal = "revision_changed"; return false }
                 guard hosting || state.preferences.samePricing(as: preference) else { refusal = "pricing_changed"; return false }
@@ -1138,10 +1185,12 @@ struct IntentPairing: Codable {
                 return true
             })
             try mutation.validate(order, symbol: e.symbol)
+            if let managed { try managed.bank.observe(managed.scope, order) }
             diagnosticStep(e.event_id, "broker_response", "client=\(clientID) broker=\(order.id) status=\(order.status) filled=\(order.filled_qty) average=\(order.filled_avg_price ?? "unavailable")")
             try commit { s in let index = s.trades[id]!.mutations.firstIndex { $0.clientID == clientID }!; s.trades[id]!.mutations[index].order = order; s.trades[id]!.mutations[index].brokerResponseSession = timerSession }
             if order.status == "rejected", hosting { _ = try host(symbol: e.symbol, asset: e.asset, quantity: e.quantity, price: e.limit_price, tradeID: id, action: "cancel") }
         } catch is IntentDispatchRefused {
+            if let managed, try managed.bank.order(managed.scope, cid: clientID) != nil { try managed.bank.notSubmitted(managed.scope, cid: clientID) }
             try commit { s in
                 let index = s.trades[id]!.mutations.firstIndex { $0.clientID == clientID }!
                 s.trades[id]!.mutations[index].notSubmitted = true
@@ -1150,6 +1199,7 @@ struct IntentPairing: Codable {
             diagnosticStep(e.event_id, "order_not_submitted", refusal)
             message = "Not submitted before dispatch: \(refusal). Journal retained; use a new revision if needed."
         } catch AlpacaError.http(let code) where [400, 401, 403, 429].contains(code) {
+            if let managed { try managed.bank.notSubmitted(managed.scope, cid: clientID) }
             diagnosticStep(e.event_id, "broker_rejected", "HTTP \(code)")
             // A definitive HTTP refusal is a local no-order disposition, never fabricated broker proof.
             try commit { s in

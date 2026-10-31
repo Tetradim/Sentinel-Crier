@@ -20,6 +20,9 @@ targets:
       - path: SentinelCrier/AlpacaREST.swift
       - path: SentinelCrier/AlpacaAlertFormatter.swift
       - path: SentinelCrier/AlpacaJournal.swift
+      - path: SentinelCrier/AccountIDBank.swift
+      - path: SentinelCrier/ManagedAccountBank.swift
+      - path: SentinelCrier/AccountIDBankView.swift
       - path: SentinelCrier/ConnectionRoutes.swift
       - path: SentinelCrier/AlpacaWorkspace.swift
       - path: SentinelCrier/RecoveryEvidence.swift
@@ -80,6 +83,7 @@ targets:
     type: bundle.unit-test
     platform: iOS
     sources:
+      - path: SentinelCrier/AccountIDBankTests.swift
       - path: SentinelCrier/ConnectionRoutesTests.swift
       - path: SentinelCrier/AlpacaTests.swift
       - path: SentinelCrier/GuidedSetupTests.swift

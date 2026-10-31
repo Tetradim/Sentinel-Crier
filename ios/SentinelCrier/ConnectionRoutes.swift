@@ -16,9 +16,14 @@ struct ConnectionRoute: Codable, Identifiable {
     @Published private(set) var routes: [ConnectionRoute]
     @Published private(set) var selected: String
     private let file: URL
+    let bank: AccountIDBank?
+    private func admitted(_ route: String, _ account: String, _ environment: AlpacaEnvironment) -> Bool {
+        guard let bank, let snapshot = try? bank.snapshot(BankScope(account: account, environment: environment)) else { return false }
+        return snapshot.journals.keys.contains { $0.hasPrefix(route + "|") }
+    }
     private var reservations: [String: String] = [:]
-    init(file: URL) throws {
-        self.file = file
+    init(file: URL, bank: AccountIDBank? = nil) throws {
+        self.file = file; self.bank = bank
         let state = FileManager.default.fileExists(atPath: file.path)
             ? try JSONDecoder().decode(State.self, from: Data(contentsOf: file))
             : State(routes: [ConnectionRoute(id: "legacy", name: "Original connection")], selected: "legacy")
@@ -38,7 +43,11 @@ struct ConnectionRoute: Codable, Identifiable {
         guard reservations.allSatisfy({ key, owner in
             owner == "legacy" && (key.hasPrefix("paper:") || key.hasPrefix("live:")) && key.split(separator: ":", maxSplits: 1).count == 2
         }) else { throw AlpacaError.invalid("Invalid historical account reservations.") }
-        guard Set(bound).count == bound.count else { throw AlpacaError.invalid("Conflicting account ownership; execution disabled.") }
+        guard Set(bound).count == bound.count || routes.allSatisfy({ route in
+            guard let account = route.account, let environment = route.environment else { return true }
+            let duplicates = routes.filter { $0.account == account && $0.environment == environment }
+            return duplicates.count <= 1 || admitted(route.id, account, environment)
+        }) else { throw AlpacaError.invalid("Conflicting account ownership; execution disabled.") }
     }
     private func save(_ next: [ConnectionRoute], selected: String) throws {
         try JSONEncoder().encode(State(routes: next, selected: selected, reservations: reservations)).write(to: file, options: [.atomic, .completeFileProtection])
@@ -61,10 +70,10 @@ struct ConnectionRoute: Codable, Identifiable {
         guard route.account == nil || (route.account == account && route.environment == environment) || historicalLegacy else {
             throw AlpacaError.invalid("This connection is permanently pinned to its original account and environment. Add another connection.")
         }
-        guard !routes.contains(where: { $0.id != id && $0.account == account && $0.environment == environment }) else {
+        guard !routes.contains(where: { $0.id != id && $0.account == account && $0.environment == environment }) || (admitted(id, account, environment) && routes.filter { $0.account == account && $0.environment == environment }.allSatisfy { admitted($0.id, account, environment) }) else {
             throw AlpacaError.invalid("This Alpaca account and environment already belong to another connection, including disconnected connections.")
         }
-        guard reservations[key] == nil || reservations[key] == id else { throw AlpacaError.invalid("This account has retained history in another connection.") }
+        guard reservations[key] == nil || reservations[key] == id || admitted(id, account, environment) else { throw AlpacaError.invalid("This account has retained history in another connection.") }
         var next = routes; next[index].account = account; next[index].environment = environment
         let previous = reservations
         if route.legacy { reservations[key] = "legacy" }
@@ -91,7 +100,7 @@ struct ConnectionRoute: Codable, Identifiable {
         var next = reservations
         for key in keys {
             guard next[key] == nil || next[key] == "legacy" else { throw AlpacaError.invalid("Legacy journal ownership conflicts with another route.") }
-            guard !routes.contains(where: { route in !route.legacy && key == (route.environment?.rawValue ?? "") + ":" + (route.account ?? "") }) else { throw AlpacaError.invalid("Legacy account is already assigned to another route.") }
+            guard !routes.contains(where: { route in !route.legacy && key == (route.environment?.rawValue ?? "") + ":" + (route.account ?? "") && !admitted(route.id, route.account ?? "", route.environment ?? .paper) }) else { throw AlpacaError.invalid("Legacy account is already assigned to another route.") }
             next[key] = "legacy"
         }
         let previous = reservations; reservations = next
@@ -161,7 +170,8 @@ struct ConnectionRouteStorage {
     init() throws {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
-        registry = try ConnectionRouteRegistry(file: support.appendingPathComponent("connection-routes-v1.json"))
+        let bank = try AccountIDBank.local()
+        registry = try ConnectionRouteRegistry(file: support.appendingPathComponent("connection-routes-v1.json"), bank: bank)
         try registry.reserveLegacyHistory(support: support)
         selected = registry.selected
         for route in registry.routes { sessions[route.id] = AlpacaWorkspace(routeStorage: ConnectionRouteStorage(route: route), routeRegistry: registry) }
@@ -172,6 +182,11 @@ struct ConnectionRouteStorage {
         let route = try registry.add()
         sessions[route.id] = AlpacaWorkspace(routeStorage: ConnectionRouteStorage(route: route), routeRegistry: registry)
         selected = route.id
+    }
+    func setupBank() async throws {
+        let selectedModel = model
+        await stopAll()
+        try await selectedModel.setupAccountBank(journals: Array(sessions.values))
     }
     func stopAll() async {
         for model in sessions.values { model.oauthStopWorkers() }
