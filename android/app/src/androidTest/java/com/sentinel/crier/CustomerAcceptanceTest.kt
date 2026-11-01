@@ -6,6 +6,7 @@ import android.widget.EditText
 import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.scrollTo
 import androidx.test.espresso.assertion.ViewAssertions.matches
@@ -29,9 +30,9 @@ class CustomerAcceptanceTest {
    onView(withText("Account")).perform(click())
    for(title in listOf("Alerts only","Trade / share","Follow trades")) {
     onView(withText("Optional paper practice / support")).perform(scrollTo(),click())
-    onView(withText(title)).perform(click())
-    onView(withText(containsString("Paper practice is optional"))).check(matches(isDisplayed()))
-    onView(withText("Return to setup")).perform(click())
+    onView(withText(title)).inRoot(isDialog()).perform(click())
+    onView(withText(containsString("Paper practice is optional"))).inRoot(isDialog()).check(matches(isDisplayed()))
+    onView(withText("Return to setup")).inRoot(isDialog()).perform(click())
    }
    scenario.onActivity { assertEquals(original,it.getSharedPreferences("journey",0).getString("purpose","")); assertFalse(SyncService.active) }
   }

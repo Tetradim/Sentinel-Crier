@@ -20,17 +20,27 @@ class BrokerageShell(private val activity:Activity,config:JSONObject,
  private var selected="Home"
  var tradeAnchor:View?=null
  init {
+  // API 30+ explicitly lays out edge-to-edge, so only this root applies safe insets.
+  // API 26-29 keeps platform decor fitting and must not add a second set of padding.
+  if(android.os.Build.VERSION.SDK_INT>=30) {
+   activity.window.setDecorFitsSystemWindows(false)
+   root.setOnApplyWindowInsetsListener { view,insets ->
+    val safe=insets.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout() or android.view.WindowInsets.Type.ime())
+    view.setPadding(safe.left,safe.top,safe.right,safe.bottom)
+    insets
+   }
+  }
   val header=LinearLayout(activity).apply { setPadding(dp(12),dp(8),dp(16),dp(8)); setBackgroundColor(surface) }
-  header.addView(Button(activity).apply { text="CRIER / ${config.optString("account").takeIf { it.isNotBlank() }?.take(12) ?: "Select account"}"; isAllCaps=false; textSize=14f; setTextColor(ink); setBackgroundColor(surface); minHeight=dp(48); setOnClickListener { onAccounts() } },LinearLayout.LayoutParams(0,-2,1f))
-  header.addView(label(when(config.optString("environment")) { "live"->"LIVE"; "paper"->"PAPER"; else->"NOT CONNECTED" },11f,accent).apply { gravity=17 },LinearLayout.LayoutParams(-2,dp(48)))
+  header.addView(Button(activity).apply { text="CRIER / ${config.optString("account").takeIf { it.isNotBlank() }?.takeLast(4) ?: "Account"}"; contentDescription="Select connection / account"; isAllCaps=false; textSize=12f; minWidth=0; setPadding(0,0,dp(8),0); setTextColor(ink); setBackgroundColor(surface); minHeight=dp(48); setOnClickListener { onAccounts() } },LinearLayout.LayoutParams(0,-2,1f))
+  header.addView(label(when(config.optString("environment")) { "live"->"LIVE"; "paper"->"PAPER"; else->"OFFLINE" },10f,accent).apply { gravity=17 },LinearLayout.LayoutParams(-2,dp(48)))
   header.addView(Button(activity).apply { text="Stop"; contentDescription="Stop all connections"; isAllCaps=false; minHeight=dp(48); setTextColor(Color.rgb(255,112,122)); setBackgroundColor(surface); setOnClickListener { onStop() } },LinearLayout.LayoutParams(dp(64),-2))
   root.addView(header); body.addView(scroll); body.addView(ScrollView(activity).apply { addView(home) }); body.addView(ScrollView(activity).apply { addView(positions) }); root.addView(body,LinearLayout.LayoutParams(-1,0,1f))
   val nav=LinearLayout(activity).apply { setBackgroundColor(surface) }
   for(name in listOf("Home","Trade","Positions","Account")) {
-   val tab=Button(activity).apply { text=name; textSize=12f; isAllCaps=false; minHeight=dp(56); setBackgroundColor(surface); setOnClickListener { if(name=="Trade") onTrade(); select(name) } }
+   val tab=Button(activity).apply { text=name; textSize=11f; isAllCaps=false; minHeight=dp(56); minWidth=0; minimumWidth=0; setPadding(0,dp(8),0,dp(8)); setSingleLine(true); setBackgroundColor(surface); setOnClickListener { if(name=="Trade") onTrade(); select(name) } }
    tabs[name]=tab; nav.addView(tab,LinearLayout.LayoutParams(0,-2,1f))
   }
-  root.addView(nav); activity.setContentView(root)
+  root.addView(nav); activity.setContentView(root); root.requestApplyInsets()
   home.addView(label("YOUR WORKSPACE",12f,muted))
   home.addView(label("Account overview",24f,ink).apply { setTypeface(null,1); setPadding(0,dp(12),0,dp(20)) })
   home.addView(label("${config.optString("role").ifBlank { "No connection selected" }} / ${config.optString("environment").ifBlank { "Choose an environment" }}",16f,ink))
@@ -47,8 +57,8 @@ class BrokerageShell(private val activity:Activity,config:JSONObject,
   for(i in 0 until body.childCount) body.getChildAt(i).visibility=if(i==when(name) { "Home"->1; "Positions"->2; else->0 }) View.VISIBLE else View.GONE
   tabs.forEach { (title,view) -> view.setTextColor(if(title==name) accent else muted); view.isSelected=title==name }
   if(name=="Positions") { positions.text="Loading retained positions..."; onPositions { if(selected=="Positions") positions.text=it } }
-  if(name=="Trade") scroll.post { tradeAnchor?.let { scroll.smoothScrollTo(0,it.top) } }
-  if(name=="Account") scroll.post { scroll.smoothScrollTo(0,0) }
+  if(name=="Trade") scroll.post { tradeAnchor?.let { scroll.scrollTo(0,it.top) } }
+  if(name=="Account") scroll.post { scroll.scrollTo(0,0) }
  }
  fun styleWorkspace()=style(workspace)
  private fun style(view:View) {

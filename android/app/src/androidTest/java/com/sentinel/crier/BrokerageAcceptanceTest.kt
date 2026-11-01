@@ -3,6 +3,7 @@ package com.sentinel.crier
 import android.Manifest
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.*
@@ -23,7 +24,7 @@ class BrokerageAcceptanceTest {
  @get:Rule val notifications=GrantPermissionRule.grant(Manifest.permission.POST_NOTIFICATIONS)
  @Test fun nativeDisconnectedNavigationAndScreenshotsNeverStartWorkers() {
   ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-   onView(withText("Home")).perform(click()); capture("android-home-disconnected")
+   onView(withText("Home")).perform(click()); scenario.onActivity { assertSafeNavigation(it) }; capture("android-home-disconnected")
    onView(withContentDescription("Stop all connections")).check(matches(isDisplayed()))
    onView(withText("Positions")).perform(click()); capture("android-positions-disconnected")
    onView(withText("Account")).perform(click()); capture("android-account-disconnected")
@@ -50,11 +51,29 @@ class BrokerageAcceptanceTest {
  }
  @Test fun editingPoolsWhileWorkersActiveShowsGuidanceWithoutThrowing() {
   ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+   onView(withText("Home")).check(matches(isDisplayed()))
    scenario.onActivity { activity ->
     AccountBankDialogs(activity,activity.routeId,JSONObject(),java.util.concurrent.Executor { it.run() },{true},{},workersActive={true}).editPools()
    }
-   onView(withText("Stop connections to edit pools")).check(matches(isDisplayed()))
-   onView(withText("Close")).perform(click())
+   onView(withText("Stop connections to edit pools")).inRoot(isDialog()).check(matches(isDisplayed()))
+   onView(withText("Close")).inRoot(isDialog()).perform(click())
+  }
+ }
+ private fun assertSafeNavigation(activity:MainActivity) {
+  val root=activity.findViewById<android.view.ViewGroup>(android.R.id.content)
+  val tabs=mutableListOf<android.widget.Button>()
+  fun visit(view:android.view.View) {
+   if(view is android.widget.Button && view.text.toString() in setOf("Home","Trade","Positions","Account")) tabs.add(view)
+   if(view is android.view.ViewGroup) for(i in 0 until view.childCount) visit(view.getChildAt(i))
+  }
+  visit(root); assertEquals(4,tabs.size)
+  val safe=android.graphics.Rect(); root.getWindowVisibleDisplayFrame(safe)
+  for(tab in tabs) {
+   val position=IntArray(2); tab.getLocationOnScreen(position)
+   assertTrue("Navigation must clear the status bar",position[1]>=safe.top)
+   assertTrue("Navigation must clear the gesture bar",position[1]+tab.height<=safe.bottom)
+   assertEquals("Navigation labels must not wrap",1,tab.lineCount)
+   assertTrue("Navigation touch target",tab.height>=48*activity.resources.displayMetrics.density)
   }
  }
  private fun capture(name:String) {
