@@ -1,140 +1,119 @@
 # Sentinel Crier
 
-**Trade inside Crier, share orders between paired devices, and publish trade alerts to Discord.**
+**Trade, share and follow stock or option orders across iPhone, Android and Windows—with optional Discord alerts.**
 
-Crier is an open-source app for iPhone, Android and Windows. A host originates stock or option orders inside Crier; paired receivers follow through their own brokerage accounts. Discord publishing is a separate, optional workflow. Copying does not require another bot to parse Discord messages.
+Crier is free, open-source software for privately paired trading communities. A host enters orders inside Crier; receivers follow through their own accounts with their own allocation and execution controls. Discord is optional and is not the copy-trading transport.
 
-The current active native trading integration is **Alpaca**, with paper and live environments. A candidate **Webull iPhone host → Alpaca-paper Windows receiver** screen and server gateway are now included; Webull approval, the approved resource adapter and activation remain unfinished. See the [route implementation and setup status](docs/webull-iphone-host.md). Signed iPhone distribution and real-device/broker acceptance also remain unfinished.
+The active native brokerage integration is **Alpaca**, supporting paper/live accounts, whole-share stocks and standard long single-leg options. Webull is a separate candidate workflow; provider activation and real acceptance are deferred.
 
-## Choose a workflow
+## Download 0.5.0
 
-| Mode | What it does |
+| Platform | Get started |
 | --- | --- |
-| Alerts only | Observe supported account fills and publish customizable Discord alerts without enabling copy trading. |
-| Trade in Crier | Enter and manage supported Alpaca orders directly from the app. |
-| Host | Share enter, replace, cancel and exit instructions with privately paired receivers. |
-| Receive | Follow the host through your own Alpaca account with your selected sizing, pricing and exit settings. |
+| Windows | [Installer](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.0/SentinelCrier-0.5.0-Windows-Setup.exe) · [Portable ZIP](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.0/SentinelCrier-0.5.0-Windows.zip) · [Setup](desktop/README.md) |
+| Android | [Signed APK](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.0/app-release.apk) · [Setup](android/README.md) |
+| iPhone | [Build guide](ios/BUILD.md) · [Distribution checklist](docs/iphone-release-checklist.md). Apple signing/TestFlight is owner-deferred; no signed iPhone download is published. |
 
-Native trading supports **whole-share stocks and standard long single-leg options**. The separate Python observer also handles eligible fractional stock fills. Independent signal entries, protective stops, trailing strategies and automatic limit-to-market fallback remain future proposals.
+[All release assets, checksums and manifests](https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.5.0)
 
-## How copying works
+Windows includes startup update notices, manual update checks and private recovery snapshots. Installation remains explicit. Its installer is Authenticode-unsigned; the update catalog is Ed25519-signed. Android packages use the operator's signing identity. See [updates and recovery](docs/customer-updates.md).
 
-1. Configure each device's own brokerage account and environment.
-2. The host creates a private invitation; the receiver accepts it. Invitations are single-use and expire after ten minutes.
-3. The receiver reviews its execution settings and explicitly enables new entries. They start paused.
-4. An order entered inside Crier publishes its instruction without waiting for the host's fill.
-5. Each device reconciles its own broker orders and reports its own results to the Copy dashboard.
+## Choose your workflow
 
-Any supported platform can take the Host or Receive role. Devices can use different networks. The apps include a [Supabase testing relay](crier/connection-service.json), so customers do not need a home server, open router ports or their own Supabase project. The current pairing flow uses scoped device tokens.
-
-**Push delivery is implemented.** An authenticated stream delivers durable instructions; database notifications wake the hosted service after writes commit. Bounded polling is the labeled recovery path. Reconnect replays saved records while durable identities suppress duplicate submissions. See [push delivery and the dashboard](docs/push-dashboard.md).
-
-The relay transports instructions and observations; it does not execute trades or hold broker API keys. Current Alpaca credentials remain on the executing device through Windows DPAPI, iOS Keychain or Android's encrypted Keystore-backed vault. The relay operator can see instruction contents. The candidate Webull route now has a composed server authorization/custody service for application secrets and customer OAuth tokens; its trading-resource adapter and activation remain unfinished. The separately prepared provider OAuth service also has different credential custody and is not activated; see [provider connections](docs/provider-connections.md).
-
-An instruction, a submitted order and a fill are different events. Networks, broker checks, liquidity and operating-system suspension affect execution. Crier does not guarantee delivery time or identical fill prices.
-
-## Execution controls
-
-| Control | Current behavior |
+| Workflow | Behavior |
 | --- | --- |
-| Entry size | Source quantity, fixed units, ratio or per-trade budget. Host quantities are not scaled. |
-| Price | Exact limit, bounded limit or explicitly selected market pricing. Initial market selection is different from automatic fallback. |
-| Limits | Source quantity cap, separate local target cap, optional entry notional cap and submission-age limit. |
-| Exit size | Requested units, proportional source-intent exits or close remaining tracked units. |
-| Entry timeout | Optionally cancel acknowledged working entries after reconciliation; acquired holdings are not automatically sold. |
-| Pause | Block new entries while preserving authorized cancellation/exit handling. It does not liquidate positions. |
+| Alerts only | Monitor supported fills and publish configurable Discord alerts without enabling trading. |
+| Trade | Enter and manage supported orders inside Crier. |
+| Host | Share entry, replacement, cancellation and exit instructions with paired receivers. |
+| Receive | Follow a selected host using your own account, sizing, pricing and exit settings. |
 
-Policies apply to new trades; settings changes do not silently rewrite open trades. Durable identities, account/environment checks, fresh broker evidence and tracked ownership constrain execution. Unknown submissions reconcile before another order is attempted. Cancel requests are not proof of cancellation; partial fills remain holdings. A host cancel invalidates an unfilled entry remainder, while a host exit requests sale of tracked holdings.
+### Connect two devices
 
-The current per-trade budget is **not** a recurring stock-card allocation or shared stock/options funding pool. See [execution settings](docs/execution-policies.md) and the [intent protocol](docs/protocol/intent-v1.md).
+1. Install or build Crier on both devices and connect each device's own brokerage account. Choose paper or live deliberately.
+2. On the host, create a private invitation. On the receiver, accept it.
+3. Review the receiver's pricing, size, exit and allocation settings. New entries start paused.
+4. Explicitly enable the receiver. Orders placed inside the host's Crier app publish instructions without waiting for the host's fill.
+5. Inspect orders, fills and device results in the Copy dashboard.
 
-## Discord alerts and diagnostics
+Devices may use different networks. The bundled [Supabase testing relay](crier/connection-service.json) supplies the shared endpoint; customers do not need a home server, router port forwarding or their own Supabase project. Authenticated push carries durable instructions, with polling as recovery.
 
-Alerts offer configurable fields and card/plain-text formats. iOS and the Python publisher also support Homebrew-style layouts. Instrument, side, quantity, fill price, timestamp and provenance appear when supported and available. Manual receipts remain user-confirmed evidence rather than broker-verified fills.
+Current Alpaca credentials remain on the executing device in protected storage. The relay transports instructions and observations, which its operator can see; it does not execute Alpaca orders.
 
-Choose **Alerts only** on iPhone, **Alerts** on Android, or **Start here → Send my fills to Discord** on Windows. Configure the destination, inspect a preview and explicitly enable publishing. These routes need no pairing and do not activate trading workers. Reconnect/restart requires fresh publishing permission. See [monitor/publisher operation](docs/monitor-publisher.md).
+[Pairing and copying](docs/intent-mirroring.md) · [Push and dashboard](docs/push-dashboard.md)
 
-The read-only **Copy dashboard** shows instructions, device results, quantities, fill averages and remaining units. Actual host/receiver price comparisons, eligible P&L calculations, clock-adjusted delivery estimates and JSON/CSV exports require appropriate evidence. Missing prices or fees are not invented. See [execution diagnostics](docs/execution-diagnostics.md) and [dashboard calculation and privacy limits](docs/push-dashboard.md).
+## Multiple hosts and allocations
 
-Windows 0.3.1 adds a startup-only, dismissible update notice, persistent connection status, **Test my connection (read-only)** and a **Support** dialog with version details and sanitized export. The test checks account/environment and relay connectivity without orders or Discord posts; peer execution remains untested. Updates require explicit download and installation. See [updates and connection checks](docs/customer-updates.md).
+Windows, iOS and Android retain independent host/account connections. To let several hosts share one Alpaca destination **within one receiving installation**, explicitly enable the **Account ID bank**.
 
-Windows now adds bounded background technical error logs and **Health → Export support bundle**, with safe stack locations, validated trade/order IDs and packaged build metadata. Secret messages and raw account databases are excluded. Writer failure and evidence loss are visible. See [unattended diagnostics](docs/unattended-diagnostics.md); this does not enable remote outage notification or automatic trading restart.
+- Persistent numeric trade IDs, separate host ownership and distinct client-order IDs.
+- Separate stock/option pools per host in units, dollars or percentage of destination equity.
+- One shared cash ledger; options buying power additionally limits option buys.
+- Reservations before submission, retained across timeouts, restarts and partial fills.
+- Exits restricted to the issuing host's owned, unreserved units.
+- Automatic archiving of completed empty IDs, preserving history and duplicate protection.
 
-## Platforms and installation
+Setup drains workers and requires older Crier orders and holdings to be reconciled and closed. New pools default to zero. Pools are aggregate exposure ceilings; per-entry sizing is separate. Managed shared-account execution requires limit pricing. Zero future allocation does not remove ownership or exit authority.
 
-| Platform | Implementation | Distribution and operating limits |
-| --- | --- | --- |
-| iPhone | Native Alpaca trading, alerts, Host/Receive, dashboard and health/recovery. Account operations do not require a PC or Python server. | Simulator and unsigned hardware archive verified. Apple enrollment/signing is required for installable distribution. Suspension can stop networking. |
-| Android | Native Alpaca trading, alerts, Host/Receive, dashboard and health/recovery. | Signed candidate APK/AAB builds produced. Physical/background acceptance remains deferred. |
-| Windows | Alpaca desktop app, alerts, Host/Receive, dashboard, health, optional tray/startup and signed update/recovery flow. | Installer/portable candidates produced; installer lifecycle tested. Ed25519 update trust is configured; Microsoft publisher signing remains separate. Keep the PC awake. Startup and post-update launch begin disconnected. |
-| Python | Local monitor/publisher console, manual receipt review and separately configured intent execution. | Python 3.11+; optional local or hosted connection service. |
+[Account-bank setup](docs/account-id-bank.md) · [Multiple connections](docs/multiple-connections.md) · [Execution settings](docs/execution-policies.md)
 
-- [iPhone build](ios/BUILD.md) · [distribution checklist](docs/iphone-release-checklist.md)
-- [Android setup](android/README.md) · [release packages](docs/android-release.md)
-- [Android 0.5.0 signed APK](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.0/app-release.apk)
-- [Windows setup](desktop/README.md) · [installer and updates](docs/windows-release.md)
-- [Windows 0.5.0 installer](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.0/SentinelCrier-0.5.0-Windows-Setup.exe) · [signed updates and recovery](docs/customer-updates.md)
-- [Customer setup, paper practice and recovery](docs/customer-acceptance.md)
-- [0.5.0 verification and actual UI screenshots](docs/acceptance/2026-11-01/account-bank/README.md)
+## Recovery and diagnostics
 
-The current iPhone target has no ReplayKit extension and does not continuously observe other brokerage apps' screens. Submission-time mirroring applies to orders placed **inside Crier**. Supported fill monitoring can observe activity originating elsewhere later; it cannot infer that other app's original button press instantly. Mobile background execution remains constrained by the operating system.
+Recovery explains unknown outcomes and inventory discrepancies using retained IDs and broker evidence. Account-bank checks include original terminal/archived orders and preserve ownership when late fills arrive.
 
-## Broker availability
+**Verified-flat repair** rechecks original orders, inventory and fresh funds before rebuilding local accounting. It refuses unresolved orders, open holdings or conflicting evidence, records an audit event, retains IDs/history and leaves entries paused. It never blindly resubmits an order or reassigns external holdings.
 
-| Broker | Scope today |
-| --- | --- |
-| Alpaca | Implemented paper/live native trading and Python monitoring/execution paths. Real account/device acceptance is separately tracked. |
-| Tradier | Read-only Python polling adapter requiring account-specific validation; no native Tradier copy executor. |
-| Webull Trading API | Experimental Python SDK observer with separate access and verification requirements. |
-| Webull Connect | Candidate iPhone Webull Host workflow, authenticated server gateway, durable source-order ledger and composed authorization/token-custody service. The approved account/contract/order adapter, deployment and sandbox acceptance remain unfinished; no real Webull trading is activated. |
+iOS also has a separate read-only check for saved manual orders. Execution diagnostics provide timelines, quantities, eligible premium/latency comparisons and JSON/CSV exports. Missing evidence is not replaced with invented prices or timing.
 
-Concurrent independent Alpaca Host/Receive routes are implemented in the app runtimes; see [multiple connections](docs/multiple-connections.md). Windows, iOS and Android also support an explicit [account ID bank](docs/account-id-bank.md) for multiple hosts sharing one Alpaca account, with host-owned lots and reusable unit/dollar/equity-percentage pools. Execution across different broker types remains deferred [D.1](docs/deferred/multi-host-cross-broker.md). A donor bot's adapter name does not establish working support in Crier.
+[Recovery guide](docs/recovery-assistant.md) · [Execution diagnostics](docs/execution-diagnostics.md) · [Windows unattended diagnostics](docs/unattended-diagnostics.md)
 
-## Run the Python console
+## Discord publishing
+
+Choose Alerts only, configure a destination, review its preview and explicitly enable delivery. Layouts include cards and plain text; iOS and Python also provide Homebrew-style formatting. Available fields include symbol, side, quantity, price, time and provenance.
+
+Publishing permission is separate from trading permission and must be renewed after reconnect. Inspect uncertain deliveries before retrying because the earlier post may have succeeded.
+
+[Monitor/publisher guide](docs/monitor-publisher.md)
+
+## Screenshots and verification
+
+Actual iOS simulator captures, disconnected in paper mode:
+
+<img src="docs/acceptance/2026-11-01/account-bank/screenshots/ios-home-disconnected.png" width="240" alt="Crier iOS workspace and connection controls">
+<img src="docs/acceptance/2026-11-01/account-bank/screenshots/ios-recovery-disconnected.png" width="240" alt="Crier iOS recovery evidence screen">
+
+Version 0.5.0 acceptance recorded **1,291 Python/Tk tests passed, one skipped; 196 iOS native tests passed; 187 Android unit tests passed**, plus simulator/emulator UI and Windows installer checks. Published hashes, Android signatures, the update-catalog signature and update discovery were verified.
+
+[Acceptance report and screenshot gallery](docs/acceptance/2026-11-01/account-bank/README.md)
+
+## Scope and deferred work
+
+Crier does not continuously watch another iPhone app's screen or detect its button presses. Submission-time mirroring applies to orders entered inside Crier; supported external-account fill monitoring is a different workflow. iOS requires foreground operation. Android/Windows operation remains subject to lifecycle and connectivity.
+
+Native execution is Alpaca-based. Tradier has a read-only Python observer; the Webull candidate is not an activated trading adapter. Shared-account banks coordinate routes on one receiving installation, not several installations using the same account. Independent strategies, trailing stops, automatic market fallback and arbitrary cross-broker execution remain future scope.
+
+Apple enrollment/signing, physical-device/broker acceptance and Webull/provider activation are [owner-deferred](docs/deferred/2026-10-31-owner-provider-acceptance.md). Automated acceptance does not establish identical fill prices, guaranteed latency or profitable copying.
+
+[Broker/provider status](docs/remaining-work.md) · [Future scope](docs/future-scope.md)
+
+## Run from source
+
+Python 3.11+:
 
 ```powershell
 git clone https://github.com/Tetradim/Sentinel-Crier.git
 cd Sentinel-Crier
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-python -m pip install -e .
-python -m crier serve
+python -m pip install -e ".[test,desktop]"
+python -m crier.desktop
 ```
 
-On macOS/Linux, activate with `source .venv/bin/activate`. Open **http://127.0.0.1:8765** using the private token generated in `data/access-token`. The default launch selects no broker and leaves Discord delivery disabled.
+For the separate local web console, run `python -m crier serve`. Open `http://127.0.0.1:8765` using the generated private token in `data/access-token`. Default startup selects no broker and leaves delivery disabled. On macOS/Linux, activate with `source .venv/bin/activate`; the desktop app targets Windows.
 
-For Alpaca paper fill monitoring, set process environment variables before starting:
+Run Python tests with `python -m pytest -q`. Native build instructions are in [iOS](ios/BUILD.md) and [Android](android/README.md). Keep broker credentials in protected app configuration, never Git.
 
-```powershell
-$env:ALPACA_ENV = "paper"
-$env:APCA_API_KEY_ID = "YOUR_PAPER_KEY"
-$env:APCA_API_SECRET_KEY = "YOUR_PAPER_SECRET"
-python -m crier serve --monitor alpaca
-```
+## License and support
 
-The first complete poll establishes a baseline without publishing historical fills. Later fills are journaled and queued. The CLI does not automatically load `.env`; Docker Compose loads it separately. See [Alpaca setup](docs/alpaca-setup.md) and [.env examples](.env.example).
+[MIT License](LICENSE) · [Report an issue](https://github.com/Tetradim/Sentinel-Crier/issues)
 
-For Python publishing, set `DISCORD_WEBHOOK_URL`, `CRIER_PUBLISHER_VERIFIED=true` and `CRIER_DELIVERY_ENABLED=true` before restarting. Review the destination and queue first: enabling delivery can publish queued records. Inspect uncertain deliveries before explicitly retrying because Discord may already have received them. The fill observer is read-only; [optional intent execution](docs/intent-mirroring.md) has separate credentials and permissions.
-
-## Verification and project status
-
-Reporting-repair source `a7b332b` passed **1,033 Python tests**, with one optional SDK skip, **165 Android unit tests** and **160 iOS native tests**, plus UI/build and Windows installer checks. Seven successful CI runs and report hashes are recorded in [accepted evidence](docs/acceptance/2026-10-26/reporting-recovery/README.md). These counts describe that revision, not physical or real-broker acceptance.
-
-The subsequent [Webull-host candidate verification](docs/acceptance/2026-10-26/webull-iphone-host/README.md) records **1,036 Python tests**, **22 Deno tests**, **five SQL tests** and **172 iOS tests**, with source-specific build evidence. It does not establish real Webull integration or activation.
-
-```powershell
-python -m pip install -e ".[test]"
-python -m pytest -q
-```
-
-Platform guides describe native builds. [Webull server operations](docs/webull-server-operations.md) and its [capability report](docs/acceptance/2026-10-24/webull-offline-acceptance.json) cover the separate offline candidate. For your own relay, see [remote connections](docs/remote-connect-setup.md) and [Supabase setup](docs/supabase-setup.md).
-
-External dependencies include Apple signing/enrollment, Webull approval/integration, provider registration/activation, physical cross-network and broker-UI acceptance, real Discord delivery and production relay operation. Automated acceptance does not mark those complete.
-
-- [Remaining work and phase status](docs/remaining-work.md)
-- [Future scope: policies, funding and routing](docs/future-scope.md)
-- [Sentinel source inventory](docs/sentinel-feature-inventory.md)
-- [Native data handling](docs/native-data-handling.md)
-- [Support and bug reports](https://github.com/Tetradim/Sentinel-Crier/issues)
-
-**License:** [MIT](LICENSE).
+Include the version, platform, paper/live environment and sanitized diagnostics in support reports. Keep brokerage keys, webhook URLs, pairing tokens and raw recovery backups private.
