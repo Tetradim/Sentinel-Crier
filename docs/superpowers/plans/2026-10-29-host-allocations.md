@@ -10,8 +10,8 @@
 - [x] Add/test non-executing allocation arithmetic for unit/dollar/equity-percent host pools and independent entry sizing; exact scope/freshness checks and shared portable cases. Files: crier/host_allocation.py, tests/test_host_allocation.py.
 - [x] Build durable account-level reservations and per-host lots, including unknown submissions, partial fills, confirmed exits, concurrent hosts, manual broker discrepancies and restart recovery. Account key includes broker/account/environment; submission ID includes host/route/event/revision/destination.
 - [x] Integrate Windows account coordinator and allocation editor. Existing single-route legacy execution remains valid; no silent migration/rebinding or auto enablement. Shared admission requires explicit verified account-bank setup. See [ID bank](../../account-id-bank.md).
-- [ ] Port ledger/preview rules and route UI to iOS and Android using identical fixtures; preserve global drain and device credential custody.
-- [ ] Validate funded fanout across distinct accounts and several hosts sharing one account, contradictory evidence, quota/freshness limits and support exports; run native/packaged CI.
+- [x] Port ledger/preview rules and route UI to iOS and Android using identical fixtures; preserve global drain and device credential custody.
+- [x] Validate synthetic funded fanout across distinct accounts and several hosts sharing one account, contradictory evidence, quota/freshness limits and support exports; run native/packaged CI.
 
 Defaults: budgets reusable after confirmed exits; fixed dollars do not compound automatically. Percentage pools refresh for new admissions using fresh destination equity. Existing exposure above a lowered cap blocks new entries without forced sales. Money-limited sizing requires a finite final buy limit; market estimates cannot guarantee a monetary cap. Round down whole supported units; never force a minimum contract that exceeds a cap. Independent strategies, trailing/fallback and additional broker execution adapters are separate work.
 

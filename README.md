@@ -72,7 +72,7 @@ Windows now adds bounded background technical error logs and **Health → Export
 - [iPhone build](ios/BUILD.md) · [distribution checklist](docs/iphone-release-checklist.md)
 - [Android setup](android/README.md) · [release packages](docs/android-release.md)
 - [Windows setup](desktop/README.md) · [installer and updates](docs/windows-release.md)
-- [Windows 0.4.0 installer](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.4.0/SentinelCrier-0.4.0-Windows-Setup.exe) · [signed updates and recovery](docs/customer-updates.md)
+- [Windows 0.5.0 installer](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.0/SentinelCrier-0.5.0-Windows-Setup.exe) · [signed updates and recovery](docs/customer-updates.md)
 - [Customer setup, paper practice and recovery](docs/customer-acceptance.md)
 
 The current iPhone target has no ReplayKit extension and does not continuously observe other brokerage apps' screens. Submission-time mirroring applies to orders placed **inside Crier**. Supported fill monitoring can observe activity originating elsewhere later; it cannot infer that other app's original button press instantly. Mobile background execution remains constrained by the operating system.
@@ -86,7 +86,7 @@ The current iPhone target has no ReplayKit extension and does not continuously o
 | Webull Trading API | Experimental Python SDK observer with separate access and verification requirements. |
 | Webull Connect | Candidate iPhone Webull Host workflow, authenticated server gateway, durable source-order ledger and composed authorization/token-custody service. The approved account/contract/order adapter, deployment and sandbox acceptance remain unfinished; no real Webull trading is activated. |
 
-Concurrent independent Alpaca Host/Receive routes are implemented in the app runtimes; see [multiple connections](docs/multiple-connections.md). Windows main also supports an explicit [account ID bank](docs/account-id-bank.md) for multiple hosts sharing one Alpaca account, with host-owned lots and reusable unit/dollar/equity-percentage pools. Native shared-account receivers and execution across different broker types remain unfinished [D.1](docs/deferred/multi-host-cross-broker.md). A donor bot's adapter name does not establish working support in Crier.
+Concurrent independent Alpaca Host/Receive routes are implemented in the app runtimes; see [multiple connections](docs/multiple-connections.md). Windows, iOS and Android also support an explicit [account ID bank](docs/account-id-bank.md) for multiple hosts sharing one Alpaca account, with host-owned lots and reusable unit/dollar/equity-percentage pools. Execution across different broker types remains deferred [D.1](docs/deferred/multi-host-cross-broker.md). A donor bot's adapter name does not establish working support in Crier.
 
 ## Run the Python console
 
