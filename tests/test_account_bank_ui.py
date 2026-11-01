@@ -51,3 +51,56 @@ def test_recovery_shows_difference_and_refuses_check_after_route_switch(desktop_
         buttons[0].invoke()
         assert not worker.calls
     finally:root.destroy()
+
+
+def test_bank_pool_save_refuses_changed_selection(desktop_tk_root):
+    root=tk.Toplevel(desktop_tk_root);root.withdraw();worker=Worker();app=DesktopApp(root,worker)
+    worker.connections=SimpleNamespace(selected='alice',routes=lambda:[dict(id='alice',label='Alice')])
+    try:
+        app.show_account_bank(dict(enabled=True,environment='paper',balance={},active=[],history=[],
+            policies={a:dict(mode='dollars',value='100') for a in ('stock','option')},fees={'stock':'1','option':'2'}))
+        dialog=next(w for w in root.winfo_children() if isinstance(w,tk.Toplevel))
+        worker.connections.selected='dave'
+        next(w for w in descendants(dialog) if isinstance(w,ttk.Button) and w.cget('text')=='Save pool').invoke()
+        assert not worker.calls
+        assert 'original connection' in app.notice.get()
+    finally:root.destroy()
+
+
+def test_trading_workspace_navigation_and_commands_at_scaled_window(desktop_tk_root):
+    root=tk.Toplevel(desktop_tk_root);root.withdraw();worker=Worker();app=DesktopApp(root,worker)
+    scale=root.tk.call('tk','scaling')
+    try:
+        root.tk.call('tk','scaling',2.0)
+        root.geometry('1080x780');root.deiconify();app.tabs.select(app.activity);root.update()
+        navigation=app.trading_navigation
+        assert [navigation.tab(tab,'text') for tab in navigation.tabs()]==['Order','Positions','Activity']
+        for tab in navigation.tabs():
+            navigation.select(tab);root.update()
+            assert navigation.winfo_ismapped()
+        assert all(str(button['state'])=='disabled' for button in app.host_buttons)
+        navigation.select(navigation.tabs()[0]);root.update()
+        worker.calls.clear()
+        # Disconnected entry controls cannot submit an instruction.
+        app.host_buttons[0].invoke()
+        assert not worker.calls
+        # The original host command guard also protects direct invocations.
+        app.command('cancel')
+        assert not worker.calls
+    finally:
+        root.tk.call('tk','scaling',scale)
+        root.destroy()
+
+
+def test_manual_provider_return_uses_pending_origin_dispatch_after_route_switch(desktop_tk_root):
+    root=tk.Toplevel(desktop_tk_root);root.withdraw();worker=Worker()
+    worker.connections=SimpleNamespace(selected='alice',routes=lambda:[dict(id='alice',label='Alice'),dict(id='dave',label='Dave')])
+    app=DesktopApp(root,worker)
+    try:
+        worker.connections.selected='dave'
+        uri='sentinelcrier://oauth/complete?flow='+'x'*43
+        app.provider_return.set(uri)
+        app.complete_provider()
+        assert worker.calls[-1][:2]==('provider_return',(uri,))
+        assert app.provider_return.get()==''
+    finally:root.destroy()

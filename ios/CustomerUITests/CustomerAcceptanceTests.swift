@@ -18,7 +18,15 @@ final class CustomerAcceptanceTests: XCTestCase {
         XCTAssertTrue(app.buttons["Stop all"].isHittable)
         XCTAssertTrue(app.buttons["Add connection"].isHittable)
         XCTAssertTrue(app.buttons["Account ID bank"].isHittable)
+        XCTAssertTrue(app.staticTexts["TOTAL ACCOUNT VALUE"].exists)
         capture("ios-home-disconnected", app: app)
+        app.tabBars.buttons["Orders"].tap()
+        XCTAssertTrue(app.staticTexts["No saved orders loaded"].waitForExistence(timeout: 5))
+        capture("ios-orders-disconnected", app: app)
+        app.tabBars.buttons["Trade"].tap()
+        XCTAssertTrue(app.buttons["crier.order.review"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["crier.order.review"].isEnabled)
+        capture("ios-trade-disconnected", app: app)
         app.tabBars.buttons["Positions"].tap()
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5))
         capture("ios-positions-disconnected", app: app)
@@ -36,6 +44,8 @@ final class CustomerAcceptanceTests: XCTestCase {
         let open = app.buttons["open-practice-guide"]
         XCTAssertTrue(open.waitForExistence(timeout: 15))
         for purpose in ["alerts", "trade", "follow"] {
+            for _ in 0..<3 where !open.isHittable { app.swipeUp() }
+            XCTAssertTrue(open.isHittable)
             open.tap()
             let journey = app.buttons["practice-\(purpose)"]
             XCTAssertTrue(journey.waitForExistence(timeout: 5))

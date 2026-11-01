@@ -61,11 +61,9 @@ actor AlpacaJournal {
         try save(next)
     }
     func record(_ order: AlpacaOrder, ticket: AlpacaTicket) throws {
-        guard order.client_order_id == ticket.id, order.symbol == ticket.symbol,
-              order.side == ticket.side, order.qty.flatMap({ Decimal(string: $0) }) == Decimal(ticket.quantity),
-              order.limit_price.flatMap({ Decimal(string: $0) }) == ticket.limitPrice else { throw AlpacaError.invalid("Broker order does not match the saved ticket.") }
         var next = state
         guard let index = next.submissions.firstIndex(where: { $0.id == ticket.id && $0.ticket == ticket }) else { throw AlpacaError.invalid("Missing saved ticket.") }
+        try RecoveryOrderEvidence.validate(order, ticket: ticket, previous: next.submissions[index].order)
         next.submissions[index].order = order; next.submissions[index].state = order.status
         try save(next)
     }

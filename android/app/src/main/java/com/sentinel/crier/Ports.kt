@@ -26,6 +26,8 @@ interface IntentStore {
 }
 interface BrokerPort {
  fun clientOrderId(event:JSONObject,ordinal:Int,sell:Boolean):String="si-${event.getString("event_id")}-${if(sell) "s$ordinal" else "b"}"
+ /** Definite pre-dispatch refusal, durably proven by the owning local ledger. */
+ fun locallyRefused(client:String):Boolean=false
  fun observeIntent(event:JSONObject) {}
  fun allocationFunds():JSONObject=throw IllegalArgumentException("Checked allocation funds unsupported")
  fun allocationPositions():Map<String,Int> = throw IllegalArgumentException("Checked allocation inventory unsupported")

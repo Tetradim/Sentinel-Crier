@@ -8,6 +8,45 @@ from crier.desktop_oauth_return import enqueue_return,take_returns
 
 OWNER='12345678-1234-1234-1234-123456789abc'
 
+
+def test_return_dispatch_uses_pending_origin_instead_of_selected_route(tmp_path):
+    from crier.desktop_connections import DesktopConnections
+    from crier.oauth_return import OAuthReturnContext,PendingOAuthReturn
+    async def run():
+        manager=DesktopConnections(tmp_path)
+        origin=manager.selected;selected=manager.add('Other')
+        flow='x'*43;calls=[]
+        for route,value in ((origin,flow),(selected,'y'*43)):
+            manager.sessions[route].oauth=SimpleNamespace(flow=value,pending=PendingOAuthReturn(value,
+                OAuthReturnContext(OWNER,'alpaca','paper','alerts'),expires_at=100))
+            async def complete(uri,_route=route):
+                calls.append(_route)
+                return {'message':'Saved.'}
+            manager.sessions[route].provider_complete=complete
+        await manager.invoke(selected,'provider_return','sentinelcrier://oauth/complete?flow='+flow)
+        assert calls==[origin]
+        assert manager.selected==selected
+        with pytest.raises(ValueError,match='pending'):
+            await manager.invoke(selected,'provider_return','sentinelcrier://oauth/complete?flow='+'z'*43)
+        assert calls==[origin]
+    asyncio.run(run())
+
+
+def test_provider_inbox_reads_installation_root_after_route_switch(tmp_path):
+    from crier.desktop import DesktopApp
+    uri='sentinelcrier://oauth/complete?flow='+'x'*43
+    enqueue_return(tmp_path,uri)
+    calls=[]
+    app=DesktopApp.__new__(DesktopApp)
+    app.closing=False
+    app.worker=SimpleNamespace(connections=SimpleNamespace(folder=tmp_path),session=SimpleNamespace(folder=tmp_path/'connections'/'other'))
+    app.root=SimpleNamespace(after=lambda *args:None)
+    app.submit=lambda method,*args,**kwargs:calls.append((method,args))
+    app.provider_message=lambda result:None
+    app.provider_inbox()
+    assert calls==[('provider_return',(uri,))]
+    assert not take_returns(tmp_path)
+
 def test_uri_inbox_bounded_and_strict(tmp_path):
     uri='sentinelcrier://oauth/complete?flow='+'x'*43
     with pytest.raises(ValueError): enqueue_return(tmp_path,uri+'&credential=bad')

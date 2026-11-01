@@ -29,6 +29,7 @@ class MainActivity:Activity(),RouteOwner {
  @Volatile private var lifecycleRevision=0L
  private var alertsPolling=false
  private val alertsTick=object:Runnable { override fun run() { val g=guided; if(g?.isEnabled()==true && !alertsPolling) { alertsPolling=true; background { try { g.tick(); g.evidence } finally { runOnUiThread { alertsPolling=false } } } }; alertsTimer.postDelayed(this,10000) } }
+ private lateinit var shell:BrokerageShell
  private lateinit var panel:LinearLayout
  private lateinit var status:TextView
  private lateinit var journal:Journal
@@ -57,8 +58,15 @@ class MainActivity:Activity(),RouteOwner {
  override fun onCreate(state:Bundle?) {
   super.onCreate(state); journal=Journal(this)
   if(android.os.Build.VERSION.SDK_INT>=33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),42)
-  panel=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(32,32,32,32) }
-  setContentView(ScrollView(this).apply { addView(panel) })
+  shell=BrokerageShell(this,Vault(this).read(),
+   onTrade={ if(journey !in setOf("trade","follow")) chooseJourney("trade") },
+   onAlerts={ chooseJourney("alerts") },onHealth={ showHealth() },
+   onPositions={ show -> loadRetainedPositions(show) },
+   onAccounts={ shell.select("Account"); findButton(panel,"Select connection / account")?.performClick() },
+   onStop={ SyncService.stopRequests(); status.text="Stopping all connections; existing broker orders remain active." })
+  panel=shell.workspace
+  panel.post { shell.styleWorkspace(); val requested=getSharedPreferences("navigation",MODE_PRIVATE).getString("screen","Home") ?: "Home"; shell.select(requested) }
+
   panel.addView(TextView(this).apply { text="Crier · native intent mirroring"; textSize=24f })
   panel.addView(TextView(this).apply { text="Keep Crier running for mirroring. Android can suspend or stop background syncing; reopen to reconcile and resume. A running worker does not establish current broker or connection health." })
   status=TextView(this).apply { text="${if(Vault(this@MainActivity).read().has("account")) "Saved setup; reconnect and reconcile before new work. Current connection health is not verified here." else "Connection not ready. Choose Host or Receive, then save and verify your account."}\n${journal.meta("status").ifBlank { "Paused until enabled. Use paper credentials for testing." }}"; panel.addView(this) }
@@ -200,17 +208,7 @@ class MainActivity:Activity(),RouteOwner {
   discordSettings(old)
   button("Unresolved orders and recovery status") { android.app.AlertDialog.Builder(this).setTitle("Execution and connection recovery").setMessage("${journal.meta("visibility")}\n${journal.meta("service")}\n${journal.meta("connection")}\n${journal.meta("status")}\n${journal.meta("protocolStatus")}\n${journal.unresolved()}\nRetain this journal. Never clear app data to resolve an unknown broker outcome.").setPositiveButton("Close",null).show() }
   button("Account ID bank · host pools and guided recovery") { accountBankDialog() }
-  if(journey=="trade") {
-  panel.addView(TextView(this).apply { text="Host order entry · buy to open"; textSize=20f })
-  val symbol=field("Symbol (stock or canonical OCC)"); val asset=ChoicePicker("Instrument",SetupChoices.instrument,"stock"); val qty=field("Quantity","1"); val price=field("Source limit price","1.00"); val trade=field("Trade UUID (filled automatically on enter)",journal.meta("lastTrade"))
-  button("Select a journaled trade") { val records=journal.history(); android.app.AlertDialog.Builder(this).setTitle("Trade history").setItems(records.map { "${it.getString("symbol")} · ${it.getString("action")} · ${it.getString("trade_id").take(8)}" }.toTypedArray()) { _, index -> val selected=records[index]; symbol.setText(selected.getString("symbol")); asset.select(selected.getString("asset")); qty.setText(selected.getInt("quantity").toString()); price.setText(selected.getString("limit_price")); trade.setText(selected.getString("trade_id")) }.show() }
-  for(action in listOf("enter","replace","cancel","exit")) button(action.replaceFirstChar { it.uppercase() }) {
-   val c=Vault(this).read(); require(c.getString("role")=="host") { "Only host creates intents" }
-   require(action !in setOf("enter","replace") || !getSharedPreferences("controls",MODE_PRIVATE).getBoolean("paused",true)) { "Enable execution first" }
-   val e=if(action=="enter") journal.create(action,symbol.text.toString().trim().uppercase(),asset.value(),qty.text.toString().toInt(),price.text.toString(),c.getString("environment")) else journal.create(action,symbol.text.toString().trim().uppercase(),asset.value(),qty.text.toString().toInt(),price.text.toString(),c.getString("environment"),trade.text.toString())
-   trade.setText(e.getString("trade_id")); journal.setMeta("lastTrade",e.getString("trade_id")); if(!SyncService.active(this)) SyncService.requestStart(this); status.text="Journaled $action; broker and relay dispatch independently"
-  }
-  }
+  if(journey=="trade") shell.tradeAnchor=HostOrderTicket(this,panel,journal) { status.text=it }.build()
   button("Diagnostics · timeline, premiums and latency") { val records=Diagnostics.export(journal); android.app.AlertDialog.Builder(this).setTitle("Execution diagnostics").setItems((0 until records.length()).map { val e=records.getJSONObject(it).getJSONObject("event"); "${e.getString("symbol")} ${e.getString("action")} · ${e.getString("event_id").take(8)}" }.toTypedArray()) { _, i -> android.app.AlertDialog.Builder(this).setTitle("Event evidence").setMessage(Diagnostics.describe(records.getJSONObject(i))).setPositiveButton("Close",null).show() }.show() }
   button("Share diagnostics JSON") { shareDiagnostics(false) }
   button("Share diagnostics CSV") { shareDiagnostics(true) }
@@ -219,51 +217,33 @@ class MainActivity:Activity(),RouteOwner {
   button("Refresh journal status") { status.text="${if(SyncService.active(this)) "Workers active" else "Workers stopped / suspended"} · ${if(getSharedPreferences("controls",MODE_PRIVATE).getBoolean("paused",true)) "entries paused" else "entries enabled"}\n${journal.meta("visibility")}\n${journal.meta("service")}\n${journal.meta("connection")}\n${journal.meta("status")}\n${journal.meta("protocolStatus")}\n${journal.summary()}\nDiscord: ${journal.alertSummary()} ${journal.meta("discordStatus")}" }
   panel.addView(TextView(this).apply { text="Keep Crier running for mirroring. Android may stop background data sync; reopen to resume. Unknown broker outcomes remain blocked until reconciled. Cancel stops the unfilled remainder; Exit closes only this trade's acquired holdings." })
  }
- private fun accountBankDialog() {
-  val config=Vault(this).read(); require(config.has("account")) { "Save and verify a Trade / Follow account first" }
-  val bank=AndroidAccountBank.bank(this); val scope=RouteAccounts.key(config)
-  if(!bank.enabled(scope)) {
-   android.app.AlertDialog.Builder(this).setTitle("Set up account ID bank")
-    .setMessage("Stop every connection first. Setup checks all retained journals and refuses unresolved orders or older Crier holdings. External holdings remain separate. IDs and source ownership are permanent; never clear app data. New host pools start at zero and require bounded limit pricing. Setup keeps every connection stopped and paused. This coordinates this installation only.")
-    .setPositiveButton("Verify and set up") { _,_ -> background { AndroidAccountBank.setup(this,config) } }.setNegativeButton("Close",null).show(); return
-  }
-  val report=bank.report(scope)
-  fun lots(name:String):String { val a=report.getJSONArray(name); return (0 until a.length()).joinToString("\n") { i -> val r=a.getJSONObject(i); "ID ${r.getInt("id")} · host ${r.getString("route")} · ${r.getString("symbol")} · owned ${r.getInt("units")} · pending buy ${r.getInt("pending_buy")} / exit ${r.getInt("pending_exit")}" }.ifBlank { "None" } }
-  android.app.AlertDialog.Builder(this).setTitle("Account ID bank")
-   .setMessage("$scope\n${report.getString("blocked").ifBlank { "Local ledger has no recorded block. Broker verification is a separate check." }}\n\nActive IDs\n${lots("active")}\n\nArchived IDs (never reused)\n${lots("archived")}\n\nEditing pools changes this selected host only. Exits can use only its owned units.")
-   .setPositiveButton("Edit this host's pools") { _,_ -> accountPoolDialog(config) }
-   .setNeutralButton("Check broker and guide recovery") { _,_ -> background {
-    val checked=SyncService.withBankTransition(beforeCheck={ AndroidAccountBank.pauseRoutes(this,config) }) { AndroidAccountBank.managed(this,routeId,config,Broker(config)).recovery() }
-    runOnUiThread {
-     val errors=checked.getJSONArray("errors"); val instructions=(0 until errors.length()).joinToString("\n") { errors.getString(it) }
-     android.app.AlertDialog.Builder(this).setTitle("Account recovery · retained evidence")
-      .setMessage("${if(checked.getBoolean("broker_checked")) "Broker evidence checked" else "Recovery unresolved"}\n${checked.getString("blocked")}\n$instructions\n\nBroker positions: ${checked.opt("broker_positions")}\nExternal baseline: ${checked.getJSONObject("baseline")}\n\n1. Keep entries paused and preserve this installation and each original route.\n2. Inspect the exact account/environment, original client IDs, cumulative fills and broker positions. Unknown outcomes never permit another POST.\n3. Restore the owning route for authorized cancel/exit handling. Partial canceled fills remain owned.\n4. Recheck after broker evidence settles. Matching inventory clears only an inventory discrepancy; contradictory fills require investigation. There is no clear-ID or automatic retry control.")
-      .setNeutralButton("Verify flat and repair") { _,_ -> background {
-       SyncService.withBankTransition(beforeCheck={ AndroidAccountBank.pauseRoutes(this,config) }) {
-        AndroidAccountBank.managed(this,routeId,config,Broker(config)).repairFlat()
-        "Authoritative flat repair completed. IDs, original orders and journals retained. All routes remain stopped and paused."
-       }
-      } }.setPositiveButton("Close",null).show()
-    }; "Recovery check finished; no orders submitted."
-   } }.setNegativeButton("Close",null).show()
+ private fun findButton(view:android.view.View,label:String):Button? {
+  if(view is Button && view.text.toString()==label) return view
+  if(view is android.view.ViewGroup) for(i in 0 until view.childCount) findButton(view.getChildAt(i),label)?.let { return it }
+  return null
  }
- private fun accountPoolDialog(config:JSONObject) {
-  require(!SyncService.active) { "Stop every connection and wait for workers to drain before editing host pools" }
-  val bank=AndroidAccountBank.bank(this); val scope=RouteAccounts.key(config); val policies=bank.report(scope).getJSONObject("policies")
-  val layout=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(24,12,24,12) }
-  layout.addView(TextView(this).apply { text="Host $routeId\nPools are aggregate exposure ceilings; entry sizing remains separate. Reducing a pool never liquidates holdings. Zero blocks new entries. Fees reserve once per order. Losses reduce monetary capacity; fixed dollar pools do not grow with profits." })
-  val inputs=mutableListOf<Triple<String,Spinner,Pair<EditText,EditText>>>()
-  for(asset in listOf("stock","option")) {
-   val p=policies.optJSONObject("$routeId:$asset") ?: JSONObject().put("mode","dollars").put("value","0").put("fee","0")
-   layout.addView(TextView(this).apply { text="${asset.replaceFirstChar { it.uppercase() }} pool" })
-   val modes=listOf("units","dollars","equity_percent"); val picker=Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,listOf("Shares / contracts","Dollars","Account equity %")); setSelection(modes.indexOf(p.getString("mode"))); layout.addView(this) }
-   val value=EditText(this).apply { hint="Pool value"; setText(p.getString("value")); inputType=InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL; layout.addView(this) }
-   val fee=EditText(this).apply { hint="Fee reserve dollars per order"; setText(p.getString("fee")); inputType=InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL; layout.addView(this) }
-   inputs.add(Triple(asset,picker,Pair(value,fee)))
-  }
-  android.app.AlertDialog.Builder(this).setTitle("This host's allocation pools").setView(ScrollView(this).apply { addView(layout) }).setPositiveButton("Save pools; stay stopped") { _,_ ->
-   try { SyncService.withBankTransition { for((asset,picker,values) in inputs) bank.configure(scope,routeId,asset,listOf("units","dollars","equity_percent")[picker.selectedItemPosition],values.first.text.toString(),values.second.text.toString()) }; status.text="Host pools saved. Explicitly reconnect each route to resume." } catch(e:Exception) { status.text=e.message }
-  }.setNegativeButton("Close",null).show()
+ private fun loadRetainedPositions(show:(String)->Unit) {
+  val config=Vault(this).read(); val lifecycle=lifecycleRevision
+  ScopedRead(sharedIo,java.util.concurrent.Executor { runOnUiThread(it) }).load(
+   { !isDestroyed && foreground && lifecycle==lifecycleRevision && Settings.sameIdentity(config,Vault(this).read()) },
+   {
+    val rows=journal.history().map { e ->
+     val orders=journal.orders(e.getString("trade_id"))
+     val bought=orders.filter { it.side=="buy" }.sumOf { it.filled }
+     val sold=orders.filter { it.side=="sell" }.sumOf { it.filled }
+     "${e.getString("symbol")} / ${bought-sold} tracked units\n${e.getString("trade_id")}\n${orders.count { it.state !in AccountBank.terminal }} unresolved orders"
+    }
+    "POSITIONS / RETAINED CRIER EVIDENCE\n\n"+rows.joinToString("\n\n").ifBlank { "No retained Crier positions.\nConnect and reconcile to verify brokerage holdings." }+"\n\nLocal fills only. External holdings, live quotes and P&L are unavailable here."
+   },show,{ show(it.message ?: "Retained positions unavailable") })
+ }
+ private fun accountBankDialog() {
+  val config=Vault(this).read()
+  val lifecycle=lifecycleRevision
+  AccountBankDialogs(this,routeId,config,sharedIo,
+   current={ !isDestroyed && foreground && lifecycle==lifecycleRevision &&
+    routeId==(getSharedPreferences("route-selection",MODE_PRIVATE).getString("id",null) ?: routeId) &&
+    Settings.sameIdentity(config,Vault(this).read()) },
+   message={ status.text=it }).show()
  }
  private fun showHealth() {
   HealthDialog.show(this,AppHealth.ledger(applicationContext),if(journey=="alerts") "alerts" else if(journey in setOf("trade","follow")) "intent" else "connection",visible={foreground}) { action ->
@@ -370,6 +350,7 @@ class MainActivity:Activity(),RouteOwner {
  }
  override fun onNewIntent(value:Intent) { super.onNewIntent(value); intent=value; handleOAuthReturn(value.dataString) }
  private fun chooseJourney(value:String) {
+  getSharedPreferences("navigation",MODE_PRIVATE).edit().putString("screen",if(value=="alerts") "Account" else "Trade").commit()
   customer?.invalidate(); redeemed=null; returnInbox.clear()
   guided?.stop()
   getSharedPreferences("journey",MODE_PRIVATE).edit().putString("purpose",value).commit()

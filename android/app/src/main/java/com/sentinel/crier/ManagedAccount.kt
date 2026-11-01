@@ -15,6 +15,11 @@ class ManagedAccount(private val bank:AccountBank,private val scope:String,priva
   require(f.getString("account")==config.getString("account") && f.getString("environment")==config.getString("environment") && f.getString("currency")=="USD" && age in 0..10000) { "Fresh pinned USD funds required" }
   AccountBank.amount(f.getString("cash")); require(AccountBank.amount(f.getString("equity"))>java.math.BigDecimal.ZERO); return f
  }
+ override fun locallyRefused(client:String):Boolean=bank.locked {
+  val order=bank.orders(scope).singleOrNull { it.getString("cid")==client } ?: return@locked false
+  require(bank.ownedOrder(scope,route,client)) { "Order belongs to another original host route" }
+  order.getString("status")=="superseded" && order.getInt("filled")==0 && order.getString("broker").isEmpty()
+ }
  override fun order(client:String):JSONObject?=bank.locked {
   val registered=bank.orders(scope).any { it.getString("cid")==client }
   if(!registered) { require(!client.startsWith("sc-")) { "Managed client ID missing from bank" }; return@locked broker.order(client) }

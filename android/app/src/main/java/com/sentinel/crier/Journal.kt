@@ -22,19 +22,16 @@ class Journal(private val contextForPolicy: Context,name:String=Settings.journal
  }
  override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) { if(old<2) diagnosticsSchema(db); if(old<3) recoverySchema(db); if(old<4) { db.rawQuery("SELECT k FROM meta WHERE k LIKE 'policy:%' OR k LIKE 'plan:%' OR k='policy_schema' LIMIT 1",null).use { require(!it.moveToFirst()) { "Existing policy evidence requires manual schema recovery" } }; db.execSQL("INSERT OR REPLACE INTO meta(k,v) SELECT 'policy:' || id, '{\"legacy\":true}' FROM trades"); db.execSQL("INSERT OR REPLACE INTO meta VALUES('policy_schema','1')") } }
  @Synchronized fun reject(cursor:Long,reason:String) { val db=writableDatabase; db.beginTransaction(); try { db.execSQL("INSERT OR REPLACE INTO rejected VALUES(?,?)",arrayOf(cursor,reason.take(300))); setMeta("cursor",cursor.toString()); setMeta("protocolStatus","Rejected event at cursor $cursor: ${reason.take(200)}"); db.setTransactionSuccessful() } finally { db.endTransaction() } }
- @Synchronized override fun enqueueAlert(id:String,payload:JSONObject) { writableDatabase.execSQL("INSERT OR IGNORE INTO alerts(id,payload) VALUES(?,?)",arrayOf(id,payload.toString())) }
- @Synchronized fun alert(now:Long,id:String?=null):JSONObject? = readableDatabase.rawQuery("SELECT id,payload,attempts FROM alerts WHERE state='pending' AND next<=?"+(if(id!=null) " AND id=?" else "")+" ORDER BY rowid LIMIT 1",if(id!=null) arrayOf(now.toString(),id) else arrayOf(now.toString())).use { if(it.moveToFirst()) JSONObject().put("id",it.getString(0)).put("payload",JSONObject(it.getString(1))).put("attempts",it.getInt(2)) else null }
- @Synchronized override fun claimAlert(now:Long,id:String?):JSONObject? {
-  val db=writableDatabase; db.beginTransaction()
-  try { val next=alert(now,id); if(next!=null) { db.execSQL("UPDATE alerts SET state='uncertain',attempts=attempts+1,detail='Dispatch reserved; acknowledgement pending' WHERE id=?",arrayOf(next.getString("id"))); setMeta("discordStatus","Dispatch reserved; acknowledgement pending. Inspect Discord before retrying.") }; db.setTransactionSuccessful(); return next }
-  finally { db.endTransaction() }
- }
- @Synchronized override fun alertResult(id:String,state:String,delay:Long,detail:String) { writableDatabase.execSQL("UPDATE alerts SET state=?,next=?,detail=? WHERE id=?",arrayOf(state,System.currentTimeMillis()+delay,detail,id)); setMeta("discordStatus","$state: $detail") }
- @Synchronized override fun healthStates():Set<String> = readableDatabase.rawQuery("SELECT DISTINCT state FROM alerts WHERE state NOT IN ('delivered','discarded')",null).use { c -> buildSet { while(c.moveToNext()) add(c.getString(0)) } }
- @Synchronized fun hasUndeliveredAlerts():Boolean = readableDatabase.rawQuery("SELECT COUNT(*) FROM alerts WHERE state IN ('pending','blocked','uncertain')",null).use { it.moveToFirst(); it.getInt(0)>0 }
- @Synchronized fun discardAlerts() { writableDatabase.execSQL("UPDATE alerts SET state='discarded',detail='Explicitly discarded by user before destination change' WHERE state IN ('pending','blocked','uncertain')") }
- @Synchronized fun retryAlerts() { writableDatabase.execSQL("UPDATE alerts SET state='pending',next=0 WHERE state IN ('pending','blocked','uncertain')") }
- @Synchronized fun alertSummary():String = readableDatabase.rawQuery("SELECT state,COUNT(*) FROM alerts GROUP BY state",null).use { c -> buildList { while(c.moveToNext()) add("${c.getString(0)}: ${c.getInt(1)}") }.joinToString(", ").ifBlank { "No queued messages" } }
+ private val alertRows by lazy { JournalAlerts({ writableDatabase },::setMeta) }
+ @Synchronized override fun enqueueAlert(id:String,payload:JSONObject)=alertRows.enqueueAlert(id,payload)
+ @Synchronized fun alert(now:Long,id:String?=null)=alertRows.alert(now,id)
+ @Synchronized override fun claimAlert(now:Long,id:String?)=alertRows.claimAlert(now,id)
+ @Synchronized override fun alertResult(id:String,state:String,delay:Long,detail:String)=alertRows.alertResult(id,state,delay,detail)
+ @Synchronized override fun healthStates()=alertRows.healthStates()
+ @Synchronized fun hasUndeliveredAlerts()=alertRows.hasUndeliveredAlerts()
+ @Synchronized fun discardAlerts()=alertRows.discardAlerts()
+ @Synchronized fun retryAlerts()=alertRows.retryAlerts()
+ @Synchronized fun alertSummary()=alertRows.alertSummary()
  @Synchronized fun unresolved():String = readableDatabase.rawQuery("SELECT client,state,filled FROM orders WHERE state NOT IN ('filled','canceled','expired','rejected','replaced','superseded')",null).use { c -> buildList { while(c.moveToNext()) add("${c.getString(0)} Â· ${c.getString(1)} Â· filled ${c.getInt(2)}") }.joinToString("\n").ifBlank { "No unresolved broker orders" } }
  @Synchronized fun evidence(id:String,stage:String,detail:String="",at:String=Instant.now().toString()) { runCatching { writableDatabase.execSQL("INSERT INTO diagnostics VALUES(?,?,?,?)",arrayOf(id,at,stage,detail)) } }
  @Synchronized override fun diagnostic(id:String,stage:String,detail:String) { runCatching { val key="timeline:$id:$stage"; if(meta(key)!=detail) { evidence(id,stage,detail); setMeta(key,detail) } } }
@@ -110,16 +107,6 @@ class Journal(private val contextForPolicy: Context,name:String=Settings.journal
  @Synchronized fun history():List<JSONObject> = readableDatabase.rawQuery("SELECT payload FROM events e WHERE seq=(SELECT MAX(seq) FROM events latest WHERE latest.trade=e.trade) ORDER BY rowid DESC LIMIT 100",null).use { c -> buildList { while(c.moveToNext()) add(JSONObject(c.getString(0))) } }
  fun summary(): String = events(false).joinToString("\n") { "${it.getString("action")} ${it.getString("symbol")} â€¢ ${it.getString("trade_id")}" }.ifBlank { "No pending intents" }
  companion object {
-  fun validate(e:JSONObject,environment:String) {
-   require(e.keys().asSequence().toSet()==setOf("version","event_id","trade_id","sequence","action","environment","symbol","asset","quantity","limit_price","created_at","expires_at"))
-   require(e.getInt("version")==1 && e.get("version").toString()=="1" && e.getString("environment")==environment)
-   for(k in listOf("event_id","trade_id")) require(UUID.fromString(e.getString(k)).toString()==e.getString(k))
-   require(e.get("sequence").toString()==e.getInt("sequence").toString() && e.getInt("sequence")>0 && e.getString("action") in setOf("enter","replace","cancel","exit"))
-   require(e.getString("asset") in setOf("stock","option") && e.getString("symbol").matches(if(e.getString("asset")=="option") Regex("[A-Z]{1,6}[0-9]{6}[CP][0-9]{8}") else Regex("[A-Z][A-Z0-9.]{0,14}")))
-   if(e.getString("asset")=="option") { val symbol=e.getString("symbol"); val date=symbol.takeLast(15).take(6); java.time.LocalDate.of(2000+date.take(2).toInt(),date.substring(2,4).toInt(),date.takeLast(2).toInt()); require(symbol.takeLast(8).toLong()>0) }
-   require(e.get("quantity").toString()==e.getInt("quantity").toString() && e.getInt("quantity") in 1..1000 && e.get("limit_price") is String && e.getString("limit_price").toBigDecimal().signum()>0)
-   val created=Instant.parse(e.getString("created_at")); val expires=Instant.parse(e.getString("expires_at"))
-   require(expires>=created && (e.getString("action") !in setOf("enter","replace") || expires<=created.plusSeconds(30)))
-  }
+  fun validate(e:JSONObject,environment:String)=EventValidation.validate(e,environment)
  }
 }

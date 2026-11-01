@@ -26,6 +26,7 @@ class CustomerAcceptanceTest {
   ActivityScenario.launch(MainActivity::class.java).use { scenario ->
    var original=""
    scenario.onActivity { original=it.getSharedPreferences("journey",0).getString("purpose","") ?: ""; assertFalse(SyncService.active) }
+   onView(withText("Account")).perform(click())
    for(title in listOf("Alerts only","Trade / share","Follow trades")) {
     onView(withText("Optional paper practice / support")).perform(scrollTo(),click())
     onView(withText(title)).perform(click())

@@ -198,82 +198,18 @@ class DesktopApp:
     def account_bank(self):
         self.submit('bank_status',callback=self.show_account_bank)
 
-    def show_recovery_assistant(self,report):
+    def bank_views(self):
+        from .desktop_bank_views import AccountBankViews
         connections=getattr(self.worker,'connections',None)
-        original_route=getattr(connections,'selected',None)
-        window=tk.Toplevel(self.root);window.title('Recovery assistant');window.geometry('900x650')
-        canvas=tk.Canvas(window,highlightthickness=0)
-        scroll=ttk.Scrollbar(window,orient='vertical',command=canvas.yview);scroll.pack(side='right',fill='y')
-        canvas.pack(fill='both',expand=True);canvas.configure(yscrollcommand=scroll.set)
-        frame=ttk.Frame(canvas,padding=16)
-        item=canvas.create_window((0,0),window=frame,anchor='nw')
-        frame.bind('<Configure>',lambda event:canvas.configure(scrollregion=canvas.bbox('all')))
-        canvas.bind('<Configure>',lambda event:canvas.itemconfigure(item,width=event.width))
-        ttk.Label(frame,text=report['explanation'],wraplength=650).pack(anchor='w',pady=8)
-        ttk.Label(frame,text='Broker check: '+str(report.get('check_result','not checked'))+'. Entries are not automatically resumed.',wraplength=650).pack(anchor='w')
-        for index,step in enumerate(report['steps'],1):
-            ttk.Label(frame,text=str(index)+'. '+step,wraplength=650).pack(anchor='w',pady=4)
-        if 'positions' in report:
-            ttk.Label(frame,text='Position snapshot: '+report['positions_checked_at'],wraplength=650).pack(anchor='w',pady=8)
-            table=ttk.Treeview(frame,columns=('symbol','host','external','expected','broker','difference'),show='headings',height=5)
-            for key,title in [('symbol','Symbol'),('host','Host owned'),('external','External'),('expected','Expected'),('broker','Broker'),('difference','Difference')]:
-                table.heading(key,text=title);table.column(key,width=105)
-            for row in report['positions']:
-                table.insert('','end',values=tuple(row[key] for key in ('symbol','host_owned','external_baseline','expected','broker','difference')))
-            table.pack(fill='x',pady=4)
-        for row in report['ids']:
-            ttk.Label(frame,text=f"ID {row['id']} | {row['symbol']} | owned {row['units']} | pending buys {row['pending_buy_units']} | pending exits {row['pending_exit_units']}",wraplength=650).pack(anchor='w',pady=4)
-        ordered=sorted(report.get('orders',[]),key=lambda row:row['result'] in ('verified','definite_no_submission'))
-        for order in ordered[:100]:
-            ttk.Label(frame,text=order['cid']+' · '+order['result']+' · '+order.get('status',''),wraplength=800).pack(anchor='w',pady=2)
-        if len(report.get('orders',[]))>100:
-            ttk.Label(frame,text='Showing first 100 order results; the check evaluated all retained orders.').pack(anchor='w')
-        def check_evidence(method='bank_recovery'):
-            if getattr(connections,'selected',None)!=original_route:
-                self.notice.set('Select the original connection and reopen its recovery assistant before checking.')
-                return
-            self.submit(method,callback=lambda updated:(window.destroy(),self.show_recovery_assistant(updated)))
-        ttk.Button(frame,text='Pause entries and check broker evidence',command=check_evidence).pack(anchor='w',pady=8)
-        if report.get('flat_repair_candidate'):
-            ttk.Label(frame,text='All recorded holdings appear flat. Repair rechecks every original order and fresh funds, rebuilds local cash capacity and retains IDs/history. Entries stay paused.',wraplength=800).pack(anchor='w',pady=8)
-            ttk.Button(frame,text='Recheck and repair verified-flat ledger',command=lambda:check_evidence('bank_repair')).pack(anchor='w',pady=8)
+        return AccountBankViews(self.root,getattr(connections,'selected',None),
+            lambda:getattr(connections,'selected',None),self.submit,self.notice.set,
+            tuple((row['id'],row['label']) for row in connections.routes()) if connections and hasattr(connections,'routes') else ())
+
+    def show_recovery_assistant(self,report):
+        self.bank_views().show_recovery_assistant(report)
 
     def show_account_bank(self,result):
-        window=tk.Toplevel(self.root)
-        window.title('Account ID bank')
-        window.geometry('850x560')
-        frame=ttk.Frame(window,padding=16);frame.pack(fill='both',expand=True)
-        ttk.Label(frame,text='Shared Alpaca account • '+result['environment'].upper(),font=('Segoe UI',14,'bold')).pack(anchor='w')
-        if not result['enabled']:
-            ttk.Label(frame,text='Enable separate host IDs for this account. Setup disconnects all routes and checks that older Crier orders and holdings are fully reconciled and closed. Reconnect afterward; orders remain paused. Each host starts with zero allocation.',wraplength=780).pack(anchor='w',pady=16)
-            ttk.Button(frame,text='Set up account ID bank',command=lambda:(window.destroy(),self.submit('bank_enable',callback=self.show_account_bank))).pack(anchor='w')
-            return
-        blocked=result['balance'].get('blocked')
-        if result.get('recovery'):
-            ttk.Button(frame,text='Recovery assistant',command=lambda:self.show_recovery_assistant(result['recovery'])).pack(anchor='w',pady=4)
-        ttk.Label(frame,text='New entries blocked: '+blocked if blocked else 'Account bank enabled. Configure this connection’s reusable pools, then reconnect and explicitly enable orders.',wraplength=780).pack(anchor='w',pady=8)
-        for asset in ('stock','option'):
-            row=ttk.Frame(frame);row.pack(fill='x',pady=4)
-            ttk.Label(row,text=asset.title()+' pool',width=14).pack(side='left')
-            policy=result['policies'][asset]
-            mode=tk.StringVar(value=policy['mode']);value=tk.StringVar(value=policy['value']);fee=tk.StringVar(value=result['fees'][asset])
-            ttk.Combobox(row,textvariable=mode,values=('units','dollars','equity_percent'),state='readonly',width=18).pack(side='left')
-            ttk.Entry(row,textvariable=value,width=12).pack(side='left',padx=5)
-            ttk.Label(row,text='Fee reserve $').pack(side='left')
-            ttk.Entry(row,textvariable=fee,width=8).pack(side='left',padx=5)
-            ttk.Button(row,text='Save pool',command=lambda a=asset,m=mode,v=value,f=fee:self.submit('bank_configure',a,m.get(),v.get(),f.get(),callback=lambda updated:(window.destroy(),self.show_account_bank(updated)))).pack(side='left')
-        ttk.Label(frame,text='Limit orders only. Units = aggregate shares/contracts held + pending. Dollars and equity % include held cost and pending buy limits. Fees are reserved per order. Lowering a pool never sells a position.',wraplength=780).pack(anchor='w',pady=8)
-        table=ttk.Treeview(frame,columns=('id','host','symbol','units','buy','sell','state'),show='headings',height=10)
-        for name in table['columns']:
-            table.heading(name,text=name.title());table.column(name,width=95 if name!='symbol' else 180)
-        table.pack(fill='both',expand=True)
-        active={row['id'] for row in result['active']}
-        labels={row['id']:row['label'] for row in self.worker.connections.routes()}
-        rows=result['active']+[row for row in result['history'] if row['id'] not in active]
-        for row in rows:
-            table.insert('','end',values=(row['id'],labels.get(row['route'],row['route']),row['symbol'],row['units'],row['pending_buy_units'],row['pending_exit_units'],'Active' if row['id'] in active else 'Archived'))
-        ttk.Label(frame,text='Showing the latest 100 IDs. Empty sold/canceled IDs archive automatically. Unknown orders and partial fills retain their IDs. IDs and audit history are never reused or erased.',wraplength=780).pack(anchor='w',pady=8)
-        ttk.Button(frame,text='Refresh',command=lambda:(window.destroy(),self.account_bank())).pack(anchor='e')
+        self.bank_views().show_account_bank(result)
 
     def _start(self, frame):
         ttk.Label(frame, text='What would you like to do?', font=('Segoe UI', 16, 'bold')).pack(anchor='w', pady=12)
@@ -338,60 +274,37 @@ class DesktopApp:
                         'Choose Host to share trades.' if purpose == 'trade' else 'Choose Receive to follow trades.')
 
     def _customer(self, frame):
-        ttk.Label(frame,text='Crier customer account',font=('Segoe UI',16,'bold')).pack(anchor='w')
-        ttk.Label(frame,text='Choose your journey in Start here. Provider approval saves credentials; reconnect separately.',wraplength=850).pack(anchor='w',pady=8)
-        self.customer_email=self._entry(frame,'Email')
-        self.customer_password=self._entry(frame,'Password',masked=True)
-        row=ttk.Frame(frame); row.pack(anchor='w',pady=8)
-        ttk.Button(row,text='Check provider availability',command=self.check_providers).pack(side='left')
-        ttk.Button(row,text='Sign in',command=lambda:self.customer_login(False)).pack(side='left')
-        ttk.Button(row,text='Renew session',command=lambda:self.submit('customer_refresh',callback=self.provider_message)).pack(side='left')
-        ttk.Button(row,text='Create account',command=lambda:self.customer_login(True)).pack(side='left')
-        ttk.Button(row,text='Sign out and disconnect',command=lambda:self.submit('customer_logout',callback=self.provider_message)).pack(side='left')
-        self.provider_environment=tk.StringVar(value='paper')
-        ttk.Combobox(frame,textvariable=self.provider_environment,values=('paper','live'),state='readonly').pack(anchor='w',pady=8)
-        self.provider_buttons={}
-        for provider,label in [('alpaca','Authorize Alpaca in browser'),('discord','Authorize Discord in browser')]:
-            button=ttk.Button(frame,text=label,state='disabled',command=lambda p=provider:self.begin_provider(p))
-            button.pack(anchor='w',pady=6); self.provider_buttons[provider]=button
-        self.provider_return=self._entry(frame,'Return URL (manual recovery)')
-        ttk.Button(frame,text='Continue provider return',command=self.complete_provider).pack(anchor='w',pady=6)
-        ttk.Button(frame,text='Cancel pending connection',command=lambda:self.submit('provider_cancel',callback=self.provider_message)).pack(anchor='w')
-        self.provider_status=tk.StringVar(value='Provider connections unavailable until the configured service verifies its capabilities.')
-        ttk.Label(frame,textvariable=self.provider_status,wraplength=850).pack(anchor='w',pady=12)
+        from .desktop_provider_view import ProviderSignInView
+        view=self.provider_view=ProviderSignInView(frame,send=self.submit,entry=self._entry,purpose=lambda:self.provider_purpose,
+            return_method='provider_return' if hasattr(self.worker,'connections') else 'provider_complete')
+        self.customer_email,self.customer_password=view.customer_email,view.customer_password
+        self.provider_environment,self.provider_return=view.provider_environment,view.provider_return
+        self.provider_buttons,self.provider_status=view.provider_buttons,view.provider_status
 
     def provider_message(self, result):
-        self.provider_status.set(result.get('message','Request completed.'))
+        self.provider_view.provider_message(result)
 
     def check_providers(self):
-        def ready(result):
-            self.provider_available=set(result['providers'])
-            for provider,button in self.provider_buttons.items():
-                button.configure(state='normal' if provider in self.provider_available else 'disabled')
-            self.provider_status.set('Provider service verified. Sign in, then authorize your selected provider.')
-        self.submit('provider_capabilities',callback=ready)
+        self.provider_view.check_providers()
 
     def customer_login(self, signup):
-        email,password=self.customer_email.get(),self.customer_password.get()
-        self.customer_password.set('')
-        self.submit('customer_login',email,password,signup,callback=self.provider_message)
+        self.provider_view.customer_login(signup)
 
     def begin_provider(self, provider):
-        purpose=self.provider_purpose
-        self.submit('provider_begin',provider,purpose,self.provider_environment.get(),callback=lambda url:webbrowser.open(url))
+        self.provider_view.begin_provider(provider)
 
     def complete_provider(self, uri=None):
-        uri=uri or self.provider_return.get()
-        self.provider_return.set('')
-        self.submit('provider_complete',uri,callback=self.provider_message)
+        self.provider_view.complete_provider(uri)
 
     def provider_inbox(self):
         if self.closing: return
         from .desktop_oauth_return import take_returns
         if not hasattr(self.worker,'session'): return
         try:
-            for uri in take_returns(self.worker.session.folder):
-                self.complete_provider(uri)
+            connections=getattr(self.worker,'connections',None)
+            folder=connections.folder if connections is not None else self.worker.session.folder
+            for uri in take_returns(folder):
+                self.submit('provider_return' if connections is not None else 'provider_complete',uri,callback=self.provider_message)
         except OSError:
             self.notice.set('Provider return inbox busy; retrying shortly.')
         finally:
@@ -840,51 +753,13 @@ class DesktopApp:
             self.submit('receive',self.invitation.get(),self.service.get(),callback=ready)
 
     def _activity(self, frame):
-        canvas=tk.Canvas(frame,highlightthickness=0)
-        scrollbar=ttk.Scrollbar(frame,orient='vertical',command=canvas.yview)
-        scrollbar.pack(side='right',fill='y')
-        canvas.pack(side='left',fill='both',expand=True)
-        canvas.configure(yscrollcommand=scrollbar.set)
-        content=ttk.Frame(canvas)
-        item=canvas.create_window((0,0),window=content,anchor='nw')
-        content.bind('<Configure>',lambda event:canvas.configure(scrollregion=canvas.bbox('all')))
-        canvas.bind('<Configure>',lambda event:canvas.itemconfigure(item,width=event.width))
-        frame=content
-        controls = ttk.Frame(frame); controls.pack(fill='x', pady=(0,10))
-        self.execution_buttons = []
-        for label, enabled in [('Enable new entries', True), ('Pause new entries', False)]:
-            button = ttk.Button(controls, text=label, state='disabled',
-                                command=lambda e=enabled: self.submit('settings', {'enabled': e}))
-            button.pack(side='left', padx=4)
-            self.execution_buttons.append(button)
-        ttk.Label(frame, text='Cancel and exit instructions continue while new entries are paused.').pack(anchor='w')
-        ttk.Label(frame, text='Tracked trades — select one to replace, cancel or exit as host').pack(anchor='w', pady=(12,4))
-        columns = ('symbol','action','quantity','limit','revision','state')
-        self.trades = ttk.Treeview(frame, columns=columns, show='headings', height=6, selectmode='browse')
-        for column in columns:
-            self.trades.heading(column, text=column.title())
-            self.trades.column(column, width=100 if column != 'symbol' else 220, stretch=True)
-        self.trades.pack(fill='x')
-        ttk.Label(frame, text='Broker orders — cumulative fills reported by your account').pack(anchor='w', pady=(12,4))
-        self.orders = ttk.Treeview(frame, columns=('symbol','side','qty','filled','status','broker_id'), show='headings', height=5)
-        for col in self.orders['columns']:
-            self.orders.heading(col, text=col.replace('_',' ').title())
-            self.orders.column(col, width=110, stretch=True)
-        self.orders.pack(fill='both', expand=True)
-        host = ttk.LabelFrame(frame, text='Host controls (only available with a host pairing)', padding=8)
-        host.pack(fill='x', pady=(12,0))
-        self.symbol = self._entry(host, 'Symbol / full OCC contract')
-        self.order_qty = self._entry(host, 'Quantity', '1')
-        self.price = self._entry(host, 'Limit price', '0.20')
-        row = ttk.Frame(host); row.pack(fill='x', pady=4)
-        self.asset = tk.StringVar(value='option')
-        ttk.Combobox(row, textvariable=self.asset, values=('option','stock'), state='readonly', width=10).pack(side='left')
-        self.host_buttons = []
-        for label, action in [('Buy','enter'),('Replace selected','replace'),('Cancel selected','cancel'),('Exit selected','exit')]:
-            button = ttk.Button(row, text=label, command=lambda a=action: self.command(a))
-            button.pack(side='left', padx=4)
-            button.configure(state='disabled')
-            self.host_buttons.append(button)
+        from .desktop_trading_views import TradingWorkspace
+        view=TradingWorkspace(frame,send=self.submit,command=self.command,entry=self._entry)
+        self.trading_navigation=view.navigation
+        self.execution_buttons=view.execution_buttons
+        self.host_buttons=view.host_buttons
+        self.trades,self.orders=view.trades,view.orders
+        self.symbol,self.order_qty,self.price,self.asset=view.symbol,view.order_qty,view.price,view.asset
 
     def _health(self, frame):
         ttk.Label(frame,text='Connection health',font=('Segoe UI',14,'bold')).pack(anchor='w')

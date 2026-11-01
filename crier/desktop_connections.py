@@ -1,5 +1,6 @@
 """Durable route identity and isolated Windows sessions (Alpaca execution only)."""
 import asyncio
+from contextlib import AsyncExitStack
 import inspect
 import json
 import re
@@ -24,6 +25,7 @@ class DesktopConnections:
         self.bank = AccountBank(self.folder/'account-bank.sqlite3')
         self.guard = threading.RLock()
         self.operations = asyncio.Lock()
+        self.recovering = set()
         self.sessions = {}
         self.stopping = False
         with self.database() as db:
@@ -160,6 +162,22 @@ class DesktopConnections:
             self.selected = identity
 
     async def invoke(self, identity, method, *args, **kwargs):
+        if method=='provider_return':
+            from .oauth_return import parse_oauth_return
+            flow=parse_oauth_return(args[0])
+            # Only route by the opaque, locally pending flow. The originating
+            # client still validates owner, expiry, generation and one-shot proof.
+            async with self.operations:
+                if self.stopping: raise ValueError('Connections are shutting down.')
+                origins=[session for session in self.sessions.values()
+                         if flow and session.oauth and session.oauth.pending and session.oauth.flow==flow]
+                if len(origins)!=1: raise ValueError('No unique pending provider connection on this device.')
+                return await self._invoke(origins[0],'provider_complete',*args,**kwargs)
+        session=self.sessions[identity]
+        settings=args[0] if args else kwargs.get('settings',{})
+        if method=='settings' and settings.get('enabled'):
+            if isinstance(session.broker,ManagedAccount) and session.broker.scope in self.recovering:
+                raise ValueError('Account recovery in progress; entries must stay paused.')
         if method in ('bank_enable','bank_status','bank_configure','bank_recovery','bank_repair'):
             async with self.operations:
                 if self.stopping: raise ValueError('Connections are shutting down.')
@@ -192,16 +210,30 @@ class DesktopConnections:
         if method in ('bank_recovery','bank_repair'):
             broker=self.sessions[identity].broker
             if not isinstance(broker,ManagedAccount): raise ValueError('Reconnect this account with its ID bank enabled first.')
-            for session in self.sessions.values():
-                if isinstance(session.broker,ManagedAccount) and session.broker.scope==scope and session.device:
-                    session.device.engine.save_settings({'enabled':False})
-            async with self.sessions[identity].lifecycle:
-                if self.sessions[identity].broker is not broker: raise ValueError('Connection changed; reconnect before checking evidence.')
-                task=asyncio.create_task(asyncio.to_thread(broker.repair_flat_account if method=='bank_repair' else broker.recovery_check))
-                try: return await asyncio.shield(task)
-                except asyncio.CancelledError:
-                    await task
-                    raise
+            affected=[session for session in self.sessions.values()
+                      if isinstance(session.broker,ManagedAccount) and session.broker.scope==scope]
+            def pause():
+                for session in affected:
+                    if session.device:
+                        session.device.engine.save_settings({'enabled':False})
+                        session.device.changed.set()
+            self.recovering.add(scope)
+            try:
+                # Pause durably before the first await, including cancellation
+                # while another route is finishing its lifecycle transition.
+                pause()
+                async with AsyncExitStack() as stack:
+                    for session in affected:
+                        await stack.enter_async_context(session.lifecycle)
+                    if self.sessions[identity].broker is not broker: raise ValueError('Connection changed; reconnect before checking evidence.')
+                    task=asyncio.create_task(asyncio.to_thread(broker.repair_flat_account if method=='bank_repair' else broker.recovery_check))
+                    try: return await asyncio.shield(task)
+                    except asyncio.CancelledError:
+                        await task
+                        raise
+            finally:
+                try: pause()
+                finally: self.recovering.discard(scope)
         if method=='bank_status':
             enabled=self.bank.enabled(scope)
             from .recovery_assistant import recovery_report

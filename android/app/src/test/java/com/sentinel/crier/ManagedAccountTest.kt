@@ -34,6 +34,17 @@ class ManagedAccountTest {
   Engine(EngineTest.Store(),c,ManagedAccount(b,scope,"bob",c,fake)) { false }.step(e)
   assertEquals(1,fake.base.posts)
  }
+ @Test fun durableBankRefusalRepairsUnknownJournalAfterCrashWithoutBrokerLookup() {
+  val b=bank(); val fake=Fake(); val e=event(); val c=config()
+  val cid=b.reserve(scope,"alice",e,0,5,false,"1",1,"100","100")
+  val store=EngineTest.Store(); store.setMeta("quantity:$cid","5"); store.unknown(cid,"trade",1,"buy")
+  b.refuse(scope,cid) // Simulate process death before Engine can write the terminal journal state.
+  val engine=Engine(store,c,ManagedAccount(AccountBank(b.file),scope,"alice",c,fake)) { false }
+  engine.step(e)
+  assertTrue(engine.reconciliationHealthy)
+  assertEquals("superseded",store.orders("trade").single().state)
+  assertFalse(fake.base.lookups.contains(cid)); assertEquals(0,fake.base.posts)
+ }
  @Test fun staleFundsAndFinalPauseNeverPostAndRefusalReleasesReservation() {
   val b=bank(); val fake=Fake(); fake.stale=true; val c=config(); val e=event(); val broker=ManagedAccount(b,scope,"alice",c,fake)
   Engine(EngineTest.Store(),c,broker) { false }.step(e); assertEquals(0,fake.base.posts); assertEquals(0,b.orders(scope).size)

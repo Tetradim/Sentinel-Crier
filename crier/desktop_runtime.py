@@ -13,7 +13,8 @@ from .service_url import service_url
 import httpx
 
 from .device_secrets import load_secret, save_secret
-from .intent_broker import AlpacaIntentBroker, HOSTS, alpaca_headers
+from .intent_broker import AlpacaIntentBroker, HOSTS
+from .desktop_broker_access import discover_account, discover_alerts_account, AlpacaFillReader
 from .intent_device import IntentDevice
 from .intent_routes import Pair
 from .connection_client import ConnectionClient
@@ -25,63 +26,6 @@ from .error_log import ErrorLog, emit_error, emit_event
 
 def data_directory():
     return Path(os.getenv('LOCALAPPDATA', str(Path.home()/'.local/share'))) / 'SentinelCrier' / 'Desktop'
-
-
-async def discover_account(environment, key, secret, client=None, *, bearer=''):
-    if environment not in HOSTS:
-        raise ValueError('Select an environment and enter both Alpaca credentials.')
-    owned = client is None
-    client = client or httpx.AsyncClient(timeout=15, trust_env=False, follow_redirects=False)
-    try:
-        response = await client.get(HOSTS[environment]+'/v2/account', headers=alpaca_headers(key,secret,bearer=bearer), follow_redirects=False)
-        response.raise_for_status()
-        row = response.json()
-        if not row.get('id') or row.get('status') != 'ACTIVE' or row.get('account_blocked') or row.get('trading_blocked'):
-            raise ValueError('The selected Alpaca account is unavailable for trading.')
-        return row['id']
-    except (httpx.HTTPError, json.JSONDecodeError):
-        raise ValueError('Cannot verify Alpaca account. Check credentials, environment and connection.') from None
-    finally:
-        if owned:
-            await client.aclose()
-
-
-async def discover_alerts_account(environment, key, secret, client=None, *, bearer=''):
-    """Verify read access; trading permission is irrelevant for fill monitoring."""
-    from .alpaca import _identity
-    if environment not in HOSTS:
-        raise ValueError('Select an environment and enter both Alpaca credentials.')
-    owned = client is None
-    client = client or httpx.AsyncClient(timeout=15, trust_env=False, follow_redirects=False)
-    try:
-        response = await client.get(HOSTS[environment]+'/v2/account', headers=alpaca_headers(key,secret,bearer=bearer), follow_redirects=False)
-        response.raise_for_status()
-        return _identity(response.json().get('id'))
-    except (httpx.HTTPError, ValueError, TypeError, AttributeError):
-        raise ValueError('Cannot verify Alpaca read access. Check credentials, environment and connection.') from None
-    finally:
-        if owned:
-            await client.aclose()
-
-
-class AlpacaFillReader:
-    """Read-only account adapter: deliberately has no order mutation methods."""
-    def __init__(self, environment, key, secret, account, *, bearer=''):
-        self.environment, self.account = environment, account
-        self.client = httpx.Client(headers=alpaca_headers(key,secret,bearer=bearer),
-                                   timeout=15, trust_env=False, follow_redirects=False)
-
-    def verify(self, environment):
-        if environment != self.environment:
-            raise ValueError('Broker environment mismatch')
-        response = self.client.get(HOSTS[environment]+'/v2/account', follow_redirects=False)
-        response.raise_for_status()
-        if response.json().get('id') != self.account:
-            raise ValueError('Broker account mismatch')
-        return self.account
-
-    def close(self):
-        self.client.close()
 
 
 class DesktopSession:
@@ -228,56 +172,11 @@ class DesktopSession:
             generation=client.generation
             identity=self.oauth_identity()
             grant=await client.complete(uri)
-            if grant['provider']=='discord':
-                if self.provider_destination=='alerts':
-                    if not self.alerts_credentials.exists():
-                        raise ValueError('Connect an alerts account once before installing Discord.')
-                    saved=json.loads(load_secret(self.alerts_credentials))
-                    if saved['environment']!=grant['environment']: raise ValueError('Discord environment mismatch.')
-                    scope=hashlib.sha256(json.dumps([saved['environment'],saved['account']]).encode()).hexdigest()
-                    profile=self.folder/'alerts-profiles'/scope
-                    publisher=DiscordPublisher(profile,Store(profile/'alerts.sqlite3'))
-                    allow_initial=True
-                else:
-                    if not self.credentials.exists(): raise ValueError('Connect a trading account once before installing Discord.')
-                    saved=json.loads(load_secret(self.credentials))
-                    if saved['pair']['environment']!=grant['environment']: raise ValueError('Discord environment mismatch.')
-                    publisher=self.intent_publisher
-                    allow_initial=False
-                self.require_oauth_owner(saved)
-                self.require_oauth_owner(publisher.destination)
-                publisher.configure(grant['credential'],False,allow_initial=allow_initial,oauth=identity)
-            else:
-                trade=grant['purpose']=='trade'
-                path=self.credentials if trade else self.alerts_credentials
-                saved=json.loads(load_secret(path)) if path.exists() else {}
-                self.require_oauth_owner(saved)
-                if trade:
-                    pair=saved.get('pair') or self.connection_client().saved()
-                    if not pair: raise ValueError('Create or receive your pairing before authorizing trading.')
-                    if pair['environment']!=grant['environment']: raise ValueError('Pairing environment mismatch.')
-                lookup=self.account_lookup if trade else self.alerts_lookup
-                account=await lookup(grant['environment'],'','',bearer=grant['credential'])
-                if generation!=client.generation: raise ValueError('Customer session changed.')
-                if account!=grant['account_id']: raise ValueError('Provider account verification mismatch.')
-                if saved and (saved['account']!=account or (saved['pair']['environment'] if trade else saved['environment'])!=grant['environment']):
-                    raise ValueError('Saved recovery records require the original account and environment.')
-                if trade:
-                    journal=self.folder/'journal'
-                    pairing=journal/'intent-pairing.secret'
-                    if pairing.exists() and json.loads(load_secret(pairing))!=pair:
-                        raise ValueError('Journal pairing mismatch.')
-                    import sqlite3
-                    for database in journal.glob('intent-*.sqlite3'):
-                        if database.name=='intent-device.sqlite3': continue
-                        with sqlite3.connect(database) as db:
-                            pin=db.execute('SELECT environment,account FROM intent_pin WHERE id=1').fetchone()
-                            if pin and tuple(pin)!=(grant['environment'],account):
-                                raise ValueError('Journal account/environment mismatch.')
-                row=dict(account=account,key='',secret='',bearer=grant['credential'],oauth=identity)
-                row.update({'pair':pair} if trade else {'environment':grant['environment']})
-                save_secret(path,json.dumps(row))
-            return {'message':'Provider connection saved. Reconnect explicitly; orders and delivery remain disabled.'}
+            from .desktop_provider_grants import ProviderGrantInstaller
+            installer=ProviderGrantInstaller(self.folder,self.credentials,self.alerts_credentials,
+                getattr(self,'provider_destination','alerts'),self.intent_publisher,self.require_oauth_owner,
+                self.account_lookup,self.alerts_lookup,lambda:self.connection_client().saved(),lambda:client.generation)
+            return await installer.install(grant,identity,generation)
 
     async def shutdown(self):
         await self.stop_oauth_jobs()

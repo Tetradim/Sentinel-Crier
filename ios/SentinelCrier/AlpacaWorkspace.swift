@@ -452,7 +452,7 @@ final class AlpacaWorkspace: ObservableObject {
             do { order = try await api.order(clientID: submission.id) }
             catch AlpacaError.http(404) { order = nil }
             guard current() else { throw AlpacaError.invalid("Session changed; evidence discarded.") }
-            if let order { try RecoveryOrderEvidence.validate(order, ticket: submission.ticket) }
+            if let order { try RecoveryOrderEvidence.validate(order, ticket: submission.ticket, previous: submission.order) }
             evidence.append(RecoveryOrderEvidence(ticket: submission.ticket, order: order))
         }
         recoverySnapshot = RecoveryBrokerSnapshot(accountID: account.id, environment: selectedEnvironment, checkedAt: Date(), orders: evidence, positions: brokerPositions)
@@ -495,6 +495,7 @@ final class AlpacaWorkspace: ObservableObject {
         for submission in snapshot.submissions where executionJourney && submission.ticket.environment == environment && submission.ticket.accountID == account.id {
             guard foreground, generation == scopeGeneration, permit.isCurrent else { return }
             do { let order = try await api.order(clientID: submission.id)
+                guard foreground, generation == scopeGeneration, permit.isCurrent, self.api === api, !Task.isCancelled else { return }
                 try await journal.record(order, ticket: submission.ticket) }
             catch AlpacaError.http(404) { continue } // Unknown remains durable. 404 does not authorize resubmission.
         }
@@ -631,23 +632,9 @@ extension AlpacaWorkspace {
         defer { withExtendedLifetime(lease) {} }
         let client = makeClient(pinnedEnvironment, try loadCredentials(pinnedEnvironment))
         defer { client.invalidate() }
-        let current = try await client.account()
-        guard current.id == pinned else { throw AlpacaError.invalid("Authenticated account changed. Setup refused.") }
-        for model in journals {
-            if let controller = model.intent, controller.state.accountID == pinned {
-                try await ManagedAccountBank.verifyJournal(controller.journalFile, api: client, scope: scope, bank: (try bank.enabled(scope)) ? bank : nil, route: model.routeStorage?.route.id ?? "legacy")
-            }
-            if let file = model.manualJournalFile { try await ManagedAccountBank.verifyManual(file, api: client, scope: scope) }
-        }
-        let positions = try ManagedAccountBank.positions(await client.positions())
-        let refreshed = try await client.account()
-        guard foreground, generation == scopeGeneration, account == nil, refreshed.id == pinned, !Task.isCancelled else { throw AlpacaError.invalid("Account or foreground session changed during setup.") }
-        let funds = try ManagedAccountBank.funds(refreshed)
-        try bank.enable(scope, cash: funds.cash, equity: funds.equity, positions: positions)
-        try bank.inventory(scope, positions: positions)
-        try intent.persistBankJournal()
-        try bank.register(scope, route: route.id, journal: intent.journalFile, pairing: pairing.fingerprint)
-        for model in journals { try model.intent?.installAccountBank(bank, route: model.routeStorage?.route.id ?? "legacy") }
+        let evidence = journals.map { AccountBankRecovery.Journal(intent: $0.intent, manualFile: $0.manualJournalFile, route: $0.routeStorage?.route.id ?? "legacy") }
+        try await AccountBankRecovery.setup(bank: bank, scope: scope, route: route.id, intent: intent, pairing: pairing, journals: evidence, client: client,
+            stillCurrent: { [self] in foreground && generation == scopeGeneration && account == nil && !Task.isCancelled })
         message = "Account ID bank enabled. Pools default to zero. Reconnect each route and explicitly resume entries after saving its pools."
     }
     func checkAccountBank(repair: Bool) async throws {
@@ -667,147 +654,5 @@ extension AlpacaWorkspace {
     func configureBank(asset: String, mode: String, value: String, fee: String) throws {
         guard let bank, let route = routeRegistry?.routes.first(where: { $0.id == routeStorage?.route.id }), let account = route.account, let environment = route.environment else { throw AlpacaError.invalid("Connect this route first.") }
         try bank.configure(BankScope(account: account, environment: environment), route: route.id, asset: asset, mode: mode, value: value, fee: fee)
-    }
-}
-
-struct AlpacaConnectionForm: View {
-    @EnvironmentObject var model: AlpacaWorkspace
-    @State private var key = ""
-    @State private var secret = ""
-    var body: some View {
-        Section("Alpaca personal Trading API") {
-            Picker("Environment", selection: $model.environment) {
-                Text("Paper • simulated funds").tag(AlpacaEnvironment.paper)
-                Text("Live • real money").tag(AlpacaEnvironment.live)
-            }.disabled(model.account != nil || model.busy)
-            Text(model.environment == .paper
-                 ? "Paper uses simulated funds. Use API keys from your Alpaca paper account."
-                 : "Live orders use real money. Use API keys from your Alpaca live account; every manual order requires final confirmation.")
-                .font(.footnote)
-            Text("Keep Crier open for monitoring, following trades and Discord delivery. These pause when iOS suspends the app.")
-                .font(.footnote)
-            SecureField("API key ID", text: $key).textInputAutocapitalization(.never).autocorrectionDisabled()
-            SecureField("API secret", text: $secret).textInputAutocapitalization(.never).autocorrectionDisabled()
-            Button("Save & connect (or use saved keys)") { Task { await model.connect(key: key, secret: secret); key = ""; secret = "" } }.disabled(model.busy)
-            if model.account != nil {
-                Button("Disconnect") { model.disconnect() }.disabled(model.busy)
-            }
-            Button("Remove this environment’s credentials", role: .destructive) { model.disconnect(removeCredentials: true) }.disabled(model.busy)
-            Text(model.message).font(.footnote)
-            Text("Webull Connect approval pending. Tradier is not integrated. No brokerage password is requested.").font(.footnote).foregroundStyle(.secondary)
-        }
-        if model.purpose == .trade || model.purpose == .follow {
-            IntentConnectionForm()
-            if model.legacyRoute && (try? model.savedPairing()) == nil { MirrorConnectionForm() }
-        }
-    }
-}
-struct AlpacaTradingView: View {
-    @EnvironmentObject var model: AlpacaWorkspace
-    @State private var symbol = ""
-    @State private var expiration = ""
-    @State private var options = false
-    @State private var contractID = ""
-    @State private var quantity = 1
-    @State private var limit = ""
-    @State private var sell = false
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    HStack(alignment: .firstTextBaseline) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("ORDER TICKET").font(.caption.weight(.semibold)).tracking(1.5).foregroundStyle(.secondary)
-                            Text(sell ? "Close position" : "Open position").font(.title2.weight(.bold))
-                        }
-                        Spacer()
-                        Text(model.environment.rawValue.uppercased())
-                            .font(.caption.weight(.bold)).padding(8)
-                            .background(Color.blue.opacity(0.16), in: Capsule())
-                    }
-                    Text("Alpaca • Limit order • Day duration")
-                        .font(.caption).foregroundStyle(.secondary)
-                    if model.account == nil {
-                        Label("Connect an account before reviewing an order", systemImage: "info.circle")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    }
-                }
-                Section("Instrument") {
-                    Picker("Asset type", selection: $options) {
-                        Text("Stocks").tag(false)
-                        Text("Options").tag(true)
-                    }.pickerStyle(.segmented)
-                    TextField("Underlying / stock symbol", text: $symbol).textInputAutocapitalization(.characters).autocorrectionDisabled()
-                    if options {
-                        TextField("Expiration YYYY-MM-DD", text: $expiration).keyboardType(.numbersAndPunctuation)
-                        Button("Discover option contracts") { Task { await model.discover(symbol: symbol, expiration: expiration) } }
-                        Picker("Contract", selection: $contractID) {
-                            Text("Choose contract").tag("")
-                            ForEach(model.contracts) { Text($0.name).tag($0.id) }
-                        }
-                        if let selected = model.contracts.first(where: { $0.id == contractID }) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack {
-                                    Text(selected.type.uppercased()).font(.caption.weight(.bold))
-                                    Spacer()
-                                    Text("Strike $" + selected.strike_price).monospacedDigit()
-                                }
-                                Text("Expires " + selected.expiration_date).font(.subheadline)
-                                Text(selected.symbol).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                            }.padding(.vertical, 6)
-                                .accessibilityElement(children: .combine)
-                        } else {
-                            Text("Discover and choose an exact contract before reviewing. No bid/ask quote is supplied by this selector.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }.disabled(model.busy || model.review != nil)
-                Section("Order details") {
-                    Picker("Order side", selection: $sell) {
-                        Text(options ? "Buy to open" : "Buy shares").tag(false)
-                        Text(options ? "Sell to close" : "Sell shares").tag(true)
-                    }.pickerStyle(.segmented)
-                    Stepper("\(options ? "Contracts" : "Shares"): \(quantity)", value: $quantity, in: 1...1000)
-                        .monospacedDigit()
-                    TextField(options ? "Limit premium per share" : "Limit price per share", text: $limit).keyboardType(.decimalPad)
-                    if options {
-                        Text("Standard contracts represent 100 shares. Premium × 100 × contracts determines limit notional, before fees.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Button("Review order") {
-                        Task { await model.prepare(symbol: symbol, quantity: quantity, limit: limit, sell: sell, contract: options ? model.contracts.first(where: { $0.id == contractID }) : nil) }
-                    }.buttonStyle(.borderedProminent).controlSize(.large)
-                        .accessibilityIdentifier("crier.order.review")
-                        .disabled(model.account == nil || (options && !model.contracts.contains(where: { $0.id == contractID })))
-                }.disabled(model.busy || model.review != nil)
-                if let ticket = model.review {
-                    Section("Final confirmation • \(ticket.environment.rawValue.uppercased())") {
-                        Text("\(ticket.side.uppercased()) \(ticket.quantity) \(ticket.symbol) @ $\(NSDecimalNumber(decimal: ticket.limitPrice).stringValue)")
-                            .font(.headline).monospacedDigit().textSelection(.enabled)
-                        Text("Limit notional: $\(NSDecimalNumber(decimal: ticket.limitPrice * Decimal(ticket.quantity * ticket.multiplier)).stringValue). Fees excluded; execution not guaranteed.")
-                        Text("Account: \(ticket.accountID)").font(.caption).textSelection(.enabled)
-                        Text("Client ID: \(ticket.id)").font(.caption).textSelection(.enabled)
-                        Button(ticket.environment == .live ? "CONFIRM REAL-MONEY ORDER" : "Confirm paper order", role: ticket.environment == .live ? .destructive : nil) { Task { await model.confirm(ticket) } }.disabled(model.busy)
-                        Button("Discard review") { model.review = nil }.disabled(model.busy)
-                    }
-                }
-                Section { Text(model.message).font(.footnote) }
-                if let intent = model.intent { IntentTradesView(controller: intent) }
-                Section("Saved orders • pull to reconcile") {
-                    ForEach(model.submissions.reversed()) { submission in
-                        VStack(alignment: .leading) {
-                            Text("\(submission.ticket.symbol) • \(submission.state)")
-                            Text(submission.id).font(.caption).textSelection(.enabled)
-                            if submission.order != nil {
-                                Button("Request cancellation", role: .destructive) { Task { await model.cancel(submission) } }.disabled(model.busy)
-                            }
-                        }
-                    }
-                }
-            }.scrollContentBackground(.hidden)
-                .background(Color(red: 0.035, green: 0.045, blue: 0.06))
-                .navigationTitle("Trade").navigationBarTitleDisplayMode(.inline)
-                .refreshable { await model.refresh() }
-        }
     }
 }

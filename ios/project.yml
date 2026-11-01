@@ -24,6 +24,9 @@ targets:
       - path: SentinelCrier/ManagedAccountBank.swift
       - path: SentinelCrier/AccountIDBankView.swift
       - path: SentinelCrier/ConnectionRoutes.swift
+      - path: SentinelCrier/AccountBankRecovery.swift
+      - path: SentinelCrier/CrierAccountHome.swift
+      - path: SentinelCrier/CrierOrdersView.swift
       - path: SentinelCrier/AlpacaWorkspace.swift
       - path: SentinelCrier/RecoveryEvidence.swift
       - path: SentinelCrier/GuidedSetup.swift
@@ -33,6 +36,18 @@ targets:
       - path: SentinelCrier/MirrorConnection.swift
       - path: SentinelCrier/IntentDiagnostics.swift
       - path: SentinelCrier/CopyDashboard.swift
+      - path: SentinelCrier/IntentEntryAuthorization.swift
+      - path: SentinelCrier/IntentModels.swift
+      - path: SentinelCrier/IntentExecution.swift
+      - path: SentinelCrier/IntentTelemetry.swift
+      - path: SentinelCrier/IntentTransport.swift
+      - path: SentinelCrier/AlpacaConnectionForm.swift
+      - path: SentinelCrier/AlpacaTradingView.swift
+      - path: SentinelCrier/CrierRecoveryView.swift
+      - path: SentinelCrier/CrierPositionsView.swift
+      - path: SentinelCrier/CrierExecutionsView.swift
+      - path: SentinelCrier/CrierConnectionsView.swift
+      - path: SentinelCrier/CrierSettingsView.swift
       - path: SentinelCrier/IntentMirroring.swift
       - path: SentinelCrier/IntentViews.swift
       - path: SentinelCrier/QuickConnection.swift

@@ -59,6 +59,36 @@ final class AlpacaTests: XCTestCase {
         do { try await journal.record(wrong, ticket: request); XCTFail("Wrong quantity accepted") } catch {}
         let snapshot = await journal.snapshot(); XCTAssertEqual(snapshot.submissions.first?.state, "unknown")
     }
+    func testReconciliationPreservesPartialFillAcrossStaleCancellationAndRestart() async throws {
+        let url = file(); defer { try? FileManager.default.removeItem(at: url) }
+        let journal = try AlpacaJournal(file: url); let request = ticket()
+        try await journal.begin(request)
+        func proof(_ status: String, _ filled: String, id: String = "broker-1", average: String? = "2") -> AlpacaOrder {
+            AlpacaOrder(id: id, client_order_id: request.id, symbol: "AAPL", status: status, qty: "2", limit_price: "2", filled_qty: filled, filled_avg_price: filled == "0" ? nil : average, side: "buy")
+        }
+        try await journal.record(proof("partially_filled", "1"), ticket: request)
+        let retained = try Data(contentsOf: url)
+        for stale in [proof("canceled", "0"), proof("canceled", "1", id: "different-broker"), proof("new", "0.5")] {
+            do { try await journal.record(stale, ticket: request); XCTFail("Contradictory broker proof accepted") } catch {}
+            XCTAssertEqual(try Data(contentsOf: url), retained)
+        }
+        let restarted = try AlpacaJournal(file: url)
+        let snapshot = await restarted.snapshot()
+        XCTAssertEqual(snapshot.submissions.first?.order?.filled_qty, "1")
+        try await restarted.record(proof("canceled", "1"), ticket: request)
+        let canceled = try Data(contentsOf: url)
+        do { try await restarted.record(proof("new", "1"), ticket: request); XCTFail("Terminal order reopened") } catch {}
+        XCTAssertEqual(try Data(contentsOf: url), canceled)
+        let missingAverage = proof("canceled", "1", average: nil)
+        let changedAverage = proof("canceled", "1", average: "9")
+        for contradictory in [missingAverage, changedAverage] {
+            do { try await restarted.record(contradictory, ticket: request); XCTFail("Economic evidence erased") } catch {}
+            XCTAssertEqual(try Data(contentsOf: url), canceled)
+        }
+        try await restarted.record(proof("filled", "2"), ticket: request) // Valid late terminal fill remains tracked.
+        let late = await restarted.snapshot()
+        XCTAssertEqual(late.submissions.first?.order?.filled_qty, "2")
+    }
     func testFillDeduplicationConflictAndAccountIsolation() async throws {
         let url = file(); defer { try? FileManager.default.removeItem(at: url) }
         let journal = try AlpacaJournal(file: url)

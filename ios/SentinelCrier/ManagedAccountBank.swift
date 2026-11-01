@@ -88,12 +88,9 @@ import Foundation
             if row.state.hasPrefix("rejected HTTP ") && row.order == nil { continue }
             do {
                 let proof = try await api.order(clientID: row.ticket.id)
-                guard proof.symbol == row.ticket.symbol, proof.side == row.ticket.side,
-                      proof.client_order_id == row.ticket.id, proof.qty.flatMap({ try? AccountIDBank.whole($0) }) == row.ticket.quantity,
-                      proof.limit_price.flatMap({ Decimal(string: $0) }) == row.ticket.limitPrice,
-                      AccountIDBank.terminal.contains(proof.status), let filled = try? AccountIDBank.whole(proof.filled_qty), filled >= 0, filled <= row.ticket.quantity,
-                      row.order == nil || row.order?.id == proof.id,
-                      filled >= ((try? AccountIDBank.whole(row.order?.filled_qty ?? "0")) ?? 0) else { throw AlpacaError.invalid("Manual journal needs broker reconciliation.") }
+                try RecoveryOrderEvidence.validate(proof, ticket: row.ticket, previous: row.order)
+                guard AccountIDBank.terminal.contains(proof.status),
+                      let filled = try? AccountIDBank.whole(proof.filled_qty) else { throw AlpacaError.invalid("Manual journal needs broker reconciliation.") }
                 held[proof.symbol, default: 0] += proof.side == "sell" ? -filled : filled
             } catch { failures.append(row.ticket.id + ": " + error.localizedDescription) }
         }

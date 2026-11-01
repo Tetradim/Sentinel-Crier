@@ -158,17 +158,17 @@ import XCTest
     private func controller(_ folder: URL, bank: AccountIDBank, api: AlpacaREST, session: URLSession, state supplied: IntentState? = nil) throws -> IntentController {
         let pair = IntentPairing(url: URL(string: "https://synthetic.invalid/intent")!, token: String(repeating: "x", count: 32), environment: .paper, role: "host")
         let file = folder.appendingPathComponent("intent.json")
+        let newCommand = supplied == nil && !FileManager.default.fileExists(atPath: file.path)
         if let supplied { try JSONEncoder().encode(supplied).write(to: file) }
-        else if !FileManager.default.fileExists(atPath: file.path) {
-            let e = IntentEvent.make(trade: UUID().uuidString.lowercased(), sequence: 1, action: "enter", environment: .paper, symbol: "AAPL", asset: "stock", quantity: 2, price: "10")
-            var trade = IntentTrade(); trade.desired = e; trade.policySnapshot = .legacy(e)
-            var state = IntentState(); state.accountID = "synthetic"; state.pairingID = pair.fingerprint; state.trades[e.trade_id] = trade
+        else if newCommand {
+            var state = IntentState(); state.accountID = "synthetic"; state.pairingID = pair.fingerprint
             try JSONEncoder().encode(state).write(to: file)
         }
         let controller = try IntentController(file: file, session: session)
         try controller.installAccountBank(bank, route: "alice")
         try bank.register(BankScope(account: "synthetic", environment: .paper), route: "alice", journal: file, pairing: pair.fingerprint)
         try controller.connect(api: api, account: "synthetic", pairing: pair, startWorkers: false)
+        if newCommand { _ = try controller.host(symbol: "AAPL", asset: "stock", quantity: 2, price: "10") }
         return controller
     }
     func testStockUsesCommonCashAndOptionCapDebitsTheSameLedger() async throws {
@@ -234,6 +234,7 @@ import XCTest
         let e = IntentEvent.make(trade: UUID().uuidString.lowercased(), sequence: 1, action: "enter", environment: .paper, symbol: "AAPL", asset: "stock", quantity: 2, price: "10")
         var trade = IntentTrade(); trade.desired = e; trade.policySnapshot = .legacy(e); saved.trades[e.trade_id] = trade
         let second = try controller(folder, bank: bank, api: api.freshClient(customer: nil), session: session, state: saved)
+        _ = try second.host(symbol: "AAPL", asset: "stock", quantity: 2, price: "10", tradeID: e.trade_id)
         await second.process()
         XCTAssertEqual(fixture.posts, 1, second.message)
         XCTAssertEqual(try bank.snapshot(scope).orders.count, 1)
@@ -254,6 +255,50 @@ import XCTest
         XCTAssertThrowsError(try bank.reserve(scope, route: "alice", trade: lot.trade, event: "reopen", cid: replay, symbol: "AAPL", asset: "stock", multiplier: 1, sell: false, quantity: 1, price: "10", ordinal: 0, cash: 1000, equity: 1000))
         controller.disconnect(); await controller.drainStoppedWork()
     }
+    func testUndispatchedHostEntryCannotExecuteAfterFlatRepairAndReconnect() async throws {
+        let (folder, bank, api, session, fixture) = try fixture()
+        let scope = BankScope(account: "synthetic", environment: .paper)
+        try bank.configure(scope, route: "alice", asset: "stock", mode: "units", value: "10", fee: "0")
+        let first = try controller(folder, bank: bank, api: api, session: session)
+        // Revoke synchronously before the host's scheduled processing task can run.
+        try first.pauseEntriesForBankTransition()
+        first.disconnect(); await first.drainStoppedWork()
+        try await ManagedAccountBank(bank: bank, scope: scope, route: "alice").check(api: api.freshClient(customer: nil), repair: true)
+        let restored = try controller(folder, bank: bank, api: api.freshClient(customer: nil), session: session)
+        await restored.process()
+        XCTAssertEqual(fixture.posts, 0, restored.message)
+        XCTAssertTrue(restored.state.preferences.paused)
+        // A new deliberate host command is permitted despite follower pause.
+        _ = try restored.host(symbol: "AAPL", asset: "stock", quantity: 2, price: "10")
+        await restored.process()
+        XCTAssertEqual(fixture.posts, 1, restored.message)
+        restored.disconnect(); await restored.drainStoppedWork()
+    }
+
+    func testStaleManualCancellationCannotHideHoldingsDuringBankAdmission() async throws {
+        let (folder, _, api, _, fixture) = try fixture()
+        let file = folder.appendingPathComponent("manual.json")
+        let journal = try AlpacaJournal(file: file)
+        let ticket = AlpacaTicket(id: "manual-client", environment: .paper, accountID: "synthetic", symbol: "AAPL", quantity: 2, limitPrice: 10, side: "buy", positionIntent: nil, multiplier: 1, reviewedAt: Date())
+        try await journal.begin(ticket)
+        let partial = AlpacaOrder(id: "manual-broker", client_order_id: ticket.id, symbol: "AAPL", status: "partially_filled", qty: "2", limit_price: "10", filled_qty: "2", filled_avg_price: "10", side: "buy")
+        try await journal.record(partial, ticket: ticket)
+        fixture.legacyProof = AlpacaOrder(id: partial.id, client_order_id: ticket.id, symbol: "AAPL", status: "canceled", qty: "2", limit_price: "10", filled_qty: "0", filled_avg_price: nil, side: "buy")
+        let retained = try Data(contentsOf: file)
+        let controller = try IntentController(file: folder.appendingPathComponent("manual-intent.json"))
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        let workspace = AlpacaWorkspace(journal: journal, intentController: controller, defaults: defaults,
+            webhook: { nil }, loadIntentPairing: { nil }, makeClient: { _, _ in api },
+            loadCredentials: { _ in AlpacaCredentials(key: "synthetic", secret: "synthetic") }, loadCustomer: { nil })
+        workspace.selectPurpose(.trade)
+        await workspace.connect(key: "", secret: "") // Actual refresh path must reject before overwriting journal.
+        XCTAssertTrue(workspace.message.contains("regressed"), workspace.message)
+        XCTAssertEqual(try Data(contentsOf: file), retained)
+        do { try await ManagedAccountBank.verifyManual(file, api: api, scope: BankScope(account: "synthetic", environment: .paper)); XCTFail("Stale zero fill hid Crier holdings") } catch {}
+        XCTAssertEqual(try Data(contentsOf: file), retained)
+        XCTAssertEqual(fixture.posts, 0)
+    }
+
     func testLegacyOpenLotRefusesAdmissionWithoutChangingJournal() async throws {
         let (folder, bank, api, session, fixture) = try fixture()
         let controller = try controller(folder, bank: bank, api: api, session: session)
