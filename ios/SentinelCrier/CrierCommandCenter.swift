@@ -30,14 +30,16 @@ struct CrierCommandCenter: View {
                     ForEach(routes.registry.routes) { route in Text(route.name).tag(route.id) }
                 }.pickerStyle(.menu).labelsHidden()
                     .font(.subheadline).lineLimit(1)
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .layoutPriority(1).disabled(connections.busy)
+                    .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44, alignment: .leading)
+                    .disabled(connections.busy)
                 Button { do { try routes.add() } catch { routeError = error.localizedDescription } } label: {
                     Image(systemName: "plus.circle").frame(minWidth: 44, minHeight: 44)
                 }.accessibilityLabel("Add connection").disabled(connections.busy)
                 Button { showAccountBank = true } label: { Image(systemName: "number.square").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Account ID bank")
-                Button("Stop all", role: .destructive) { Task { await routes.stopAll() } }
-                    .frame(minHeight: 44)
+                Button(role: .destructive) { Task { await routes.stopAll() } } label: {
+                    Image(systemName: "stop.circle").frame(width: 44, height: 44)
+                }.accessibilityLabel("Stop all")
+                    .accessibilityHint("Stops all retained connections and workers")
             }.padding(.horizontal, 16)
             Divider()
             if !routeError.isEmpty { Text(routeError).font(.caption) }

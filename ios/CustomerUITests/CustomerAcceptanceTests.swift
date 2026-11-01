@@ -15,6 +15,9 @@ final class CustomerAcceptanceTests: XCTestCase {
     func testCaptureDisconnectedWorkspace() {
         let app = XCUIApplication(); app.launch()
         XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["Stop all"].isHittable)
+        XCTAssertTrue(app.buttons["Add connection"].isHittable)
+        XCTAssertTrue(app.buttons["Account ID bank"].isHittable)
         capture("ios-home-disconnected", app: app)
         app.tabBars.buttons["Positions"].tap()
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5))
