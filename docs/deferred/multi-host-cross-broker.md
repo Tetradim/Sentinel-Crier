@@ -1,6 +1,6 @@
 # D.1 — Multiple Hosts, Connections, and Cross-Broker Copying
 
-Status: **October 29, 2026: concurrent independent Alpaca routes are implemented on Windows, iOS and Android. Windows main now adds opt-in shared-account coordination through the [account ID bank](../account-id-bank.md). Native shared-account receiver parity and additional execution adapters remain unfinished.**
+Status: **October 29, 2026: concurrent independent Alpaca routes are implemented on Windows, iOS and Android. All three platforms now implement opt-in shared-account coordination through the [account ID bank](../account-id-bank.md). Additional execution adapters and cross-installation account coordination remain deferred.**
 
 See [current routing guide](../multiple-connections.md) and [implementation plan](../superpowers/plans/2026-10-29-multiple-connections.md). The research below describes the full requested scope, not a claim that every broker/route is available.
 

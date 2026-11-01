@@ -6,6 +6,8 @@ The approved customer-ease phases E–I, live-policy phase J, reconciliation pha
 
 The owner explicitly deferred physical iPhone/Mac and Apple/Webull provider work on October 31; see the [recorded deferral](deferred/2026-10-31-owner-provider-acceptance.md). These checks remain unpassed and do not block independent implementation or Windows release work.
 
+**November 1 accepted delivery:** shared-account banks and guided verified-flat recovery are implemented and automatically verified on Windows, iOS and Android. Windows 0.5.0 and the signed Android 0.5.0 package are published. [Results, source revisions, release links and simulator screenshots](acceptance/2026-11-01/account-bank/README.md).
+
 Phase L's [completed plan](superpowers/plans/2026-10-26-push-dashboard.md) and [accepted evidence](acceptance/2026-10-26/push-dashboard/source-evidence.json) record push delivery, the read-only dashboard, hosted deployment and an isolated synthetic probe. See the [usage guide](push-dashboard.md). The following external work remains unpassed:
 
 - Webull Connect approval, issued integration details and real authorized integration testing.

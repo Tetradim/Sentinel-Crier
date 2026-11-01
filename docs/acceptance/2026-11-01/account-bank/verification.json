@@ -1,0 +1,48 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "e6efcf30a761275dbcc559849ed5cbedeb14666a",
+  "ui_source_commit": "1939d79",
+  "windows_release_source": "13a7aacd7a5510e2973a2bf2b41a2f2d6ea52a5a",
+  "tests": {
+    "windows_python_passed": 1291,
+    "windows_python_skipped": 1,
+    "ios_native_passed": 196,
+    "android_unit_passed": 187
+  },
+  "native_acceptance_run": 41281738881,
+  "windows_publication_run": 41281626819,
+  "android_signed_package_run": 41231839666,
+  "release": "https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.5.0",
+  "checks": {
+    "windows_artifact_hashes": true,
+    "android_artifact_hashes": true,
+    "update_catalog_ed25519": true,
+    "real_040_update_discovery": true,
+    "installer_acceptance": true,
+    "stop_all_visible": true
+  },
+  "screenshots": [
+    {
+      "file": "ios-home-disconnected.png",
+      "sha256": "2abe8290ad089cdb4bcef7c450483ccdff7cda7543beb333662d3112e20e19a3",
+      "bytes": 277107
+    },
+    {
+      "file": "ios-positions-disconnected.png",
+      "sha256": "d7366446809414d840576dc101dddf1bbf85e4bdf97f02bc9d1656c93b8e7826",
+      "bytes": 184735
+    },
+    {
+      "file": "ios-recovery-disconnected.png",
+      "sha256": "124a6791fb87b7d45cf3ee0e7d2615104a36ff5f37a53772824fdd698e6b8a3c",
+      "bytes": 311728
+    },
+    {
+      "file": "ios-markets-disconnected.png",
+      "sha256": "033844c91510b1604072a33cdf90b61bf2a2427af772e4f66df5dfaf1c2cc4e1",
+      "bytes": 211801
+    }
+  ],
+  "external_acceptance": "deferred_by_owner",
+  "deferral": "docs/deferred/2026-10-31-owner-provider-acceptance.md"
+}
