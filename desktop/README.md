@@ -4,9 +4,15 @@ Native Windows app with read-only Alpaca fill alerts and optional submission-tim
 mirroring with iPhone and Android. It supports Alpaca paper/live accounts. Webull
 Connect is not implemented in this desktop release.
 
+## Mobile-style Windows workspace
+
+Windows 0.5.2 uses the mobile app's dark palette and account-first layout. The bottom navigation opens **Home**, **Markets**, **Trade**, **Positions** and **Orders**. **Account** opens setup, pairing, allocation, alerts, recovery, support and updates. The account selector and **Stop all** remain visible across pages.
+
+**Stop all** disconnects every local connection and invalidates pending reconnect callbacks. It does not cancel existing broker orders or liquidate positions. Reconnect deliberately before enabling new entries again. Home displays unavailable balances explicitly; Markets does not invent a chart feed.
+
 ## Alerts only — no mirroring setup
 
-1. Open **Start here → Send my fills to Discord** (or the **Alerts setup** tab).
+1. Open **Home → Send my fills to Discord** (or **Account → Alerts setup**).
 2. Choose paper or live and enter your own Alpaca key and secret. Live read access requires explicit permission. Choose **Connect / use saved keys**; the app discovers and verifies the account. Future connections can leave both key fields blank to reuse the same saved alerts account/environment.
 3. After account verification, choose **Set up Discord: preview, test, enable**. Save your destination and format, then use the guided **Preview saved format** and optional **Send labeled test** actions. Inspect the test result; an uncertain acknowledgement requires checking Discord before retrying. Choose **Enable real alerts** when ready; pending alerts may then send. A successful test is not a mandatory gate.
 4. Keep the PC awake and Crier running. The first complete fill fetch establishes a suppressed baseline; place a new paper trade after monitoring reports observing. Transient activity failures retain the cursor and show reconnecting rather than inventing fills.
@@ -17,8 +23,7 @@ A fresh alerts profile can bind never-attempted pending messages to its first ex
 
 ## Download and launch
 
-1. Download `SentinelCrier-Windows.zip` from the **Windows desktop** GitHub Actions
-   artifact, or use the locally built ZIP in `dist/`.
+1. Download the [Windows installer or portable ZIP](https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.5.2). The installer handles normal installation and upgrades. For the portable ZIP, continue below.
 2. Extract the entire ZIP to a normal folder. Keep `SentinelCrier.exe` and `_internal`
    together. Double-click `SentinelCrier.exe`. No separate Python install is required.
 
@@ -26,7 +31,7 @@ For Discord alerts only, follow the alerts setup above. For trade mirroring, con
 
 ## Tray and Windows sign-in options
 
-In **Start here → Windows background options**, enable **Keep Crier running in the tray** if closing its window should leave monitoring running. Both background options are off by default. The tray offers **Show Crier**, **Pause new entries**, and **Quit Crier**. Quit stops workers through the normal disconnect flow; existing broker orders remain. A failed or stopped tray restores the window. The PC still needs to stay awake.
+In **Account → Windows background options**, enable **Keep Crier running in the tray** if closing its window should leave monitoring running. Both background options are off by default. The tray offers **Show Crier**, **Pause new entries**, and **Quit Crier**. Quit stops workers through the normal disconnect flow; existing broker orders remain. A failed or stopped tray restores the window. The PC still needs to stay awake.
 
 **Open Crier at Windows sign-in** is available in the packaged Windows app. It registers only the current user's installed executable, with no credentials in the startup command. It always opens disconnected and does not authorize orders or publishing. Reconnect explicitly, then enable the permissions you want. If tray mode is also enabled and its icon starts successfully, the sign-in launch begins in the tray. Disabling tray mode restores the window. Uninstall removes Crier's matching startup registration and preserves journals and credentials as before.
 
@@ -34,14 +39,14 @@ Source users can install the optional tray dependencies with `python -m pip inst
 
 ## Follow another device's trades
 
-1. Open **Host / Receive**. Paste the invitation shared by the iPhone host.
+1. Open **Account → Host / Receive**. Paste the invitation shared by the iPhone host.
 2. Enter this PC account's Alpaca API key and secret. The account ID is discovered
    automatically. Paper credentials require a paper channel. Live channels require
    explicitly selecting **Allow connection to a live-money account**.
 3. Click **Receive / reconnect**. Confirm the environment, account ID and follower role shown at
    the top. Connecting always starts new entries paused.
-4. In **Pricing**, select exact-limit, bounded-limit or market pricing and save settings. In
-   **Trading & activity**, click **Enable new entries** when ready to receive trades.
+4. In **Account → Pricing & allocation**, select exact-limit, bounded-limit or market pricing and save settings. In
+   **Trade**, click **Enable new entries** when ready to receive trades.
 5. Place a trade **inside Crier on the iPhone**. Its order instruction travels through
    the relay immediately, without waiting for a host fill. PC activity shows the
    instruction and the PC account's own broker order status and filled quantity.

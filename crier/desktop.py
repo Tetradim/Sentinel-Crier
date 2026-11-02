@@ -23,6 +23,7 @@ class DesktopApp:
         self.presence = presence
         self.pending = []
         self.connection_jobs = set()
+        self.action_epoch = 0
         self.poll = None
         self.connected = False
         self.provider_purpose = 'alerts'
@@ -41,40 +42,39 @@ class DesktopApp:
         root.title('Sentinel Crier • Desktop')
         root.geometry('1080x780')
         root.minsize(850, 680)
-        style = ttk.Style(root)
-        if 'vista' in style.theme_names():
-            style.theme_use('vista')
-        style.configure('Title.TLabel', font=('Segoe UI', 22, 'bold'))
-        style.configure('Subtitle.TLabel', font=('Segoe UI', 10))
-        outer = ttk.Frame(root, padding=20)
-        outer.pack(fill='both', expand=True)
-        ttk.Label(outer, text='Sentinel Crier', style='Title.TLabel').pack(anchor='w')
-        ttk.Label(outer, text='Fill alerts, trade sharing and following — choose your setup.', style='Subtitle.TLabel').pack(anchor='w', pady=(0,12))
+        from .desktop_theme import install_theme
+        from .desktop_mobile_shell import MobileShell, markets_view, scroll_content
+        install_theme(root)
+        self.mobile_shell=MobileShell(root,navigate=self.show_mobile_page,stop=self.stop_all_connections,
+                                     account=lambda:self.show_mobile_page('Account'),bank=self.account_bank,add=self.add_route)
+        outer=self.mobile_shell.content
         if hasattr(worker, 'connections'):
-            routes = ttk.Frame(outer)
-            routes.pack(fill='x', pady=(0, 8))
-            ttk.Label(routes, text='Connection (Alpaca):').pack(side='left')
-            self.route_choice = ttk.Combobox(routes, state='readonly', width=40)
-            self.route_choice.pack(side='left', padx=8)
+            routes = self.mobile_shell.route_holder
+            self.route_choice = ttk.Combobox(routes, state='readonly', width=16)
+            self.route_choice.pack(side='left',fill='x',expand=True)
             self.route_choice.bind('<<ComboboxSelected>>', self.select_route)
-            ttk.Button(routes, text='Add connection', command=self.add_route).pack(side='left')
-            ttk.Button(routes, text='Account ID bank', command=self.account_bank).pack(side='left',padx=8)
             self.refresh_routes()
         self.summary = tk.StringVar(value='Disconnected • Choose a setup to begin')
         self.connection_title=tk.StringVar(value='Disconnected')
         self.connection_detail=tk.StringVar(value='Connect an account and pairing to begin.')
-        ttk.Label(outer,textvariable=self.connection_title,font=('Segoe UI',14,'bold')).pack(anchor='w')
-        ttk.Label(outer,textvariable=self.connection_detail,wraplength=1000).pack(anchor='w',pady=(0,4))
-        ttk.Label(outer, textvariable=self.summary, wraplength=1000).pack(anchor='w', pady=(0,12))
-        ttk.Button(outer,text='Support',command=self.open_support).pack(anchor='e',pady=(0,4))
         self.update_banner=ttk.Frame(outer,padding=8)
         self.startup_update_text=tk.StringVar(value='')
         ttk.Label(self.update_banner,textvariable=self.startup_update_text).pack(side='left')
         ttk.Button(self.update_banner,text='Review update',command=self.review_startup_update).pack(side='left',padx=8)
         ttk.Button(self.update_banner,text='Dismiss',command=self.dismiss_startup_update).pack(side='left')
-        tabs = self.tabs = ttk.Notebook(outer)
+        self.notice = tk.StringVar(value='Choose Account to set up or reconnect. New entries require explicit enable.')
+        self.notice_label=ttk.Label(outer,textvariable=self.notice,wraplength=1000,style='Muted.TLabel')
+        self.notice_label.pack(side='bottom',fill='x',pady=(6,0))
+        self.notice_label.bind('<Configure>',lambda event:self.notice_label.configure(wraplength=max(200,event.width)))
+        tabs = self.tabs = ttk.Notebook(outer,style='Mobile.TNotebook')
         tabs.pack(fill='both', expand=True)
-        start = ttk.Frame(tabs, padding=14)
+        start = self.start_tab = ttk.Frame(tabs, padding=8)
+        self.account_tab=ttk.Frame(tabs,padding=10)
+        self.account_content=scroll_content(self.account_tab)
+        self.markets_tab=ttk.Frame(tabs,padding=10)
+        tabs.add(self.account_tab,text='Account')
+        tabs.add(self.markets_tab,text='Markets')
+        markets_view(self.markets_tab,self.show_mobile_page)
         self.alerts_tab = ttk.Frame(tabs, padding=14)
         tabs.add(start, text='Start here')
         tabs.add(self.alerts_tab, text='Alerts setup')
@@ -99,8 +99,6 @@ class DesktopApp:
         self.setup_tab = setup
         tabs.select(start)
         self._start(start)
-        if self.presence is not None:
-            self._presence_controls(start)
         customer = ttk.Frame(tabs,padding=14)
         tabs.add(customer,text='Provider sign-in')
         self._customer(customer)
@@ -120,11 +118,13 @@ class DesktopApp:
         self.build_updates(updates)
         self._health(connection_health)
         self._diagnostics(timeline)
-        self.notice = tk.StringVar(value='Choose Send my fills to Discord, Trade/share trades, or Follow trades in Start here.')
+        self.build_account_hub(copy_tab,pricing,customer)
+        if self.presence is not None:
+            self._presence_controls(self.account_content)
         root.report_callback_exception=self.report_callback_error
-        ttk.Label(outer, textvariable=self.notice, wraplength=1000).pack(anchor='w', pady=(12,0))
-        ttk.Label(outer, text='Keep this PC awake. Closing stops Crier unless tray mode is enabled. Quit stops monitoring; broker orders remain.',
-                  style='Subtitle.TLabel').pack(anchor='w', pady=(6,0))
+        self.tabs.bind('<<NotebookTabChanged>>',lambda event:self.sync_mobile_navigation())
+        self.trading_navigation.bind('<<NotebookTabChanged>>',lambda event:self.sync_mobile_navigation())
+        self.show_mobile_page('Home')
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.bind('<F1>',lambda event:self.open_practice())
         if self.presence is not None:
@@ -144,10 +144,14 @@ class DesktopApp:
         self.route_choice.current(next(i for i, row in enumerate(self.route_rows) if row['id'] == self.worker.connections.selected))
 
     def reset_route_view(self):
+        self.action_epoch += 1
         self.poll = None
         self.latest = {}
         self.connected = False
-        self.connection_jobs = set()
+        self.mobile_shell.render({})
+        self.home_overview.render({})
+        stop=getattr(self,'stop_job',None)
+        self.connection_jobs = {stop} if stop is not None and not stop.done() else set()
         self.setup_progress = SetupProgress()
         self.setup_dirty = False
         for name in ('key', 'secret', 'alerts_key', 'alerts_secret', 'pairing', 'invitation', 'delivery_webhook', 'customer_email', 'customer_password', 'provider_return', 'symbol', 'order_qty', 'price'):
@@ -192,6 +196,8 @@ class DesktopApp:
             self.notice.set(str(exc))
 
     def current_route_future(self, future):
+        if future is getattr(self,'stop_job',None): return True
+        if getattr(future,'ui_action_epoch',self.action_epoch)!=self.action_epoch:return False
         connections = getattr(self.worker, 'connections', None)
         return connections is None or getattr(future, 'route_id', connections.selected) == connections.selected
 
@@ -212,13 +218,58 @@ class DesktopApp:
         self.bank_views().show_account_bank(result)
 
     def _start(self, frame):
-        ttk.Label(frame, text='What would you like to do?', font=('Segoe UI', 16, 'bold')).pack(anchor='w', pady=12)
-        ttk.Label(frame, text='Choose a journey. Connections always require your explicit action.').pack(anchor='w', pady=8)
-        for label, purpose in [('Send my fills to Discord', 'alerts'), ('Trade/share trades', 'trade'), ('Follow trades', 'follow')]:
-            ttk.Button(frame, text=label, command=lambda p=purpose: self.choose_purpose(p)).pack(anchor='w', pady=8)
-        ttk.Label(frame, text='Other tools and existing recovery evidence remain available in the tabs above.', wraplength=700).pack(anchor='w', pady=12)
-        ttk.Button(frame,text='Optional paper practice / support (F1)',command=self.open_practice).pack(anchor='w',pady=4)
-        ttk.Button(frame,text='Test my connection (read-only)',command=self.test_connection).pack(anchor='w',pady=5)
+        from .desktop_mobile_shell import AccountHome
+        self.home_overview=AccountHome(frame,purpose=self.choose_purpose,navigate=self.show_mobile_page,
+                                       practice=self.open_practice,test_connection=self.test_connection)
+
+    def show_mobile_page(self,name):
+        if name in ('Trade','Positions','Orders'):
+            self.tabs.select(self.activity)
+            self.trading_navigation.select(('Trade','Positions','Orders').index(name))
+        else:
+            self.tabs.select({'Home':self.start_tab,'Markets':self.markets_tab,'Account':self.account_tab}[name])
+        self.mobile_shell.select(name)
+
+    def sync_mobile_navigation(self):
+        current=self.tabs.select()
+        if current==str(self.activity):
+            self.mobile_shell.select(('Trade','Positions','Orders')[self.trading_navigation.index('current')])
+        elif current==str(self.start_tab): self.mobile_shell.select('Home')
+        elif current==str(self.markets_tab): self.mobile_shell.select('Markets')
+        else:
+            self.mobile_shell.select('Account')
+            if current!=str(self.account_tab):self.mobile_shell.section.set(self.tabs.tab(current,'text'))
+
+    def build_account_hub(self,copy_tab,pricing,customer):
+        frame=self.account_content
+        ttk.Label(frame,text='Account & connections',style='Title.TLabel').pack(anchor='w',pady=(0,10))
+        ttk.Label(frame,textvariable=self.connection_title,style='Section.TLabel').pack(anchor='w')
+        ttk.Label(frame,textvariable=self.connection_detail,wraplength=700,style='Muted.TLabel').pack(anchor='w',pady=(0,12))
+        grid=ttk.Frame(frame);grid.pack(fill='x')
+        self.account_links={}
+        for i,(title,page) in enumerate([('Alerts setup',self.alerts_tab),('Host / Receive',self.setup_tab),('Pricing & allocation',pricing),
+                                       ('Copy dashboard',copy_tab),('Discord & receivers',self.delivery_tab),('Health & recovery',self.health_tab),('Provider sign-in',customer)]):
+            button=ttk.Button(grid,text=title,command=lambda p=page:self.tabs.select(p),style='Tertiary.TButton')
+            button.grid(row=i//2,column=i%2,sticky='ew',padx=(0,8),pady=4);grid.columnconfigure(i%2,weight=1)
+            self.account_links[title]=button
+        utilities=ttk.Frame(frame);utilities.pack(fill='x',pady=12)
+        ttk.Button(utilities,text='Updates & private backups',command=lambda:(self.tabs.select(self.health_tab),self.health_sections.select(self.updates_tab)),style='Tertiary.TButton').pack(side='left',padx=(0,8))
+        ttk.Button(utilities,text='Support',command=self.open_support,style='Tertiary.TButton').pack(side='left')
+        ttk.Label(frame,text='Keep this PC awake. Quit stops Crier; existing broker orders remain active.',wraplength=700,style='Muted.TLabel').pack(anchor='w',pady=8)
+
+    def stop_all_connections(self):
+        if self.closing or self.stopping_all():return
+        self.action_epoch += 1
+        method='disconnect_all' if hasattr(self.worker,'connections') else 'disconnect'
+        self.submit(method,callback=lambda result:self.notice.set('All connections stopped. Existing broker orders remain active.'))
+        self.stop_job=self.pending[-1][0]
+        self.connection_jobs.add(self.stop_job)
+        for button in self.host_buttons+self.execution_buttons:button.configure(state='disabled')
+        self.notice.set('Stopping all connections; waiting for in-flight work. Broker orders remain active.')
+
+    def stopping_all(self):
+        future=getattr(self,'stop_job',None)
+        return future is not None and not future.done()
 
     def test_connection(self):
         current=getattr(self,'connection_test_job',None)
@@ -736,7 +787,9 @@ class DesktopApp:
             self.notice.set('Invitation copied. Send it only to the intended receiver.')
 
     def quick_connect(self, role):
+        epoch=self.action_epoch
         def ready(result):
+            if epoch!=self.action_epoch or self.closing or self.stopping_all():return
             self.pairing.set(json.dumps(result['pair']))
             self.service.set(result['pair']['url'])
             self.host_environment.set(result['pair']['environment'])
@@ -744,7 +797,7 @@ class DesktopApp:
             self.share.set(result.get('invitation',''))
             if not self.connected:
                 # Pairing is already durable if broker credentials are not available yet.
-                self.root.after(0,self.connect)
+                self.root.after(0,lambda:self.connect() if epoch==self.action_epoch and not self.closing and not self.stopping_all() else None)
             else:
                 self.pairing.set('')
         if role=='host':
@@ -756,32 +809,39 @@ class DesktopApp:
         from .desktop_trading_views import TradingWorkspace
         view=TradingWorkspace(frame,send=self.submit,command=self.command,entry=self._entry)
         self.trading_navigation=view.navigation
+        self.trading_navigation.configure(style='Mobile.TNotebook')
         self.execution_buttons=view.execution_buttons
         self.host_buttons=view.host_buttons
         self.trades,self.orders=view.trades,view.orders
         self.symbol,self.order_qty,self.price,self.asset=view.symbol,view.order_qty,view.price,view.asset
 
     def _health(self, frame):
-        ttk.Label(frame,text='Connection health',font=('Segoe UI',14,'bold')).pack(anchor='w')
-        ttk.Label(frame,text='Last successes are evidence, not permission to trade. Reconnect after restart to verify again.',wraplength=700).pack(anchor='w',pady=8)
-        self.health_rows=ttk.Treeview(frame,columns=('component','state','success','recovery'),show='headings',height=6,selectmode='browse')
+        frame.columnconfigure(0,weight=1); frame.rowconfigure(2,weight=1)
+        ttk.Label(frame,text='Connection health',style='Section.TLabel').grid(row=0,column=0,sticky='w')
+        ttk.Label(frame,text='Last successes are evidence, not trading permission. Reconnect after restart.',wraplength=700).grid(row=1,column=0,sticky='w',pady=4)
+        container=ttk.Frame(frame);container.grid(row=2,column=0,sticky='nsew')
+        container.columnconfigure(0,weight=1);container.rowconfigure(0,weight=1)
+        self.health_rows=ttk.Treeview(container,columns=('component','state','success','recovery'),show='headings',height=4,selectmode='browse')
         for column,title,width in [('component','Component',120),('state','State',105),('success','Last success (local)',160),('recovery','Recovery',325)]:
             self.health_rows.heading(column,text=title); self.health_rows.column(column,width=width,minwidth=65,stretch=True)
-        self.health_rows.pack(fill='x',pady=8)
+        self.health_rows.grid(row=0,column=0,sticky='nsew')
+        scroll=ttk.Scrollbar(container,orient='vertical',command=self.health_rows.yview);scroll.grid(row=0,column=1,sticky='ns')
+        self.health_rows.configure(yscrollcommand=scroll.set)
         self.health_notice=tk.StringVar(value='No current health evidence. Connect the intended account to begin.')
         self.health_data={}
         self.health_rows.bind('<<TreeviewSelect>>',lambda event:self.show_health_detail())
-        ttk.Label(frame,textvariable=self.health_notice,wraplength=700).pack(anchor='w',pady=8)
-        actions=ttk.Frame(frame); actions.pack(anchor='w',pady=8)
-        ttk.Button(actions,text='Account setup',command=lambda:self.tabs.select(self.alerts_tab if self.latest.get('mode')=='alerts' else self.setup_tab)).pack(side='left',padx=3)
-        self.health_activity_button=ttk.Button(actions,text='Order activity',command=lambda:self.tabs.select(self.activity))
-        self.health_activity_button.pack(side='left',padx=3)
-        ttk.Button(actions,text='Discord history',command=lambda:self.tabs.select(self.delivery_tab)).pack(side='left',padx=3)
-        ttk.Button(actions,text='Disconnect',command=lambda:self.submit('disconnect')).pack(side='left',padx=3)
-        ttk.Button(actions,text='Export support bundle',command=self.save_support_bundle).pack(side='left',padx=3)
+        ttk.Label(frame,textvariable=self.health_notice,wraplength=700).grid(row=3,column=0,sticky='w',pady=4)
+        actions=ttk.Frame(frame); actions.grid(row=4,column=0,sticky='ew',pady=4)
+        callbacks=[('Account setup',lambda:self.tabs.select(self.alerts_tab if self.latest.get('mode')=='alerts' else self.setup_tab)),
+                   ('Order activity',lambda:self.tabs.select(self.activity)),('Discord history',lambda:self.tabs.select(self.delivery_tab)),
+                   ('Disconnect',lambda:self.submit('disconnect')),('Export support bundle',self.save_support_bundle)]
+        for i,(text,command) in enumerate(callbacks):
+            button=ttk.Button(actions,text=text,command=command)
+            button.grid(row=i//3,column=i%3,sticky='ew',padx=3,pady=2);actions.columnconfigure(i%3,weight=1)
+            if i==1:self.health_activity_button=button
         self.log_notice=tk.StringVar(value='Technical log status unavailable.')
-        ttk.Label(frame,textvariable=self.log_notice,wraplength=700).pack(anchor='w',pady=4)
-        ttk.Label(frame,text='Idle means no queued work; it does not prove the remote service is reachable. Inspect uncertain orders or messages before retrying.',wraplength=700).pack(anchor='w',pady=8)
+        ttk.Label(frame,textvariable=self.log_notice,wraplength=700,style='Muted.TLabel').grid(row=5,column=0,sticky='w',pady=3)
+        ttk.Label(frame,text='Idle is not a connectivity check. Inspect uncertain orders or messages before retrying.',wraplength=700,style='Muted.TLabel').grid(row=6,column=0,sticky='w',pady=3)
 
     def report_callback_error(self, kind, error, trace):
         from .error_log import emit_error
@@ -880,7 +940,10 @@ class DesktopApp:
     def submit(self, method, *args, callback=None, **kwargs):
         if self.closing:
             return
-        lifecycle = method in ('connect', 'connect_alerts', 'disconnect', 'host', 'receive')
+        if self.stopping_all() and method in ('command','settings','connect','connect_alerts','host','receive','provider_complete','provider_return','bank_enable','bank_configure','bank_recovery','bank_repair'):
+            self.notice.set('All connections are stopping. Wait for in-flight work before reconnecting or changing execution.')
+            return
+        lifecycle = method in ('connect', 'connect_alerts', 'disconnect', 'disconnect_all', 'host', 'receive')
         if lifecycle:
             self.setup_progress.account(None)
             self.setup_dirty = False
@@ -890,6 +953,7 @@ class DesktopApp:
             self.clear_delivery_list('receivers')
         self.notice.set('Working…')
         future = self.worker.call(method, *args, **kwargs)
+        future.ui_action_epoch=self.action_epoch
         if lifecycle:
             self.connection_jobs.add(future)
         self.pending.append((future, callback))
@@ -932,6 +996,8 @@ class DesktopApp:
 
     def render(self, state):
         self.latest = state
+        self.mobile_shell.render(state)
+        self.home_overview.render(state)
         from .customer_readiness import connection_summary
         readiness=connection_summary(state)
         self.connection_title.set(readiness['title'])
