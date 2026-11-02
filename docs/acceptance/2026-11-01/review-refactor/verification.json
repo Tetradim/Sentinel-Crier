@@ -1,0 +1,167 @@
+{
+  "source": "bf5bc28c78ed679ab8eba8f52430ec54ad556653",
+  "baseline": "660e864",
+  "version": "0.5.1",
+  "tests": {
+    "local_python_passed": 1301,
+    "local_python_skipped": 1,
+    "focused_windows_passed": 233,
+    "android_unit_passed": 190,
+    "ios_native_passed": 199,
+    "android_emulator_passed": 12
+  },
+  "sources": {
+    "windows": "415d3bdf83607e1e26e0c1fd09a030bd7b32d726",
+    "ios": "bf5bc28c78ed679ab8eba8f52430ec54ad556653",
+    "android": "bf5bc28c78ed679ab8eba8f52430ec54ad556653"
+  },
+  "unchanged_windows_and_ios_sources_verified": true,
+  "workflows": {
+    "windows_release": 41339416463,
+    "windows_desktop": 41339377029,
+    "ios_build": 41364858312,
+    "ios_trading": 41366203243,
+    "ios_ui": 41366203240,
+    "android_build": 41366203285,
+    "android_ui": 41366203240,
+    "android_release": 41366268389
+  },
+  "windows": {
+    "version": "0.5.1",
+    "commit": "415d3bdf83607e1e26e0c1fd09a030bd7b32d726",
+    "platform": "windows-x64",
+    "release_channel": "candidate",
+    "physical_device_acceptance": "deferred_by_owner",
+    "connection_service_url": "https://afvumgzbfqyrugjqrteu.supabase.co/functions/v1/crier",
+    "authenticode": "unsigned",
+    "artifacts": {
+      "SentinelCrier-0.5.1-Windows.zip": {
+        "sha256": "e94fca87be7558c4aa0cda064b3b52a59539826490fdd7edf805d92b0d3d9c0d",
+        "bytes": 33019092
+      },
+      "SentinelCrier-0.5.1-Windows-Setup.exe": {
+        "sha256": "15a9722677c50e732b75e0e7f404135f7d661a4fa80909379baebe53cdecfe82",
+        "bytes": 25195125
+      }
+    }
+  },
+  "android": {
+    "application_id": "com.sentinel.crier",
+    "release_channel": "candidate",
+    "physical_device_acceptance": "deferred_by_owner",
+    "version_name": "0.5.1",
+    "version_code": 7,
+    "previous_version_code": 6,
+    "commit": "bf5bc28c78ed679ab8eba8f52430ec54ad556653",
+    "workflow_run": "41366268389",
+    "certificate_sha256": "1FF6C2BC5857D0DE21B5FB286E11DEA8F5A85E3B4B92CBBA3E94186B89B1C2A6",
+    "signing_provenance": "Operator-provided Android signing identity; not Play App Signing or independent publisher certification",
+    "apk_signature_verified": true,
+    "aab_jar_signature_verified": true,
+    "artifacts": [
+      {
+        "file": "app-release.apk",
+        "sha256": "80fa2762aa7b8938e07a20bd98735c8a9116f0e3d71703d319925a87394f7f06",
+        "bytes": 843255
+      },
+      {
+        "file": "app-release.aab",
+        "sha256": "f1ab7f94beb18745061be4c3872ae16fccde262fc0856aeeb33e8e7eca495575",
+        "bytes": 845095
+      }
+    ]
+  },
+  "update_signature_verified": true,
+  "artifact_hashes_verified": true,
+  "metrics": [
+    {
+      "path": "crier/desktop.py",
+      "before_lines": 1473,
+      "after_lines": 1348
+    },
+    {
+      "path": "crier/desktop_runtime.py",
+      "before_lines": 630,
+      "after_lines": 529
+    },
+    {
+      "path": "ios/SentinelCrier/IntentMirroring.swift",
+      "before_lines": 1311,
+      "after_lines": 500
+    },
+    {
+      "path": "ios/SentinelCrier/AlpacaWorkspace.swift",
+      "before_lines": 813,
+      "after_lines": 658
+    },
+    {
+      "path": "ios/SentinelCrier/CrierCommandCenter.swift",
+      "before_lines": 399,
+      "after_lines": 86
+    },
+    {
+      "path": "android/app/src/main/java/com/sentinel/crier/MainActivity.kt",
+      "before_lines": 436,
+      "after_lines": 423
+    },
+    {
+      "path": "android/app/src/main/java/com/sentinel/crier/Journal.kt",
+      "before_lines": 125,
+      "after_lines": 112
+    },
+    {
+      "path": "android/app/src/main/java/com/sentinel/crier/Engine.kt",
+      "before_lines": 196,
+      "after_lines": 151
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "screenshots/android-account-disconnected.png",
+      "sha256": "1d61d17ed8224e75c85879619817642bc79a87c9f21620b9c4e46c67d9af6b34"
+    },
+    {
+      "file": "screenshots/android-home-disconnected.png",
+      "sha256": "0d831bfa69670b9bb7b9d35614c23ab0da1c59575f6b054e72e5d9a72ee6e481"
+    },
+    {
+      "file": "screenshots/android-positions-disconnected.png",
+      "sha256": "ea8facb62bf735d446db8eb1a5b4cabacbe1fc7e48f342cc3da70d5d4d737b78"
+    },
+    {
+      "file": "screenshots/android-trade-disconnected.png",
+      "sha256": "661e623c27201dc23465e62b5616f358e7d5c92be58ec78d7bdb7c5a5c0d2a0a"
+    },
+    {
+      "file": "screenshots/android-trade-keyboard.png",
+      "sha256": "9fcfa7caf1bb80626d06fdea53210b93c0b55645302032aee4fb3a438fbba0a5"
+    },
+    {
+      "file": "screenshots/ios-home-disconnected.png",
+      "sha256": "0e98ba3bc03a7e27013f6d11e6e12222be482996fa82850704768218c8711d10"
+    },
+    {
+      "file": "screenshots/ios-markets-disconnected.png",
+      "sha256": "6bea33ba6999a2579c16aec0e6f58695d202c568570b1f42a7f06df76301f7c5"
+    },
+    {
+      "file": "screenshots/ios-orders-disconnected.png",
+      "sha256": "c0effb1fa36238ddf58c05e72fe7dcd5ee389f078b3a171ea978df0d2d8856c4"
+    },
+    {
+      "file": "screenshots/ios-positions-disconnected.png",
+      "sha256": "249fa3915bd6a3d662b34a78fd0d05ccf6de90f11779ba0efda5291888d889e0"
+    },
+    {
+      "file": "screenshots/ios-recovery-disconnected.png",
+      "sha256": "6abeb2e0fbcc522e3aafe8b1218769ab66daa0e6e062824849c08a4c5c680c4d"
+    },
+    {
+      "file": "screenshots/ios-trade-disconnected.png",
+      "sha256": "d7d2c4ae9e412130bd2a3f9c9ad7d13f0d119e7662f96fd4cf9543e30f69bc0f"
+    }
+  ],
+  "physical_provider_apple_acceptance": "deferred_by_owner",
+  "final_customer_acceptance": "success",
+  "final_live_safety": "success"
+}

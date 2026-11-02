@@ -1,0 +1,163 @@
+name: Publish accepted release artifacts
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Release commit (full SHA; runtime must match accepted tests)'
+        required: true
+        type: string
+      windows_run:
+        description: 'Successful Windows release candidate run'
+        required: true
+        type: string
+      android_run:
+        description: 'Successful signed Android release candidate run'
+        required: true
+        type: string
+      acceptance_run:
+        description: 'Successful customer acceptance run for source'
+        required: true
+        type: string
+      safety_run:
+        description: 'Successful native trading safety run for source'
+        required: true
+        type: string
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: publish-accepted-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: windows-release
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      SOURCE: ${{ inputs.source }}
+      WINDOWS_RUN: ${{ inputs.windows_run }}
+      ANDROID_RUN: ${{ inputs.android_run }}
+      ACCEPTANCE_RUN: ${{ inputs.acceptance_run }}
+      SAFETY_RUN: ${{ inputs.safety_run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install cryptography==50.0.2
+      - name: Read canonical release metadata
+        id: metadata
+        run: |
+          python - <<'PY'
+          import json,os,re
+          from pathlib import Path
+          r=json.loads(Path('release.json').read_text()); v=r['version']; c=r['android_version_code']
+          assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',v) and type(c) is int and c>r['previous_android_version_code']
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write(f'android_artifact=android-signed-{v}-{c}\n')
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.windows_run }}
+          name: SentinelCrier-Windows-release
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.windows_run }}
+          name: windows-signed-update
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.android_run }}
+          name: ${{ steps.metadata.outputs.android_artifact }}
+          path: android-input
+      - name: Verify accepted provenance, hashes and update signature
+        id: verify
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64, hashlib, json, os, re, shutil, subprocess
+          from pathlib import Path
+          from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+          def gh(*args):
+              return json.loads(subprocess.check_output(['gh',*args],text=True))
+          def run(identity, name, source=None):
+              assert re.fullmatch(r'[0-9]+',identity)
+              r=gh('api',f'repos/{os.environ["GH_REPO"]}/actions/runs/{identity}')
+              assert r['conclusion']=='success' and r['name']==name
+              if source: assert r['head_sha']==source
+              return r['head_sha']
+          source=os.environ['SOURCE']; assert re.fullmatch(r'[a-f0-9]{40}',source)
+          accepted=run(os.environ['ACCEPTANCE_RUN'],'Customer acceptance')
+          assert run(os.environ['SAFETY_RUN'],'Crier live-trading safety checks')==accepted
+          changes=subprocess.check_output(['git','diff','--no-renames','--name-only',accepted,source],text=True).splitlines()
+          assert all(p=='README.md' or p.startswith('docs/') or p=='.github/workflows/publish-accepted-release.yml' for p in changes)
+          windows=run(os.environ['WINDOWS_RUN'],'Windows release')
+          android_commit=run(os.environ['ANDROID_RUN'],'Android release packaging')
+          release=json.loads(Path('release.json').read_text()); version=release['version']
+          assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',version)
+          tag='v'+version
+          draft=gh('release','view',tag,'--json','isDraft,tagName'); assert draft['isDraft'] and draft['tagName']==tag
+          existing=subprocess.check_output(['git','ls-remote','--tags','origin',f'refs/tags/{tag}',f'refs/tags/{tag}^{{}}'],text=True).splitlines()
+          if existing: assert existing[-1].split()[0]==source
+          android=Path('android-assets'); android.mkdir()
+          originals=[p for p in Path('android-input').rglob('*') if p.is_file()]
+          assert len(originals)==3 and {p.name for p in originals}=={'app-release.apk','app-release.aab','release-manifest.json'}
+          for p in originals: shutil.copyfile(p,android/p.name)
+          folder=Path('release-assets'); android=Path('android-assets')
+          w=json.loads((folder/f'SentinelCrier-{version}-Windows-manifest.json').read_text(encoding='utf-8-sig'))
+          a=json.loads((android/'release-manifest.json').read_text(encoding='utf-8-sig'))
+          assert w['version']==a['version_name']==version and w['commit']==windows
+          assert a['version_code']==release['android_version_code'] and a['previous_version_code']==release['previous_android_version_code']
+          assert a['apk_signature_verified'] and a['aab_jar_signature_verified']
+          assert a['workflow_run']==os.environ['ANDROID_RUN'] and a['commit']==android_commit
+          for commit,paths in [(windows,['crier','desktop','pyproject.toml','release.json']), (a['commit'],['android','release.json','crier/connection-service.json','crier/customer-practice.json'])]:
+              assert re.fullmatch(r'[a-f0-9]{40}',commit)
+              subprocess.run(['git','diff','--exit-code',commit,source,'--',*paths],check=True)
+          for name,row in w['artifacts'].items():
+              p=folder/name; assert p.name==name and p.stat().st_size==row['bytes'] and hashlib.file_digest(p.open('rb'),'sha256').hexdigest()==row['sha256']
+          for row in a['artifacts']:
+              p=android/row['file']; assert p.name==row['file'] and p.stat().st_size==row['bytes'] and hashlib.file_digest(p.open('rb'),'sha256').hexdigest()==row['sha256']
+          envelope=json.loads((folder/'SentinelCrier-update.json').read_text(encoding='utf-8-sig'))
+          policy=json.loads(Path('crier/update-policy.json').read_text())
+          payload=base64.b64decode(envelope['payload'],validate=True)
+          Ed25519PublicKey.from_public_bytes(base64.b64decode(policy['public_keys'][envelope['key_id']],validate=True)).verify(base64.b64decode(envelope['signature'],validate=True),payload)
+          signed=json.loads(payload)
+          assert signed['version']==version and signed['source_commit']==windows and signed['release_tag']==tag
+          assert signed['installer']['sha256']==w['artifacts'][signed['installer']['name']]['sha256']
+          expected={f'SentinelCrier-{version}-Windows-Setup.exe',f'SentinelCrier-{version}-Windows.zip',f'SentinelCrier-{version}-Windows-manifest.json',f'SentinelCrier-{version}-Windows-SHA256SUMS.txt','installer-acceptance.json','SentinelCrier-update.json'}
+          assert {p.name for p in folder.iterdir()}==expected
+          assert json.loads((folder/'installer-acceptance.json').read_text())['status']=='passed'
+          publish=Path('publish-assets'); publish.mkdir()
+          for p in [*folder.iterdir(),*android.iterdir()]: shutil.copyfile(p,publish/p.name)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output: output.write('tag='+tag+'\n')
+          print('Accepted source, test runs, artifact hashes and trusted catalog signature verified.')
+          PY
+      - name: Upload from the runner and publish only the complete draft
+        env:
+          TAG: ${{ steps.verify.outputs.tag }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,os,subprocess
+          assert json.loads(subprocess.check_output(['gh','release','view',os.environ['TAG'],'--json','isDraft'],text=True))['isDraft']
+          PY
+          gh release upload "$TAG" publish-assets/* --clobber
+          python - <<'PY'
+          import hashlib,json,os,subprocess
+          from pathlib import Path
+          files={p.name:p for p in Path('publish-assets').iterdir()}
+          result=json.loads(subprocess.check_output(['gh','release','view',os.environ['TAG'],'--json','isDraft,assets'],text=True))
+          assert result['isDraft'] and {a['name'] for a in result['assets']}==set(files) and len(files)==9
+          for asset in result['assets']:
+              assert asset['state']=='uploaded' and asset['size']==files[asset['name']].stat().st_size
+              if asset.get('digest'): assert asset['digest']=='sha256:'+hashlib.file_digest(files[asset['name']].open('rb'),'sha256').hexdigest()
+          PY
+          gh release edit "$TAG" --draft=false --latest --target "$SOURCE"

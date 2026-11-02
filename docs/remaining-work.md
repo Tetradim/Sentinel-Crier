@@ -8,6 +8,8 @@ The owner explicitly deferred physical iPhone/Mac and Apple/Webull provider work
 
 **November 1 accepted delivery:** shared-account banks and guided verified-flat recovery are implemented and automatically verified on Windows, iOS and Android. Windows 0.5.0 and the signed Android 0.5.0 package are published. [Results, source revisions, release links and simulator screenshots](acceptance/2026-11-01/account-bank/README.md).
 
+**November 1 review patch, 0.5.1:** reviewed recovery/routing defects, coherent module extraction and account-first native UI have [accepted source verification and screenshots](acceptance/2026-11-01/review-refactor/README.md). The [external review assessment](reviews/2026-11-01-external-fixed-review.md) separately records proposed observer backoff, deliberate follower-limit onboarding, clock/runtime warnings and provider admission hardening. These proposals do not activate new trading presets, provider services or independent outage notifications.
+
 Phase L's [completed plan](superpowers/plans/2026-10-26-push-dashboard.md) and [accepted evidence](acceptance/2026-10-26/push-dashboard/source-evidence.json) record push delivery, the read-only dashboard, hosted deployment and an isolated synthetic probe. See the [usage guide](push-dashboard.md). The following external work remains unpassed:
 
 - Webull Connect approval, issued integration details and real authorized integration testing.

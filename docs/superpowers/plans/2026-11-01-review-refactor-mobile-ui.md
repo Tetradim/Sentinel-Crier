@@ -23,4 +23,4 @@ The [owner-deferred physical/provider checklist](../../deferred/2026-10-31-owner
 
 ## Evidence
 
-The final acceptance record will contain commit-specific test results, module sizes, screenshot paths and release verification. Earlier 0.5.0 acceptance remains historical evidence rather than proof of these changes.
+The [accepted verification record](../../acceptance/2026-11-01/review-refactor/README.md) contains commit-specific test results, module sizes, actual native screenshots and release-artifact verification. Earlier 0.5.0 acceptance remains historical evidence rather than proof of these changes.

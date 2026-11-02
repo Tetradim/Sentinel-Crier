@@ -6,15 +6,15 @@ Crier is free, open-source software for privately paired trading communities. A 
 
 The active native brokerage integration is **Alpaca**, supporting paper/live accounts, whole-share stocks and standard long single-leg options. Webull is a separate candidate workflow; provider activation and real acceptance are deferred.
 
-## Download 0.5.0
+## Download 0.5.1
 
 | Platform | Get started |
 | --- | --- |
-| Windows | [Installer](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.0/SentinelCrier-0.5.0-Windows-Setup.exe) · [Portable ZIP](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.0/SentinelCrier-0.5.0-Windows.zip) · [Setup](desktop/README.md) |
-| Android | [Signed APK](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.0/app-release.apk) · [Setup](android/README.md) |
+| Windows | [Installer](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.1/SentinelCrier-0.5.1-Windows-Setup.exe) · [Portable ZIP](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.1/SentinelCrier-0.5.1-Windows.zip) · [Setup](desktop/README.md) |
+| Android | [Signed APK](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.1/app-release.apk) · [Setup](android/README.md) |
 | iPhone | [Build guide](ios/BUILD.md) · [Distribution checklist](docs/iphone-release-checklist.md). Apple signing/TestFlight is owner-deferred; no signed iPhone download is published. |
 
-[All release assets, checksums and manifests](https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.5.0)
+[All release assets, checksums and manifests](https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.5.1)
 
 Windows includes startup update notices, manual update checks and private recovery snapshots. Installation remains explicit. Its installer is Authenticode-unsigned; the update catalog is Ed25519-signed. Android packages use the operator's signing identity. See [updates and recovery](docs/customer-updates.md).
 
@@ -76,14 +76,15 @@ Publishing permission is separate from trading permission and must be renewed af
 
 ## Screenshots and verification
 
-Actual iOS simulator captures, disconnected in paper mode:
+Actual native simulator/emulator captures, disconnected. The mobile workspace uses a compact account-first brokerage layout with persistent account/environment and Stop controls, separate trading/position views and secondary setup/recovery.
 
-<img src="docs/acceptance/2026-11-01/account-bank/screenshots/ios-home-disconnected.png" width="240" alt="Crier iOS workspace and connection controls">
-<img src="docs/acceptance/2026-11-01/account-bank/screenshots/ios-recovery-disconnected.png" width="240" alt="Crier iOS recovery evidence screen">
+<img src="docs/acceptance/2026-11-01/review-refactor/screenshots/ios-home-disconnected.png" width="240" alt="Crier iOS account overview and persistent controls">
+<img src="docs/acceptance/2026-11-01/review-refactor/screenshots/ios-orders-disconnected.png" width="240" alt="Crier iOS saved and unresolved orders">
+<img src="docs/acceptance/2026-11-01/review-refactor/screenshots/android-trade-disconnected.png" width="240" alt="Crier Android dedicated trade ticket">
 
-Version 0.5.0 acceptance recorded **1,291 Python/Tk tests passed, one skipped; 196 iOS native tests passed; 187 Android unit tests passed**, plus simulator/emulator UI and Windows installer checks. Published hashes, Android signatures, the update-catalog signature and update discovery were verified.
+Version 0.5.1 acceptance recorded **1,301 Python/Tk tests passed, one skipped; 199 iOS native tests passed; 190 Android unit tests passed; 12 Android emulator tests passed**, plus iOS UI and Windows installer checks. The update fixes route-bound bank editing, recovery pause races, provider callback routing, retained iOS fill/host authorization and Android recovery/UI issues. Release hashes, Android signatures and the trusted update-catalog signature were verified.
 
-[Acceptance report and screenshot gallery](docs/acceptance/2026-11-01/account-bank/README.md)
+[Acceptance report, module changes and 11 screenshots](docs/acceptance/2026-11-01/review-refactor/README.md) · [External-review assessment and proposed follow-ups](docs/reviews/2026-11-01-external-fixed-review.md) · [Previous 0.5.0 acceptance](docs/acceptance/2026-11-01/account-bank/README.md)
 
 ## Scope and deferred work
 

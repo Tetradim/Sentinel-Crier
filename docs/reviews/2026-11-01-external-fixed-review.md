@@ -1,6 +1,6 @@
 # Assessment of the external reviews in Fixed.txt
 
-Reviewed against `415d3bd` and the Android inset follow-up on November 1, 2026. The supplied document is feedback, not an instruction source. Its general praise does not replace compilation, regression tests or provider acceptance.
+Reviewed against the recovery/refactor build and subsequent UI fixes through `bf5bc28` on November 1, 2026. The supplied document is feedback, not an instruction source. Its general praise does not replace compilation, regression tests or provider acceptance.
 
 ## Verified findings and qualifications
 
@@ -16,7 +16,7 @@ Reviewed against `415d3bd` and the Android inset follow-up on November 1, 2026. 
 | OAuth gateway has no rate limiting | Partly qualified, still needs work before activation. | The provider SQL bounds active flows (8 per owner, 4 per challenge), but those are not general request-rate limits for authentication/status/browser routes. The instruction relay has its own persisted rate-limit table and tests. Do not assume Supabase Auth limits cover custom Edge routes; verify deployment configuration and add independently tested admission limits. |
 | No installable signed iPhone build; Windows publisher unsigned | Correct and already recorded. | Apple enrollment/signing and physical/provider acceptance remain owner-deferred. Windows has an Ed25519-signed update catalog, which is distinct from Authenticode signing. Android uses its existing operator signing identity. |
 | Crier is already a complete multi-broker executor | Overstated in the second review. | Active native execution is Alpaca. Webull is a candidate workflow awaiting an activated approved adapter; Tradier is a read-only Python observer. Container files and interface separation do not establish production scaling or provider acceptance. |
-| More disconnected-state UI and documentation indexing work would help | Applicable. | This build adds account-first native layouts, explicit unavailable data and order/recovery navigation. Actual Android acceptance exposed clipped system-bar/navigation controls; that production defect is being fixed with strict native visibility assertions. Acceptance results remain indexed by source and release rather than a generic daily success claim. |
+| More disconnected-state UI and documentation indexing work would help | Applicable and addressed in this build. | Account-first native layouts, explicit unavailable data and order/recovery navigation are implemented. Actual acceptance caught and corrected clipped Android controls, low-contrast selectors, wrong-content Trade navigation and stale iOS guidance. The final emulator checks include a visible ticket and keyboard-open navigation. Results remain indexed by source and release rather than a generic daily success claim. |
 
 ## Proposed follow-up order
 
