@@ -15,7 +15,7 @@ The Windows 0.5.2 workspace follows the approved Crier mobile palette and accoun
 
 The Windows update does not publish a new Android package. [Mobile 0.5.1 acceptance](../../2026-11-01/review-refactor/README.md) remains the prior published baseline. Physical-device/provider acceptance, Webull activation and Apple signing remain owner-deferred.
 
-Local verification: **1,320 Python/Tk tests passed, one optional test skipped** in 208.28 seconds. The sole warning is an existing Starlette/httpx test-client deprecation. `git diff --check` passed. Independent theme/ticket/shell review found no remaining blocking issues after the Stop-race fixes. 
+Local verification: **1,320 Python/Tk tests passed, one optional test skipped** in 208.28 seconds. The sole warning is an existing Starlette/httpx test-client deprecation. `git diff --check` passed. Independent theme/ticket/shell review found no remaining blocking issues after the Stop-race fixes.
 
 ## Published Windows 0.5.2
 
