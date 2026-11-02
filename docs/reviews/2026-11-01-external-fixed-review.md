@@ -20,6 +20,8 @@ Reviewed against `415d3bd` and the Android inset follow-up on November 1, 2026. 
 
 ## Proposed follow-up order
 
+Provider references checked against Alpaca's official [account activity schema](https://docs.alpaca.markets/us/docs/account-activities) and [trade-update streaming documentation](https://docs.alpaca.markets/us/docs/websocket-streaming). Activity evidence and order-lifecycle evidence are distinct inputs; a stream-assisted design must retain durable catch-up after disconnects.
+
 These are additional recommendations, separate from the already approved recovery/refactor/UI implementation. They are not silently enabled by this review.
 
 1. Harden the standalone Alpaca observer's retry/audit behavior, retaining cursor/outbox atomicity and redacting upstream errors.

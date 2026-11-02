@@ -208,7 +208,13 @@ class MainActivity:Activity(),RouteOwner {
   discordSettings(old)
   button("Unresolved orders and recovery status") { android.app.AlertDialog.Builder(this).setTitle("Execution and connection recovery").setMessage("${journal.meta("visibility")}\n${journal.meta("service")}\n${journal.meta("connection")}\n${journal.meta("status")}\n${journal.meta("protocolStatus")}\n${journal.unresolved()}\nRetain this journal. Never clear app data to resolve an unknown broker outcome.").setPositiveButton("Close",null).show() }
   button("Account ID bank · host pools and guided recovery") { accountBankDialog() }
-  if(journey=="trade") shell.tradeAnchor=HostOrderTicket(this,panel,journal) { status.text=it }.build()
+  if(journey=="trade") {
+   shell.tradeWorkspace.removeAllViews()
+   HostOrderTicket(this,shell.tradeWorkspace,journal) {
+    status.text=it
+    Toast.makeText(this,it,Toast.LENGTH_LONG).show()
+   }.build()
+  }
   button("Diagnostics · timeline, premiums and latency") { val records=Diagnostics.export(journal); android.app.AlertDialog.Builder(this).setTitle("Execution diagnostics").setItems((0 until records.length()).map { val e=records.getJSONObject(it).getJSONObject("event"); "${e.getString("symbol")} ${e.getString("action")} · ${e.getString("event_id").take(8)}" }.toTypedArray()) { _, i -> android.app.AlertDialog.Builder(this).setTitle("Event evidence").setMessage(Diagnostics.describe(records.getJSONObject(i))).setPositiveButton("Close",null).show() }.show() }
   button("Share diagnostics JSON") { shareDiagnostics(false) }
   button("Share diagnostics CSV") { shareDiagnostics(true) }

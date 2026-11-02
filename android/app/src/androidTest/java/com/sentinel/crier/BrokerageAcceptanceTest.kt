@@ -5,6 +5,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.action.ViewActions.typeText
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.*
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -29,10 +30,28 @@ class BrokerageAcceptanceTest {
    onView(withText("Positions")).perform(click()); capture("android-positions-disconnected")
    onView(withText("Account")).perform(click()); capture("android-account-disconnected")
    onView(withText("Trade")).perform(click())
+   onView(withText("TRADE / SOURCE INTENT")).check(matches(isDisplayed()))
+   onView(withText("Instrument")).check(matches(isDisplayed()))
    scenario.onActivity { assertReadableSelectors(it) }
    capture("android-trade-disconnected")
    onView(withContentDescription("Stop all connections")).check(matches(isDisplayed()))
    scenario.onActivity { assertFalse(SyncService.active) }
+  }
+ }
+ @Test fun keyboardKeepsTradingNavigationAndStopReachable() {
+  ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+   onView(withText("Trade")).perform(click())
+   onView(withText("TRADE / SOURCE INTENT")).check(matches(isDisplayed()))
+   onView(withHint("Symbol (stock or canonical OCC)")).perform(click(),typeText("SPY"))
+   onView(withContentDescription("Stop all connections")).check(matches(isDisplayed()))
+   onView(withText("Account")).check(matches(isDisplayed()))
+   scenario.onActivity {
+    if(android.os.Build.VERSION.SDK_INT>=30) assertTrue("Keyboard must be open for this acceptance check",it.window.decorView.rootWindowInsets.isVisible(android.view.WindowInsets.Type.ime()))
+    assertSafeNavigation(it)
+    assertFalse(SyncService.active)
+   }
+   capture("android-trade-keyboard")
+   androidx.test.espresso.Espresso.closeSoftKeyboard()
   }
  }
  @Test fun bankObservationDoesNotBlockMainThreadAndLateResultIsDiscarded() {

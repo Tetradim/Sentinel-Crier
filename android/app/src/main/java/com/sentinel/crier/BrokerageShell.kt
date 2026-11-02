@@ -11,14 +11,15 @@ class BrokerageShell(private val activity:Activity,config:JSONObject,
  private val onTrade:()->Unit,private val onAlerts:()->Unit,private val onHealth:()->Unit,
  private val onPositions:((String)->Unit)->Unit,private val onAccounts:()->Unit,private val onStop:()->Unit) {
  val workspace=LinearLayout(activity).apply { orientation=1; setPadding(dp(16),dp(12),dp(16),dp(24)) }
+ val tradeWorkspace=LinearLayout(activity).apply { orientation=1; setPadding(dp(16),dp(12),dp(16),dp(24)) }
  private val root=LinearLayout(activity).apply { orientation=1; setBackgroundColor(bg) }
  private val scroll=ScrollView(activity).apply { isFillViewport=true; addView(workspace) }
+ private val tradeScroll=ScrollView(activity).apply { isFillViewport=true; addView(tradeWorkspace) }
  private val home=LinearLayout(activity).apply { orientation=1; setPadding(dp(20),dp(24),dp(20),dp(20)) }
  private val positions=TextView(activity).apply { textSize=16f; setTextColor(ink); setPadding(dp(20),dp(24),dp(20),dp(24)); setTextIsSelectable(true) }
  private val body=FrameLayout(activity)
  private val tabs=mutableMapOf<String,Button>()
  private var selected="Home"
- var tradeAnchor:View?=null
  init {
   // API 30+ explicitly lays out edge-to-edge, so only this root applies safe insets.
   // API 26-29 keeps platform decor fitting and must not add a second set of padding.
@@ -34,7 +35,7 @@ class BrokerageShell(private val activity:Activity,config:JSONObject,
   header.addView(Button(activity).apply { text="CRIER / ${config.optString("account").takeIf { it.isNotBlank() }?.takeLast(4) ?: "Account"}"; contentDescription="Select connection / account"; isAllCaps=false; textSize=12f; minWidth=0; setPadding(0,0,dp(8),0); setTextColor(ink); setBackgroundColor(surface); minHeight=dp(48); setOnClickListener { onAccounts() } },LinearLayout.LayoutParams(0,-2,1f))
   header.addView(label(when(config.optString("environment")) { "live"->"LIVE"; "paper"->"PAPER"; else->"OFFLINE" },10f,accent).apply { gravity=17 },LinearLayout.LayoutParams(-2,dp(48)))
   header.addView(Button(activity).apply { text="Stop"; contentDescription="Stop all connections"; isAllCaps=false; minHeight=dp(48); setTextColor(Color.rgb(255,112,122)); setBackgroundColor(surface); setOnClickListener { onStop() } },LinearLayout.LayoutParams(dp(64),-2))
-  root.addView(header); body.addView(scroll); body.addView(ScrollView(activity).apply { addView(home) }); body.addView(ScrollView(activity).apply { addView(positions) }); root.addView(body,LinearLayout.LayoutParams(-1,0,1f))
+  root.addView(header); body.addView(scroll); body.addView(ScrollView(activity).apply { addView(home) }); body.addView(ScrollView(activity).apply { addView(positions) }); body.addView(tradeScroll); root.addView(body,LinearLayout.LayoutParams(-1,0,1f))
   val nav=LinearLayout(activity).apply { setBackgroundColor(surface) }
   for(name in listOf("Home","Trade","Positions","Account")) {
    val tab=Button(activity).apply { text=name; textSize=11f; isAllCaps=false; minHeight=dp(56); minWidth=0; minimumWidth=0; setPadding(0,dp(8),0,dp(8)); setSingleLine(true); setBackgroundColor(surface); setOnClickListener { if(name=="Trade") onTrade(); select(name) } }
@@ -48,19 +49,21 @@ class BrokerageShell(private val activity:Activity,config:JSONObject,
   action("Open trade workspace") { onTrade(); select("Trade") }
   action("Broker-fill alerts",onAlerts); action("Connection health and recovery",onHealth)
   action("Account and connection setup") { select("Account") }; select("Home")
+  tradeWorkspace.addView(label("Trading connection",20f,ink))
+  tradeWorkspace.addView(label("Complete Trade / share setup to enter host orders. Following uses the paired host's instructions and your own execution settings.",15f,muted))
+  tradeWorkspace.addView(Button(activity).apply { text="Account and execution settings"; isAllCaps=false; minHeight=dp(48); setOnClickListener { select("Account") } })
  }
  private fun dp(n:Int)=(n*activity.resources.displayMetrics.density).toInt()
  private fun label(value:String,size:Float,color:Int)=TextView(activity).apply { text=value; textSize=size; setTextColor(color) }
  private fun action(title:String,run:()->Unit) { home.addView(Button(activity).apply { text=title; isAllCaps=false; textSize=15f; minHeight=dp(52); setTextColor(ink); backgroundTintList=android.content.res.ColorStateList.valueOf(surface); setOnClickListener { run() } },LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(8) }) }
  fun select(name:String) {
   selected=name
-  for(i in 0 until body.childCount) body.getChildAt(i).visibility=if(i==when(name) { "Home"->1; "Positions"->2; else->0 }) View.VISIBLE else View.GONE
+  for(i in 0 until body.childCount) body.getChildAt(i).visibility=if(i==when(name) { "Home"->1; "Positions"->2; "Trade"->3; else->0 }) View.VISIBLE else View.GONE
   tabs.forEach { (title,view) -> view.setTextColor(if(title==name) accent else muted); view.isSelected=title==name }
   if(name=="Positions") { positions.text="Loading retained positions..."; onPositions { if(selected=="Positions") positions.text=it } }
-  if(name=="Trade") scroll.post { tradeAnchor?.let { scroll.scrollTo(0,it.top) } }
   if(name=="Account") scroll.post { scroll.scrollTo(0,0) }
  }
- fun styleWorkspace()=style(workspace)
+ fun styleWorkspace() { style(workspace); style(tradeWorkspace) }
  private fun style(view:View) {
   if(view is TextView) { view.setTextColor(ink); if(view !is Button && view !is EditText) view.setPadding(0,dp(6),0,dp(6)) }
   if(view is Button) { view.isAllCaps=false; view.minHeight=dp(48); view.textSize=14f; view.backgroundTintList=android.content.res.ColorStateList.valueOf(surface) }
