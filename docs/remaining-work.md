@@ -4,7 +4,7 @@ The approved customer-ease phases E–I, live-policy phase J, reconciliation pha
 
 ## November 2 review improvements
 
-The approved follow-up adds [selected cross-platform invariant scenarios](protocol/native-invariants.md), focused desktop/Android journey coordinators, sanitized reporting for selected diagnostic failures and [plain-language What happened explanations](decision-explanations.md). The scope preserves native execution engines, explicit enablement and durable journal formats. Automated acceptance is recorded separately; physical/provider work below is unchanged.
+The approved follow-up adds [selected cross-platform invariant scenarios](protocol/native-invariants.md), focused desktop/Android journey coordinators, sanitized reporting for selected diagnostic failures and [plain-language What happened explanations](decision-explanations.md). The scope preserves native execution engines, explicit enablement and durable journal formats. [Automated acceptance and published Windows/Android 0.5.3 packages](acceptance/2026-11-02/review-improvements/README.md) record final test, signature, updater and UI evidence; physical/provider work below is unchanged.
 
 ## Owner/provider/device work still unpassed
 

@@ -23,7 +23,7 @@ A fresh alerts profile can bind never-attempted pending messages to its first ex
 
 ## Download and launch
 
-1. Download the [Windows installer or portable ZIP](https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.5.2). The installer handles normal installation and upgrades. For the portable ZIP, continue below.
+1. Download the [Windows installer or portable ZIP](https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.5.3). The installer handles normal installation and upgrades. For the portable ZIP, continue below.
 2. Extract the entire ZIP to a normal folder. Keep `SentinelCrier.exe` and `_internal`
    together. Double-click `SentinelCrier.exe`. No separate Python install is required.
 

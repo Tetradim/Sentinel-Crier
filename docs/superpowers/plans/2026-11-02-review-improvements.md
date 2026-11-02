@@ -34,5 +34,5 @@
 
 ## Verification and delivery
 
-- [ ] Run full Python/Tk tests and platform CI, independently review spec compliance and correctness, fix reproduced issues, and capture the changed UI using an isolated profile.
-- [ ] Commit/push verified code directly to main. Record exact checks and any owner-deferred physical/provider acceptance separately; no real broker orders or Discord messages.
+- [x] Run full Python/Tk tests and platform CI, independently review spec compliance and correctness, fix reproduced issues, and capture the changed UI using an isolated profile.
+- [x] Commit/push verified code directly to main. Record exact checks and any owner-deferred physical/provider acceptance separately; no real broker orders or Discord messages.

@@ -10,13 +10,13 @@ The active native brokerage integration is **Alpaca**, supporting paper/live acc
 
 | Platform | Get started |
 | --- | --- |
-| Windows 0.5.2 | [Installer](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.2/SentinelCrier-0.5.2-Windows-Setup.exe) · [Portable ZIP](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.2/SentinelCrier-0.5.2-Windows.zip) · [Setup](desktop/README.md) |
-| Android 0.5.1 | [Signed APK](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.1/app-release.apk) · [Setup](android/README.md) |
+| Windows 0.5.3 | [Installer](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.3/SentinelCrier-0.5.3-Windows-Setup.exe) · [Portable ZIP](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.3/SentinelCrier-0.5.3-Windows.zip) · [Setup](desktop/README.md) |
+| Android 0.5.3 | [Signed APK](https://github.com/Tetradim/Sentinel-Crier/releases/download/v0.5.3/app-release.apk) · [Setup](android/README.md) |
 | iPhone | [Build guide](ios/BUILD.md) · [Distribution checklist](docs/iphone-release-checklist.md). Apple signing/TestFlight is owner-deferred; no signed iPhone download is published. |
 
-[Windows release assets, checksums and manifests](https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.5.2) · [Android release](https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.5.1)
+[Release assets, checksums and manifests](https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.5.3)
 
-Windows 0.5.2 follows the mobile app’s dark account-first design, with Home/Markets/Trade/Positions/Orders navigation, an Account hub and persistent Stop all control. It includes startup update notices, manual update checks and private recovery snapshots. Installation remains explicit. Its installer is Authenticode-unsigned; the update catalog is Ed25519-signed. Android packages use the operator's signing identity. See [updates and recovery](docs/customer-updates.md).
+Windows follows the mobile app’s dark account-first design, with Home/Markets/Trade/Positions/Orders navigation, an Account hub and persistent Stop all control. It includes startup update notices, manual update checks and private recovery snapshots. Installation remains explicit. Its installer is Authenticode-unsigned; the update catalog is Ed25519-signed. Android packages use the operator's signing identity. Both retain explicit connection and execution permissions. See [updates and recovery](docs/customer-updates.md).
 
 ## Choose your workflow
 
@@ -78,13 +78,15 @@ Publishing permission is separate from trading permission and must be renewed af
 
 Actual native simulator/emulator captures, disconnected. The mobile workspace uses a compact account-first brokerage layout with persistent account/environment and Stop controls, separate trading/position views and secondary setup/recovery.
 
-<img src="docs/acceptance/2026-11-02/windows-mobile/screenshots/windows-home.png" width="600" alt="Crier Windows mobile-style account overview">
+<img src="docs/acceptance/2026-11-02/review-improvements/screenshots/windows-what-happened-synthetic.png" width="600" alt="Actual Crier Windows decision panel showing clearly labeled synthetic evidence">
 
 <img src="docs/acceptance/2026-11-01/review-refactor/screenshots/ios-home-disconnected.png" width="240" alt="Crier iOS account overview and persistent controls">
 <img src="docs/acceptance/2026-11-01/review-refactor/screenshots/ios-orders-disconnected.png" width="240" alt="Crier iOS saved and unresolved orders">
 <img src="docs/acceptance/2026-11-01/review-refactor/screenshots/android-trade-disconnected.png" width="240" alt="Crier Android dedicated trade ticket">
 
-Windows 0.5.2 passed **1,320 Python/Tk tests, one skipped**, native UI navigation and scaled-layout checks, packaged-app smoke testing and installer acceptance. [Windows acceptance and seven actual screenshots](docs/acceptance/2026-11-02/windows-mobile/README.md) document the new layout and global Stop race regressions. Android remains the published 0.5.1 package.
+Version 0.5.3 passed **1,439 Python/Tk tests (one skipped), 203 iOS native tests and 200 Android unit tests**, plus platform UI, packaging and installer checks. It adds [What happened explanations](docs/decision-explanations.md), shared native invariant scenarios, focused journey coordinators and selected sanitized diagnostic reporting. Windows reads existing local evidence explicitly; Android and iOS explain recorded events before advanced diagnostics. These views never authorize or retry orders. [Acceptance, source equivalence and screenshot](docs/acceptance/2026-11-02/review-improvements/README.md).
+
+Windows 0.5.2 passed **1,320 Python/Tk tests, one skipped**, native UI navigation and scaled-layout checks, packaged-app smoke testing and installer acceptance. [Windows acceptance and seven actual screenshots](docs/acceptance/2026-11-02/windows-mobile/README.md) document the new layout and global Stop race regressions. Android 0.5.1 was the previous published mobile package.
 
 Version 0.5.1 acceptance recorded **1,301 Python/Tk tests passed, one skipped; 199 iOS native tests passed; 190 Android unit tests passed; 12 Android emulator tests passed**, plus iOS UI and Windows installer checks. The update fixes route-bound bank editing, recovery pause races, provider callback routing, retained iOS fill/host authorization and Android recovery/UI issues. Release hashes, Android signatures and the trusted update-catalog signature were verified.
 
