@@ -32,6 +32,7 @@ final class CustomerAcceptanceTests: XCTestCase {
         capture("ios-positions-disconnected", app: app)
         app.navigationBars.buttons["Recovery"].tap()
         XCTAssertTrue(app.staticTexts["Local records, not a fresh broker check"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Read-only order evidence. Open Account ID bank in the header for shared-account IDs, broker checks and guided recovery."].exists)
         capture("ios-recovery-disconnected", app: app)
         app.tabBars.buttons["Markets"].tap()
         capture("ios-markets-disconnected", app: app)

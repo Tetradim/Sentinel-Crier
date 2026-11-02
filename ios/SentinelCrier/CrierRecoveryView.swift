@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Observational recovery entry point. No refresh, order, cancel or reset action.
+/// Read-only manual-order evidence; shared-account recovery is in the header bank.
 struct CrierRecoveryView: View {
     @EnvironmentObject var model: AlpacaWorkspace
     var body: some View {
@@ -18,7 +18,7 @@ struct CrierRecoveryView: View {
                     Text("Last workspace update: " + updated.formatted(date: .abbreviated, time: .standard))
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Text("This screen does not submit, cancel, retry, clear IDs or resume trading. The shared-account ID bank currently runs on Windows.")
+                Text("Read-only order evidence. Open Account ID bank in the header for shared-account IDs, broker checks and guided recovery.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Section("Read-only broker check") {
