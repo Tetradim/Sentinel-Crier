@@ -1,9 +1,9 @@
-Crier 0.5.2 brings the Windows workspace closer to Crier's mobile interface.
+Crier 0.5.3 adds plain-language explanations of local execution evidence and focused maintenance improvements.
 
-The dark account-first layout includes persistent account and PAPER/LIVE/OFFLINE context, Home/Markets/Trade/Positions/Orders navigation, an Account hub for setup and recovery, and a visible Stop all control. Stock and option tickets use stacked inputs, separate order management, and scrollable tables. Status messages and recovery actions remain reachable at scaled window sizes.
+Windows Home and Account now open What happened? Choose a tracked trade and Read local evidence to see recent recorded steps, then open the detailed timeline for quantities and exports. Android and iOS diagnostics show the same explanation catalog ahead of advanced evidence. These views never authorize orders or infer fills from submission acknowledgements; unavailable or unstructured evidence remains explicit. Late results are rejected after account or trade selection changes.
 
-Stop all also invalidates pending pairing callbacks and queued reconnects, including when the selected connection changes during shutdown. Existing execution authorization, frozen order commands, ownership journals and allocation checks remain in place. Unavailable balances and chart feeds are explicitly marked unavailable.
+Shared native scenarios exercise clock continuity and bank ownership, cash reservations, cancellation, late cumulative fills and durable conflicts. Desktop and Android journey coordinators retain the existing explicit connect/enable flows and Stop fences. Selected optional diagnostic failures now use bounded, sanitized technical logging; expected wait timeouts stay quiet. Financial journals and execution policies retain their existing formats.
 
-Before installing, stop Crier workers and create a private recovery snapshot. The updater checks compatibility, hashes and the signed update catalog; installation remains explicit. The Windows installer remains Authenticode-unsigned. Android 0.5.1 remains the separately published mobile package; this Windows update does not change its UI.
+Before installing, stop workers and create a private recovery snapshot. Updates validate compatibility, hashes and the signed catalog; installation remains explicit. The Windows installer remains Authenticode-unsigned. Android packages retain the existing operator signing identity.
 
-Apple enrollment/signing, physical-device/broker acceptance and Webull/provider activation remain owner-deferred. No real brokerage orders or customer notifications are part of automated acceptance.
+Apple signing/distribution, physical-device/provider acceptance and Webull activation remain owner-deferred. Automated checks do not place real broker orders or send customer notifications.

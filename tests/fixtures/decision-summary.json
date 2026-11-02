@@ -1,0 +1,1163 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "empty",
+      "timeline": [],
+      "expected": [
+        "No decision evidence is recorded yet."
+      ]
+    },
+    {
+      "id": "sender_instruction_journaled",
+      "timeline": [
+        {
+          "stage": "sender_instruction_journaled",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The instruction was saved on this device."
+      ]
+    },
+    {
+      "id": "receiver_instruction_arrived",
+      "timeline": [
+        {
+          "stage": "receiver_instruction_arrived",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The instruction reached this device."
+      ]
+    },
+    {
+      "id": "relay_publish_acknowledged",
+      "timeline": [
+        {
+          "stage": "relay_publish_acknowledged",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The relay acknowledged the instruction; broker execution is not confirmed."
+      ]
+    },
+    {
+      "id": "broker_submit_started",
+      "timeline": [
+        {
+          "stage": "broker_submit_started",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "A broker submission was started; the outcome is not confirmed."
+      ]
+    },
+    {
+      "id": "broker_submit_returned",
+      "timeline": [
+        {
+          "stage": "broker_submit_returned",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The broker submission call returned; a fill is not confirmed."
+      ]
+    },
+    {
+      "id": "broker_not_submitted",
+      "timeline": [
+        {
+          "stage": "broker_not_submitted",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "This attempt was not submitted to the broker."
+      ]
+    },
+    {
+      "id": "broker_submit_rejected",
+      "timeline": [
+        {
+          "stage": "broker_submit_rejected",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "This submission was refused; a fill is not established by this record."
+      ]
+    },
+    {
+      "id": "broker_lookup_unknown",
+      "timeline": [
+        {
+          "stage": "broker_lookup_unknown",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The broker outcome is unknown. Reconciliation is required before new work."
+      ]
+    },
+    {
+      "id": "cancel_requested",
+      "timeline": [
+        {
+          "stage": "cancel_requested",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "Cancellation was requested; cancellation is not confirmed."
+      ]
+    },
+    {
+      "id": "entry_skipped",
+      "timeline": [
+        {
+          "stage": "entry_skipped",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The entry was skipped by local checks."
+      ]
+    },
+    {
+      "id": "entry_deferred",
+      "timeline": [
+        {
+          "stage": "entry_deferred",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The entry was deferred; no new submission is confirmed."
+      ]
+    },
+    {
+      "id": "reconciled",
+      "timeline": [
+        {
+          "stage": "reconciled",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "Broker evidence was refreshed; the recorded outcome is not confirmed."
+      ]
+    },
+    {
+      "id": "entry_invalidated",
+      "timeline": [
+        {
+          "stage": "entry_invalidated",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The entry remainder was invalidated; any recorded fills are retained."
+      ]
+    },
+    {
+      "id": "execution_complete",
+      "timeline": [
+        {
+          "stage": "execution_complete",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "Local instruction processing completed; a fill is not confirmed."
+      ]
+    },
+    {
+      "id": "totally-secret-stage",
+      "timeline": [
+        {
+          "stage": "totally-secret-stage",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "Additional evidence was recorded; its meaning is unavailable."
+      ]
+    },
+    {
+      "id": "flow",
+      "timeline": [
+        {
+          "stage": "sender_instruction_journaled",
+          "details": {}
+        },
+        {
+          "stage": "receiver_instruction_arrived",
+          "details": {}
+        },
+        {
+          "stage": "relay_publish_acknowledged",
+          "details": {}
+        },
+        {
+          "stage": "broker_submit_started",
+          "details": {}
+        },
+        {
+          "stage": "broker_submit_returned",
+          "details": {}
+        }
+      ],
+      "expected": [
+        "The instruction was saved on this device.",
+        "The instruction reached this device.",
+        "The relay acknowledged the instruction; broker execution is not confirmed.",
+        "A broker submission was started; the outcome is not confirmed.",
+        "The broker submission call returned; a fill is not confirmed."
+      ]
+    },
+    {
+      "id": "status-partially_filled",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": {
+            "status": "partially_filled",
+            "id": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The broker reports a partial fill; the full order is not confirmed filled."
+      ]
+    },
+    {
+      "id": "status-filled",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": {
+            "status": "filled",
+            "id": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The broker reports the order filled."
+      ]
+    },
+    {
+      "id": "status-canceled",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": {
+            "status": "canceled",
+            "id": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The broker reports the order canceled; earlier fills may remain."
+      ]
+    },
+    {
+      "id": "status-pending_cancel",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": {
+            "status": "pending_cancel",
+            "id": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "Cancellation was requested; cancellation is not confirmed."
+      ]
+    },
+    {
+      "id": "status-rejected",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": {
+            "status": "rejected",
+            "id": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "This submission was refused; a fill is not established by this record."
+      ]
+    },
+    {
+      "id": "status-new",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": {
+            "status": "new",
+            "id": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The broker reports an active order; a full fill is not confirmed."
+      ]
+    },
+    {
+      "id": "status-unknown",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": {
+            "status": "unknown",
+            "id": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The broker outcome is unknown. Reconciliation is required before new work."
+      ]
+    },
+    {
+      "id": "free-text-not-status",
+      "timeline": [
+        {
+          "stage": "reconciled",
+          "details": "client=SECRET status=filled filled=99"
+        }
+      ],
+      "expected": [
+        "Broker evidence was refreshed; the recorded outcome is not confirmed."
+      ]
+    },
+    {
+      "id": "returned-not-filled",
+      "timeline": [
+        {
+          "stage": "broker_submit_returned",
+          "details": {
+            "status": "filled"
+          }
+        }
+      ],
+      "expected": [
+        "The broker submission call returned; a fill is not confirmed."
+      ]
+    },
+    {
+      "id": "coalesce",
+      "timeline": [
+        {
+          "stage": "sender",
+          "details": {}
+        },
+        {
+          "stage": "sender_instruction_journaled",
+          "details": {}
+        },
+        {
+          "stage": "receiver",
+          "details": {}
+        },
+        {
+          "stage": "sender",
+          "details": {}
+        }
+      ],
+      "expected": [
+        "The instruction was saved on this device.",
+        "The instruction reached this device.",
+        "The instruction was saved on this device."
+      ]
+    },
+    {
+      "id": "last-eight",
+      "timeline": [
+        {
+          "stage": "sender",
+          "details": {}
+        },
+        {
+          "stage": "receiver",
+          "details": {}
+        },
+        {
+          "stage": "sender",
+          "details": {}
+        },
+        {
+          "stage": "receiver",
+          "details": {}
+        },
+        {
+          "stage": "sender",
+          "details": {}
+        },
+        {
+          "stage": "receiver",
+          "details": {}
+        },
+        {
+          "stage": "sender",
+          "details": {}
+        },
+        {
+          "stage": "receiver",
+          "details": {}
+        },
+        {
+          "stage": "sender",
+          "details": {}
+        },
+        {
+          "stage": "receiver",
+          "details": {}
+        },
+        {
+          "stage": "sender",
+          "details": {}
+        },
+        {
+          "stage": "receiver",
+          "details": {}
+        }
+      ],
+      "expected": [
+        "The instruction was saved on this device.",
+        "The instruction reached this device.",
+        "The instruction was saved on this device.",
+        "The instruction reached this device.",
+        "The instruction was saved on this device.",
+        "The instruction reached this device.",
+        "The instruction was saved on this device.",
+        "The instruction reached this device."
+      ]
+    },
+    {
+      "id": "limit",
+      "timeline": [
+        {
+          "stage": "sender",
+          "details": {}
+        },
+        {
+          "stage": "receiver",
+          "details": {}
+        }
+      ],
+      "expected": [
+        "The instruction reached this device."
+      ],
+      "limit": 1
+    },
+    {
+      "id": "reason-clock",
+      "timeline": [
+        {
+          "stage": "execution_deferred",
+          "details": {
+            "reason": "clock_changed"
+          }
+        }
+      ],
+      "expected": [
+        "The entry was deferred because the device clock needs checking."
+      ]
+    },
+    {
+      "id": "reason-private",
+      "timeline": [
+        {
+          "stage": "entry_skipped",
+          "details": {
+            "reason": "SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The entry was skipped by local checks."
+      ]
+    },
+    {
+      "id": "decision-unknown",
+      "timeline": [
+        {
+          "stage": "execution_decision",
+          "details": {
+            "state": "reconcile_required"
+          }
+        }
+      ],
+      "expected": [
+        "The broker outcome is unknown. Reconciliation is required before new work."
+      ]
+    },
+    {
+      "id": "decision-settled-not-filled",
+      "timeline": [
+        {
+          "stage": "execution_decision",
+          "details": {
+            "state": "settled"
+          }
+        }
+      ],
+      "expected": [
+        "Local instruction processing completed; a fill is not confirmed."
+      ]
+    },
+    {
+      "id": "bad-status",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": {
+            "status": [
+              "filled"
+            ]
+          }
+        }
+      ],
+      "expected": [
+        "Broker evidence was refreshed; the recorded outcome is not confirmed."
+      ]
+    },
+    {
+      "id": "alias-instruction_stored",
+      "timeline": [
+        {
+          "stage": "instruction_stored",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The instruction was saved on this device."
+      ]
+    },
+    {
+      "id": "alias-receiver_instruction_stored",
+      "timeline": [
+        {
+          "stage": "receiver_instruction_stored",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The instruction was saved on this device."
+      ]
+    },
+    {
+      "id": "alias-relay_ack",
+      "timeline": [
+        {
+          "stage": "relay_ack",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The relay acknowledged the instruction; broker execution is not confirmed."
+      ]
+    },
+    {
+      "id": "alias-relay_accepted",
+      "timeline": [
+        {
+          "stage": "relay_accepted",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The relay acknowledged the instruction; broker execution is not confirmed."
+      ]
+    },
+    {
+      "id": "alias-relay_publish_started",
+      "timeline": [
+        {
+          "stage": "relay_publish_started",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "Sending the instruction to the relay was started; delivery is not confirmed."
+      ]
+    },
+    {
+      "id": "alias-relay_publish_rejected",
+      "timeline": [
+        {
+          "stage": "relay_publish_rejected",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The relay rejected the instruction; broker execution is not confirmed."
+      ]
+    },
+    {
+      "id": "alias-relay_rejected",
+      "timeline": [
+        {
+          "stage": "relay_rejected",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The relay rejected the instruction; broker execution is not confirmed."
+      ]
+    },
+    {
+      "id": "alias-submit_attempt",
+      "timeline": [
+        {
+          "stage": "submit_attempt",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "A broker submission was started; the outcome is not confirmed."
+      ]
+    },
+    {
+      "id": "alias-order_dispatch",
+      "timeline": [
+        {
+          "stage": "order_dispatch",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "A broker submission was started; the outcome is not confirmed."
+      ]
+    },
+    {
+      "id": "alias-broker_response",
+      "timeline": [
+        {
+          "stage": "broker_response",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The broker submission call returned; a fill is not confirmed."
+      ]
+    },
+    {
+      "id": "alias-order_not_submitted",
+      "timeline": [
+        {
+          "stage": "order_not_submitted",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "This attempt was not submitted to the broker."
+      ]
+    },
+    {
+      "id": "alias-broker_submit_superseded",
+      "timeline": [
+        {
+          "stage": "broker_submit_superseded",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "This attempt was not submitted to the broker."
+      ]
+    },
+    {
+      "id": "alias-broker_rejected",
+      "timeline": [
+        {
+          "stage": "broker_rejected",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "This submission was refused; a fill is not established by this record."
+      ]
+    },
+    {
+      "id": "alias-broker_lookup_unusable",
+      "timeline": [
+        {
+          "stage": "broker_lookup_unusable",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The broker outcome is unknown. Reconciliation is required before new work."
+      ]
+    },
+    {
+      "id": "alias-execution_error",
+      "timeline": [
+        {
+          "stage": "execution_error",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The broker outcome is unknown. Reconciliation is required before new work."
+      ]
+    },
+    {
+      "id": "alias-cancel_uncertain",
+      "timeline": [
+        {
+          "stage": "cancel_uncertain",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The broker outcome is unknown. Reconciliation is required before new work."
+      ]
+    },
+    {
+      "id": "alias-reconciliation_wait",
+      "timeline": [
+        {
+          "stage": "reconciliation_wait",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The broker outcome is unknown. Reconciliation is required before new work."
+      ]
+    },
+    {
+      "id": "alias-reconciliation_error",
+      "timeline": [
+        {
+          "stage": "reconciliation_error",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The broker outcome is unknown. Reconciliation is required before new work."
+      ]
+    },
+    {
+      "id": "alias-execution_pending",
+      "timeline": [
+        {
+          "stage": "execution_pending",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "The broker outcome is unknown. Reconciliation is required before new work."
+      ]
+    },
+    {
+      "id": "alias-cancel_dispatch",
+      "timeline": [
+        {
+          "stage": "cancel_dispatch",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "Cancellation was requested; cancellation is not confirmed."
+      ]
+    },
+    {
+      "id": "alias-execution_started",
+      "timeline": [
+        {
+          "stage": "execution_started",
+          "details": {
+            "secret": "broker-SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "Local execution checks started; submission is not confirmed."
+      ]
+    },
+    {
+      "id": "status-accepted",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": {
+            "status": "accepted"
+          }
+        }
+      ],
+      "expected": [
+        "The broker reports an active order; a full fill is not confirmed."
+      ]
+    },
+    {
+      "id": "status-pending_new",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": {
+            "status": "pending_new"
+          }
+        }
+      ],
+      "expected": [
+        "The broker reports an active order; a full fill is not confirmed."
+      ]
+    },
+    {
+      "id": "status-accepted_for_bidding",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": {
+            "status": "accepted_for_bidding"
+          }
+        }
+      ],
+      "expected": [
+        "The broker reports an active order; a full fill is not confirmed."
+      ]
+    },
+    {
+      "id": "status-pending_replace",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": {
+            "status": "pending_replace"
+          }
+        }
+      ],
+      "expected": [
+        "The broker reports an active order; a full fill is not confirmed."
+      ]
+    },
+    {
+      "id": "status-expired",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": {
+            "status": "expired"
+          }
+        }
+      ],
+      "expected": [
+        "The broker reports the order expired; earlier fills may remain."
+      ]
+    },
+    {
+      "id": "status-submit_unknown",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": {
+            "status": "submit_unknown"
+          }
+        }
+      ],
+      "expected": [
+        "The broker outcome is unknown. Reconciliation is required before new work."
+      ]
+    },
+    {
+      "id": "status-cancel_unknown",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": {
+            "status": "cancel_unknown"
+          }
+        }
+      ],
+      "expected": [
+        "The broker outcome is unknown. Reconciliation is required before new work."
+      ]
+    },
+    {
+      "id": "state-reconcile_required",
+      "timeline": [
+        {
+          "stage": "execution_decision",
+          "details": {
+            "state": "reconcile_required"
+          }
+        }
+      ],
+      "expected": [
+        "The broker outcome is unknown. Reconciliation is required before new work."
+      ]
+    },
+    {
+      "id": "state-waiting_for_reconciliation",
+      "timeline": [
+        {
+          "stage": "execution_decision",
+          "details": {
+            "state": "waiting_for_reconciliation"
+          }
+        }
+      ],
+      "expected": [
+        "The broker outcome is unknown. Reconciliation is required before new work."
+      ]
+    },
+    {
+      "id": "state-manual_reconcile",
+      "timeline": [
+        {
+          "stage": "execution_decision",
+          "details": {
+            "state": "manual_reconcile"
+          }
+        }
+      ],
+      "expected": [
+        "The broker outcome is unknown. Reconciliation is required before new work."
+      ]
+    },
+    {
+      "id": "state-cancel_pending",
+      "timeline": [
+        {
+          "stage": "execution_decision",
+          "details": {
+            "state": "cancel_pending"
+          }
+        }
+      ],
+      "expected": [
+        "Cancellation was requested; cancellation is not confirmed."
+      ]
+    },
+    {
+      "id": "state-rejected",
+      "timeline": [
+        {
+          "stage": "execution_decision",
+          "details": {
+            "state": "rejected"
+          }
+        }
+      ],
+      "expected": [
+        "This submission was refused; a fill is not established by this record."
+      ]
+    },
+    {
+      "id": "state-skipped",
+      "timeline": [
+        {
+          "stage": "execution_decision",
+          "details": {
+            "state": "skipped"
+          }
+        }
+      ],
+      "expected": [
+        "The entry was skipped by local checks."
+      ]
+    },
+    {
+      "id": "state-superseded",
+      "timeline": [
+        {
+          "stage": "execution_decision",
+          "details": {
+            "state": "superseded"
+          }
+        }
+      ],
+      "expected": [
+        "This attempt was not submitted to the broker."
+      ]
+    },
+    {
+      "id": "state-invalidated",
+      "timeline": [
+        {
+          "stage": "execution_decision",
+          "details": {
+            "state": "invalidated"
+          }
+        }
+      ],
+      "expected": [
+        "The entry remainder was invalidated; any recorded fills are retained."
+      ]
+    },
+    {
+      "id": "state-settled",
+      "timeline": [
+        {
+          "stage": "execution_decision",
+          "details": {
+            "state": "settled"
+          }
+        }
+      ],
+      "expected": [
+        "Local instruction processing completed; a fill is not confirmed."
+      ]
+    },
+    {
+      "id": "state-submitted",
+      "timeline": [
+        {
+          "stage": "execution_decision",
+          "details": {
+            "state": "submitted"
+          }
+        }
+      ],
+      "expected": [
+        "The broker submission call returned; a fill is not confirmed."
+      ]
+    },
+    {
+      "id": "state-waiting_for_clock",
+      "timeline": [
+        {
+          "stage": "execution_decision",
+          "details": {
+            "state": "waiting_for_clock"
+          }
+        }
+      ],
+      "expected": [
+        "The entry was deferred because the device clock needs checking."
+      ]
+    },
+    {
+      "id": "state-waiting_for_start",
+      "timeline": [
+        {
+          "stage": "execution_decision",
+          "details": {
+            "state": "waiting_for_start"
+          }
+        }
+      ],
+      "expected": [
+        "The entry is waiting for its recorded start time."
+      ]
+    },
+    {
+      "id": "refused-not-broker-proof",
+      "timeline": [
+        {
+          "stage": "order_state",
+          "details": {
+            "status": "rejected"
+          }
+        }
+      ],
+      "expected": [
+        "This submission was refused; a fill is not established by this record."
+      ]
+    },
+    {
+      "id": "encoded-structured",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": "{\"status\":\"partially_filled\",\"id\":\"SECRET\"}"
+        }
+      ],
+      "expected": [
+        "The broker reports a partial fill; the full order is not confirmed filled."
+      ]
+    },
+    {
+      "id": "unknown-secret-status",
+      "timeline": [
+        {
+          "stage": "broker_reconciled",
+          "details": {
+            "status": "SECRET"
+          }
+        }
+      ],
+      "expected": [
+        "Broker evidence was refreshed; the recorded outcome is not confirmed."
+      ]
+    }
+  ]
+}

@@ -63,7 +63,7 @@ class AccountHome:
         for i,(title,value) in enumerate([('Send my fills to Discord','alerts'),('Trade/share trades','trade'),('Follow trades','follow')]):
             ttk.Button(choices,text=title,command=lambda p=value:purpose(p),style='Accent.TButton').grid(row=0,column=i,sticky='ew',padx=(0,6));choices.columnconfigure(i,weight=1)
         links=ttk.Frame(frame);links.pack(fill='x',pady=10)
-        for title,callback in [('Setup & connections',lambda:navigate('Account')),('Optional paper practice / support (F1)',practice),('Test my connection (read-only)',test_connection)]:
+        for title,callback in [('What happened?',lambda:navigate('Decisions')),('Setup & connections',lambda:navigate('Account')),('Optional paper practice / support (F1)',practice),('Test my connection (read-only)',test_connection)]:
             ttk.Button(links,text=title,command=callback,style='Tertiary.TButton').pack(fill='x',pady=3)
 
     def render(self,state):

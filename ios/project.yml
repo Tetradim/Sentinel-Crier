@@ -34,6 +34,7 @@ targets:
       - path: ../crier/customer-practice.json
         buildPhase: resources
       - path: SentinelCrier/MirrorConnection.swift
+      - path: SentinelCrier/DecisionSummary.swift
       - path: SentinelCrier/IntentDiagnostics.swift
       - path: SentinelCrier/CopyDashboard.swift
       - path: SentinelCrier/IntentEntryAuthorization.swift
@@ -104,6 +105,9 @@ targets:
       - path: SentinelCrier/GuidedSetupTests.swift
       - path: SentinelCrier/PracticeGuideTests.swift
       - path: SentinelCrier/MirrorTests.swift
+      - path: SentinelCrier/DecisionSummaryTests.swift
+      - path: ../tests/fixtures/decision-summary.json
+        buildPhase: resources
       - path: SentinelCrier/IntentDiagnosticsTests.swift
       - path: SentinelCrier/CopyDashboardTests.swift
       - path: ../tests/fixtures/copy-dashboard.json
@@ -118,6 +122,9 @@ targets:
       - path: SentinelCrier/WebullHostTests.swift
       - path: SentinelCrier/NativeHealthTests.swift
       - path: SentinelCrier/EntryClockTests.swift
+      - path: SentinelCrier/NativeInvariantsTests.swift
+      - path: ../tests/fixtures/native-invariants.json
+        buildPhase: resources
       - path: SentinelCrier/NativeHealthFlowTests.swift
       - path: SentinelCrier/RecoveryEvidenceTests.swift
       - path: ../tests/fixtures/oauth-return.json

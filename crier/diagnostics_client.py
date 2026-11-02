@@ -5,6 +5,7 @@ import json
 import time
 import httpx
 from .trade_diagnostics import validate_quote
+from .error_log import emit_error
 
 
 def iso(ms):
@@ -84,7 +85,9 @@ class DiagnosticsClient:
                 if pair:
                     if time.monotonic()>=next_clock or (self.clock and self.clock['pair']!=self.device.fingerprint):
                         try: await self.sample_clock(client,pair)
-                        except Exception: self.clock=None
+                        except Exception as exc:
+                            self.clock=None
+                            emit_error(getattr(self.device,'error_log',None),'diagnostics.clock_failed',exc)
                         next_clock=time.monotonic()+20
                     with self.device.db() as db:
                         jobs=[dict(row) for row in db.execute('SELECT * FROM diagnostic_jobs WHERE pair=? AND done=0 AND next_try<=? ORDER BY rowid LIMIT 8',(self.device.fingerprint,time.time()))]
@@ -114,8 +117,9 @@ class DiagnosticsClient:
                             complete=observation['stage']=='sender' or (any(x['observation']['stage']=='sender' for x in observations) and any(x['observation']['stage']=='receiver' for x in observations))
                             with self.device.db() as db:
                                 db.execute('UPDATE diagnostic_jobs SET done=? WHERE event_id=?',(int(complete),job['event_id']))
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            emit_error(getattr(self.device,'error_log',None),'diagnostics.transport_failed',exc,
+                                       trade_id=job['trade_id'])
                         finally:
                             attempts=job['attempts']+1
                             with self.device.db() as db:

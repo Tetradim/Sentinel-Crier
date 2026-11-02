@@ -2,6 +2,10 @@
 
 The approved customer-ease phases E–I, live-policy phase J, reconciliation phase K and push/dashboard phase L have automated source verification. This is acceptance of the implemented source scope, with exclusions recorded in each phase report.
 
+## November 2 review improvements
+
+The approved follow-up adds [selected cross-platform invariant scenarios](protocol/native-invariants.md), focused desktop/Android journey coordinators, sanitized reporting for selected diagnostic failures and [plain-language What happened explanations](decision-explanations.md). The scope preserves native execution engines, explicit enablement and durable journal formats. Automated acceptance is recorded separately; physical/provider work below is unchanged.
+
 ## Owner/provider/device work still unpassed
 
 The owner explicitly deferred physical iPhone/Mac and Apple/Webull provider work on October 31; see the [recorded deferral](deferred/2026-10-31-owner-provider-acceptance.md). These checks remain unpassed and do not block independent implementation or Windows release work.

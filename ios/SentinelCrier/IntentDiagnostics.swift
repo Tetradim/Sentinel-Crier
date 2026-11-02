@@ -119,6 +119,11 @@ struct IntentDiagnosticsView: View {
         List {
             ForEach((controller.state.diagnostics ?? [:]).values.filter { $0.event.trade_id == tradeID }.sorted { $0.event.sequence < $1.event.sequence }, id: \.event.event_id) { record in
                 Section("Revision \(record.event.sequence) · \(record.event.action)") {
+                    Text("What happened?").font(.headline)
+                    ForEach(Array(DecisionSummary.fromTimeline(record.timeline).enumerated()), id: \.offset) { _, explanation in
+                        Text(explanation)
+                    }
+                    Text("Advanced evidence").font(.headline)
                     Text(record.event.event_id).font(.caption).textSelection(.enabled)
                     Text(record.latencyText)
                     Text(record.premiumText)

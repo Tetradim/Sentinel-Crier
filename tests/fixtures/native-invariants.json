@@ -1,0 +1,423 @@
+{
+  "version": 1,
+  "clock": [
+    {
+      "id": "inclusive-positive-boundary-and-high-water",
+      "anchor_wall_ms": 1000000,
+      "anchor_mono_ms": 10000,
+      "samples": [
+        {
+          "wall_ms": 1006000,
+          "mono_ms": 11000,
+          "effective_ms": 1006000
+        },
+        {
+          "wall_ms": 1002000,
+          "mono_ms": 12000,
+          "effective_ms": 1006000
+        },
+        {
+          "wall_ms": 1003000,
+          "mono_ms": 13000,
+          "effective_ms": 1006000
+        },
+        {
+          "wall_ms": 1007000,
+          "mono_ms": 17000,
+          "effective_ms": 1007000
+        }
+      ]
+    },
+    {
+      "id": "negative-boundary-and-recovery",
+      "anchor_wall_ms": 1000000,
+      "anchor_mono_ms": 10000,
+      "samples": [
+        {
+          "wall_ms": 996000,
+          "mono_ms": 11000,
+          "effective_ms": 1001000
+        },
+        {
+          "wall_ms": 995999,
+          "mono_ms": 11000,
+          "uncertain": true
+        },
+        {
+          "wall_ms": 1002000,
+          "mono_ms": 12000,
+          "effective_ms": 1002000
+        }
+      ]
+    },
+    {
+      "id": "positive-discontinuity-and-monotonic-rollback",
+      "anchor_wall_ms": 1000000,
+      "anchor_mono_ms": 10000,
+      "samples": [
+        {
+          "wall_ms": 1006001,
+          "mono_ms": 11000,
+          "uncertain": true
+        },
+        {
+          "wall_ms": 1000000,
+          "mono_ms": 9999,
+          "uncertain": true
+        },
+        {
+          "wall_ms": 1001000,
+          "mono_ms": 11000,
+          "effective_ms": 1001000
+        }
+      ]
+    }
+  ],
+  "bank": [
+    {
+      "id": "shared-cash-and-account-isolation",
+      "steps": [
+        {
+          "op": "reserve",
+          "alias": "a",
+          "account": "one",
+          "route": "alice",
+          "trade": "t",
+          "event": "e",
+          "quantity": 7,
+          "sell": false,
+          "refused": false,
+          "available": "30",
+          "active": 1,
+          "orders": 1
+        },
+        {
+          "op": "restart"
+        },
+        {
+          "op": "reserve",
+          "alias": "too-much",
+          "account": "one",
+          "route": "bob",
+          "trade": "b",
+          "event": "b",
+          "quantity": 4,
+          "sell": false,
+          "refused": true,
+          "available": "30",
+          "active": 1,
+          "orders": 1
+        },
+        {
+          "op": "reserve",
+          "alias": "duplicate-source",
+          "account": "one",
+          "route": "bob",
+          "trade": "other",
+          "event": "e",
+          "quantity": 1,
+          "sell": false,
+          "refused": true,
+          "available": "30",
+          "active": 1,
+          "orders": 1
+        },
+        {
+          "op": "reserve",
+          "alias": "other-account",
+          "account": "two",
+          "route": "alice",
+          "trade": "t",
+          "event": "e",
+          "quantity": 7,
+          "sell": false,
+          "refused": false,
+          "available": "30",
+          "active": 1,
+          "orders": 1
+        },
+        {
+          "op": "check",
+          "account": "one",
+          "available": "30",
+          "active": 1,
+          "orders": 1,
+          "blocked": false
+        }
+      ]
+    },
+    {
+      "id": "partial-cancel-owned-exit-and-tombstone",
+      "steps": [
+        {
+          "op": "reserve",
+          "alias": "buy",
+          "account": "one",
+          "route": "alice",
+          "trade": "t",
+          "event": "e",
+          "quantity": 5,
+          "sell": false,
+          "refused": false,
+          "available": "50",
+          "active": 1,
+          "orders": 1
+        },
+        {
+          "op": "observe",
+          "alias": "buy",
+          "filled": 2,
+          "status": "pending_cancel",
+          "available": "50",
+          "active": 1,
+          "orders": 1
+        },
+        {
+          "op": "observe",
+          "alias": "buy",
+          "filled": 2,
+          "status": "canceled",
+          "available": "80",
+          "active": 1,
+          "orders": 1
+        },
+        {
+          "op": "observe",
+          "alias": "buy",
+          "filled": 2,
+          "status": "canceled",
+          "available": "80",
+          "active": 1,
+          "orders": 1
+        },
+        {
+          "op": "reserve",
+          "alias": "wrong-owner",
+          "account": "one",
+          "route": "bob",
+          "trade": "t",
+          "event": "wrong",
+          "quantity": 1,
+          "sell": true,
+          "refused": true,
+          "available": "80",
+          "active": 1,
+          "orders": 1
+        },
+        {
+          "op": "reserve",
+          "alias": "exit",
+          "account": "one",
+          "route": "alice",
+          "trade": "t",
+          "event": "exit",
+          "quantity": 2,
+          "sell": true,
+          "refused": false,
+          "available": "80",
+          "active": 1,
+          "orders": 2
+        },
+        {
+          "op": "reserve",
+          "alias": "oversell",
+          "account": "one",
+          "route": "alice",
+          "trade": "t",
+          "event": "again",
+          "quantity": 1,
+          "sell": true,
+          "refused": true,
+          "available": "80",
+          "active": 1,
+          "orders": 2
+        },
+        {
+          "op": "observe",
+          "alias": "exit",
+          "filled": 2,
+          "status": "filled",
+          "available": "100",
+          "active": 0,
+          "orders": 2
+        },
+        {
+          "op": "restart"
+        },
+        {
+          "op": "reserve",
+          "alias": "reopen",
+          "account": "one",
+          "route": "alice",
+          "trade": "t",
+          "event": "reopen",
+          "quantity": 1,
+          "sell": false,
+          "refused": true,
+          "available": "100",
+          "active": 0,
+          "orders": 2
+        }
+      ]
+    },
+    {
+      "id": "inventory-mismatch-never-adopts-external-holdings",
+      "steps": [
+        {
+          "op": "inventory",
+          "positions": {
+            "SPY": 1
+          },
+          "refused": true,
+          "available": "100",
+          "active": 0,
+          "orders": 0,
+          "blocked": true
+        },
+        {
+          "op": "restart"
+        },
+        {
+          "op": "reserve",
+          "alias": "blocked",
+          "account": "one",
+          "route": "alice",
+          "trade": "t",
+          "event": "e",
+          "quantity": 1,
+          "sell": false,
+          "refused": true,
+          "available": "100",
+          "active": 0,
+          "orders": 0,
+          "blocked": true
+        },
+        {
+          "op": "inventory",
+          "positions": {},
+          "refused": false,
+          "available": "100",
+          "active": 0,
+          "orders": 0,
+          "blocked": false
+        },
+        {
+          "op": "reserve",
+          "alias": "recovered",
+          "account": "one",
+          "route": "alice",
+          "trade": "t",
+          "event": "e",
+          "quantity": 1,
+          "sell": false,
+          "refused": false,
+          "available": "90",
+          "active": 1,
+          "orders": 1,
+          "blocked": false
+        }
+      ]
+    },
+    {
+      "id": "late-cumulative-fill-growth-and-decreasing-proof-refusal",
+      "steps": [
+        {
+          "op": "reserve",
+          "alias": "buy",
+          "account": "one",
+          "route": "alice",
+          "trade": "t",
+          "event": "e",
+          "quantity": 5,
+          "sell": false,
+          "refused": false,
+          "available": "50",
+          "active": 1,
+          "orders": 1
+        },
+        {
+          "op": "observe",
+          "alias": "buy",
+          "filled": 2,
+          "status": "canceled",
+          "available": "80",
+          "active": 1,
+          "orders": 1
+        },
+        {
+          "op": "observe",
+          "alias": "buy",
+          "filled": 3,
+          "status": "canceled",
+          "available": "70",
+          "active": 1,
+          "orders": 1,
+          "blocked": true
+        },
+        {
+          "op": "restart"
+        },
+        {
+          "op": "inventory",
+          "positions": {
+            "SPY": 3
+          },
+          "refused": false,
+          "available": "70",
+          "active": 1,
+          "orders": 1,
+          "blocked": true
+        },
+        {
+          "op": "observe",
+          "alias": "buy",
+          "filled": 2,
+          "expected_filled": 3,
+          "status": "canceled",
+          "refused": true,
+          "available": "70",
+          "active": 1,
+          "orders": 1,
+          "blocked": true
+        },
+        {
+          "op": "restart"
+        },
+        {
+          "op": "check",
+          "account": "one",
+          "available": "70",
+          "active": 1,
+          "orders": 1,
+          "blocked": true
+        },
+        {
+          "op": "reserve",
+          "alias": "wrong-owner",
+          "account": "one",
+          "route": "bob",
+          "trade": "t",
+          "event": "wrong-owner",
+          "quantity": 3,
+          "sell": true,
+          "refused": true,
+          "available": "70",
+          "active": 1,
+          "orders": 1,
+          "blocked": true
+        },
+        {
+          "op": "inventory",
+          "positions": {
+            "SPY": 3
+          },
+          "refused": false,
+          "available": "70",
+          "active": 1,
+          "orders": 1,
+          "blocked": true
+        }
+      ]
+    }
+  ]
+}

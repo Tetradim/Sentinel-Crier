@@ -95,7 +95,9 @@ originate mirrored commands. Standard single-leg long options and whole shares o
 
 ## Inspect execution evidence
 
-Select a tracked trade in **Positions**, open **Account → Health & recovery → Trade timeline**, and click
+For a short explanation, open **Home → What happened?**, choose a tracked trade and click **Read local evidence**. Use **Detailed timeline** for quantities and advanced records. The panel reads local evidence only; it never submits or retries orders. [Explanation semantics](../docs/decision-explanations.md).
+
+Alternatively, select a tracked trade in **Positions**, open **Account → Health & recovery → Trade timeline**, and click
 **Load selected trade**. Export JSON or CSV to keep the local relay and broker
 timeline. Missing market quotes and unmeasured cross-device latency are labeled
 explicitly. See [execution diagnostics](../docs/execution-diagnostics.md).

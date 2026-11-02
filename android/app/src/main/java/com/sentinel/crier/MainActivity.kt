@@ -27,6 +27,14 @@ class MainActivity:Activity(),RouteOwner {
  private val alertsTimer=android.os.Handler(android.os.Looper.getMainLooper())
  @Volatile private var foreground=false
  @Volatile private var lifecycleRevision=0L
+ private val journeys=JourneyCoordinator(
+  saveNavigation={ getSharedPreferences("navigation",MODE_PRIVATE).edit().putString("screen",it).commit(); Unit },
+  invalidateCustomer={ customer?.invalidate(); redeemed=null; returnInbox.clear() },
+  stopAlerts={ guided?.stop(); Unit },
+  savePurpose={ getSharedPreferences("journey",MODE_PRIVATE).edit().putString("purpose",it).commit(); Unit },
+  retireRoute={ lifecycleRevision++; foreground=false },
+  saveRoute={ getSharedPreferences("route-selection",MODE_PRIVATE).edit().putString("id",it).commit(); Unit },
+  recreate={ recreate() })
  private var alertsPolling=false
  private val alertsTick=object:Runnable { override fun run() { val g=guided; if(g?.isEnabled()==true && !alertsPolling) { alertsPolling=true; background { try { g.tick(); g.evidence } finally { runOnUiThread { alertsPolling=false } } } }; alertsTimer.postDelayed(this,10000) } }
  private lateinit var shell:BrokerageShell
@@ -74,12 +82,12 @@ class MainActivity:Activity(),RouteOwner {
   button("Select connection / account") {
    val profiles=Vault(this).profiles()
    android.app.AlertDialog.Builder(this).setTitle("Select route · other routes keep running").setItems(profiles.map { val c=it.getJSONObject("config"); "${it.getString("id").take(8)} · ${c.optString("environment")} ${c.optString("role")} · ${c.optString("account").take(8)}" }.toTypedArray()) { _,index ->
-    guided?.stop(); lifecycleRevision++; foreground=false; getSharedPreferences("route-selection",MODE_PRIVATE).edit().putString("id",profiles[index].getString("id")).commit(); recreate()
+    journeys.changeRoute { profiles[index].getString("id") }
    }.show()
   }
   button("Add connection / account") {
-   RouteStorage.sharedFeatureRoute(this); guided?.stop(); lifecycleRevision++; foreground=false; val config=JSONObject(); Vault(this).save(config,true)
-   getSharedPreferences("route-selection",MODE_PRIVATE).edit().putString("id",config.getString("profile")).commit(); recreate()
+   RouteStorage.sharedFeatureRoute(this)
+   journeys.changeRoute { val config=JSONObject(); Vault(this).save(config,true); config.getString("profile") }
   }
   if(routeId==RouteStorage.sharedFeatureRoute(this)) { customerSetup(); handleOAuthReturn(intent?.dataString) }
   journey=getSharedPreferences("journey",MODE_PRIVATE).getString("purpose","") ?: ""
@@ -355,13 +363,7 @@ class MainActivity:Activity(),RouteOwner {
   }
  }
  override fun onNewIntent(value:Intent) { super.onNewIntent(value); intent=value; handleOAuthReturn(value.dataString) }
- private fun chooseJourney(value:String) {
-  getSharedPreferences("navigation",MODE_PRIVATE).edit().putString("screen",if(value=="alerts") "Account" else "Trade").commit()
-  customer?.invalidate(); redeemed=null; returnInbox.clear()
-  guided?.stop()
-  getSharedPreferences("journey",MODE_PRIVATE).edit().putString("purpose",value).commit()
-  recreate()
- }
+ private fun chooseJourney(value:String) { journeys.choosePurpose(value) }
  private fun alertsSetup() {
   val g=alertsOwner.get { GuidedAlerts(EncryptedAlertsDocument(applicationContext),health=AppHealth.ledger(applicationContext)) }; guided=g
   val saved=g.saved()

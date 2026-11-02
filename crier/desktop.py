@@ -13,17 +13,20 @@ from .desktop_runtime import DesktopWorker, data_directory
 from .connection_client import default_origin
 from .lock import AlreadyRunningError, single_process
 from .desktop_setup import SetupProgress
+from .desktop_journeys import DesktopJourneys
 from .desktop_practice import PracticeWindow, readonly_traversal
 
 
 class DesktopApp:
     def __init__(self, root, worker, *, presence=None, startup=False, check_updates=True):
         self.root, self.worker = root, worker
+        self.journeys = DesktopJourneys(self)
         self.practice_window = None
         self.presence = presence
         self.pending = []
         self.connection_jobs = set()
         self.action_epoch = 0
+        self.diagnostic_revision = 0
         self.poll = None
         self.connected = False
         self.provider_purpose = 'alerts'
@@ -118,6 +121,12 @@ class DesktopApp:
         self.build_updates(updates)
         self._health(connection_health)
         self._diagnostics(timeline)
+        self.timeline_tab=timeline
+        self.decision_tab=ttk.Frame(health_sections,padding=8)
+        health_sections.add(self.decision_tab,text='What happened?')
+        from .desktop_decisions import DecisionPanel
+        self.decision_panel=DecisionPanel(self.decision_tab,send=self.submit,epoch=lambda:self.action_epoch,
+                                          details=self.open_decision_timeline)
         self.build_account_hub(copy_tab,pricing,customer)
         if self.presence is not None:
             self._presence_controls(self.account_content)
@@ -150,6 +159,9 @@ class DesktopApp:
         self.connected = False
         self.mobile_shell.render({})
         self.home_overview.render({})
+        self.decision_panel.render_state({})
+        self.diagnostic_revision += 1
+        self.clear_diagnostic_view('Select a tracked trade on the current connection to read its local timeline.')
         stop=getattr(self,'stop_job',None)
         self.connection_jobs = {stop} if stop is not None and not stop.done() else set()
         self.setup_progress = SetupProgress()
@@ -218,44 +230,16 @@ class DesktopApp:
         self.bank_views().show_account_bank(result)
 
     def _start(self, frame):
-        from .desktop_mobile_shell import AccountHome
-        self.home_overview=AccountHome(frame,purpose=self.choose_purpose,navigate=self.show_mobile_page,
-                                       practice=self.open_practice,test_connection=self.test_connection)
+        return self.journeys._start(frame)
 
     def show_mobile_page(self,name):
-        if name in ('Trade','Positions','Orders'):
-            self.tabs.select(self.activity)
-            self.trading_navigation.select(('Trade','Positions','Orders').index(name))
-        else:
-            self.tabs.select({'Home':self.start_tab,'Markets':self.markets_tab,'Account':self.account_tab}[name])
-        self.mobile_shell.select(name)
+        return self.journeys.show_mobile_page(name)
 
     def sync_mobile_navigation(self):
-        current=self.tabs.select()
-        if current==str(self.activity):
-            self.mobile_shell.select(('Trade','Positions','Orders')[self.trading_navigation.index('current')])
-        elif current==str(self.start_tab): self.mobile_shell.select('Home')
-        elif current==str(self.markets_tab): self.mobile_shell.select('Markets')
-        else:
-            self.mobile_shell.select('Account')
-            if current!=str(self.account_tab):self.mobile_shell.section.set(self.tabs.tab(current,'text'))
+        return self.journeys.sync_mobile_navigation()
 
     def build_account_hub(self,copy_tab,pricing,customer):
-        frame=self.account_content
-        ttk.Label(frame,text='Account & connections',style='Title.TLabel').pack(anchor='w',pady=(0,10))
-        ttk.Label(frame,textvariable=self.connection_title,style='Section.TLabel').pack(anchor='w')
-        ttk.Label(frame,textvariable=self.connection_detail,wraplength=700,style='Muted.TLabel').pack(anchor='w',pady=(0,12))
-        grid=ttk.Frame(frame);grid.pack(fill='x')
-        self.account_links={}
-        for i,(title,page) in enumerate([('Alerts setup',self.alerts_tab),('Host / Receive',self.setup_tab),('Pricing & allocation',pricing),
-                                       ('Copy dashboard',copy_tab),('Discord & receivers',self.delivery_tab),('Health & recovery',self.health_tab),('Provider sign-in',customer)]):
-            button=ttk.Button(grid,text=title,command=lambda p=page:self.tabs.select(p),style='Tertiary.TButton')
-            button.grid(row=i//2,column=i%2,sticky='ew',padx=(0,8),pady=4);grid.columnconfigure(i%2,weight=1)
-            self.account_links[title]=button
-        utilities=ttk.Frame(frame);utilities.pack(fill='x',pady=12)
-        ttk.Button(utilities,text='Updates & private backups',command=lambda:(self.tabs.select(self.health_tab),self.health_sections.select(self.updates_tab)),style='Tertiary.TButton').pack(side='left',padx=(0,8))
-        ttk.Button(utilities,text='Support',command=self.open_support,style='Tertiary.TButton').pack(side='left')
-        ttk.Label(frame,text='Keep this PC awake. Quit stops Crier; existing broker orders remain active.',wraplength=700,style='Muted.TLabel').pack(anchor='w',pady=8)
+        return self.journeys.build_account_hub(copy_tab, pricing, customer)
 
     def stop_all_connections(self):
         if self.closing or self.stopping_all():return
@@ -316,13 +300,7 @@ class DesktopApp:
             self.notice.set('Practice guide unavailable. See the project README and support page; account controls remain available.')
 
     def choose_purpose(self, purpose):
-        if self.connected:
-            self.notice.set('Disconnect before changing setup purpose. Existing orders and recovery records remain saved.')
-            return
-        self.provider_purpose = 'alerts' if purpose == 'alerts' else 'trade'
-        self.tabs.select(self.alerts_tab if purpose == 'alerts' else self.setup_tab)
-        self.notice.set('Verify your account, then configure Discord.' if purpose == 'alerts' else
-                        'Choose Host to share trades.' if purpose == 'trade' else 'Choose Receive to follow trades.')
+        return self.journeys.choose_purpose(purpose)
 
     def _customer(self, frame):
         from .desktop_provider_view import ProviderSignInView
@@ -362,39 +340,10 @@ class DesktopApp:
             if not self.closing: self.root.after(500,self.provider_inbox)
 
     def _alerts_setup(self, frame):
-        ttk.Label(frame, text='1. Connect your account for fill alerts', font=('Segoe UI', 14, 'bold')).pack(anchor='w', pady=8)
-        ttk.Label(frame, text='Read-only fill monitoring. No Host or Receive connection is needed.', wraplength=750).pack(anchor='w', pady=8)
-        row = ttk.Frame(frame); row.pack(fill='x', pady=8)
-        ttk.Label(row, text='Alpaca environment', width=25).pack(side='left')
-        self.alerts_environment = tk.StringVar(value='paper')
-        ttk.Combobox(row, textvariable=self.alerts_environment, values=('paper', 'live'), state='readonly').pack(side='left')
-        self.alerts_key = self._entry(frame, 'Alpaca API key', masked=True)
-        self.alerts_secret = self._entry(frame, 'Alpaca API secret', masked=True)
-        ttk.Label(frame, text='Leave both blank to reuse saved alerts keys for the same environment and account.').pack(anchor='w', pady=8)
-        self.alerts_live = tk.BooleanVar(value=False)
-        ttk.Checkbutton(frame, text='Allow read access to my live-money account', variable=self.alerts_live).pack(anchor='w', pady=8)
-        self.alerts_connect = ttk.Button(frame, text='Connect / use saved keys', command=self.connect_alerts)
-        self.alerts_connect.pack(anchor='w', pady=8)
-        ttk.Button(frame, text='Disconnect', command=lambda: self.submit('disconnect')).pack(anchor='w', pady=4)
-        self.alerts_result = tk.StringVar(value='Account not verified. Connect to check read access.')
-        ttk.Label(frame, textvariable=self.alerts_result, wraplength=750).pack(anchor='w', pady=12)
-        self.alerts_next = ttk.Button(frame, text='2. Set up Discord: preview, test, enable', state='disabled',
-                                     command=lambda: self.tabs.select(self.delivery_tab))
-        self.alerts_next.pack(anchor='w', pady=8)
+        return self.journeys._alerts_setup(frame)
 
     def connect_alerts(self):
-        if self.connected:
-            self.notice.set('Disconnect before changing connection settings.')
-            return
-        self.alerts_connect.configure(state='disabled')
-        self.alerts_next.configure(state='disabled')
-        self.alerts_result.set('Verifying account read access…')
-        def completed(result):
-            self.alerts_key.set(''); self.alerts_secret.set('')
-            self.render(result)
-            self.refresh_delivery_history()
-        self.submit('connect_alerts', self.alerts_environment.get(), self.alerts_key.get(), self.alerts_secret.get(),
-                    allow_live=self.alerts_live.get(), callback=completed)
+        return self.journeys.connect_alerts()
 
     def build_delivery(self, frame):
         self.delivery_tab = frame
@@ -684,32 +633,7 @@ class DesktopApp:
         return variable
 
     def _setup(self, frame):
-        ttk.Label(frame, text='Connect across networks', font=('Segoe UI',12,'bold')).pack(anchor='w')
-        ttk.Label(frame, text='Choose Host to share your trades, or Receive to follow a paired host.').pack(anchor='w', pady=6)
-        self.service = self._entry(frame, 'Service (host setup)', default_origin())
-        self.invitation = self._entry(frame, 'Host invitation / code', masked=True)
-        row=ttk.Frame(frame); row.pack(fill='x', pady=8)
-        self.host_environment=tk.StringVar(value='paper')
-        ttk.Combobox(row, textvariable=self.host_environment, values=('paper','live'), state='readonly', width=8).pack(side='left')
-        ttk.Button(row,text='Host / invite receiver',command=lambda:self.quick_connect('host')).pack(side='left',padx=8)
-        ttk.Button(row,text='Receive / reconnect',command=lambda:self.quick_connect('receive')).pack(side='left')
-        self.share=self._entry(frame, 'Invitation to share')
-        ttk.Button(frame,text='Copy invitation',command=self.copy_invitation).pack(anchor='w')
-        ttk.Label(frame,text='Each invitation joins one receiver and expires in 10 minutes. Generate another for each additional receiver.').pack(anchor='w',pady=6)
-        ttk.Separator(frame).pack(fill='x',pady=10)
-        ttk.Label(frame,text='Your brokerage account • leave both blank to reuse saved credentials').pack(anchor='w')
-        self.key = self._entry(frame, 'Alpaca API key', masked=True)
-        self.secret = self._entry(frame, 'Alpaca API secret', masked=True)
-        self.live = tk.BooleanVar(value=False)
-        ttk.Checkbutton(frame, text='Allow connection to a live-money account', variable=self.live).pack(anchor='w', pady=6)
-        buttons = ttk.Frame(frame)
-        buttons.pack(fill='x', pady=6)
-        self.connect_button = ttk.Button(buttons, text='Connect / reuse saved', command=self.connect)
-        self.connect_button.pack(side='left')
-        ttk.Button(buttons, text='Disconnect', command=lambda: self.submit('disconnect')).pack(side='left', padx=8)
-        ttk.Button(buttons, text='Pairing & setup guide', command=lambda: webbrowser.open(
-            'https://github.com/Tetradim/Sentinel-Crier/blob/main/desktop/README.md')).pack(side='left')
-        self.pairing = self._entry(frame, 'Advanced: pairing JSON', masked=True)
+        return self.journeys._setup(frame)
 
     def _pricing(self, frame):
         ttk.Label(frame, text='Local execution settings', font=('Segoe UI',12,'bold')).pack(anchor='w')
@@ -787,23 +711,7 @@ class DesktopApp:
             self.notice.set('Invitation copied. Send it only to the intended receiver.')
 
     def quick_connect(self, role):
-        epoch=self.action_epoch
-        def ready(result):
-            if epoch!=self.action_epoch or self.closing or self.stopping_all():return
-            self.pairing.set(json.dumps(result['pair']))
-            self.service.set(result['pair']['url'])
-            self.host_environment.set(result['pair']['environment'])
-            self.invitation.set('')
-            self.share.set(result.get('invitation',''))
-            if not self.connected:
-                # Pairing is already durable if broker credentials are not available yet.
-                self.root.after(0,lambda:self.connect() if epoch==self.action_epoch and not self.closing and not self.stopping_all() else None)
-            else:
-                self.pairing.set('')
-        if role=='host':
-            self.submit('host',self.service.get(),self.host_environment.get(),callback=ready)
-        else:
-            self.submit('receive',self.invitation.get(),self.service.get(),callback=ready)
+        return self.journeys.quick_connect(role)
 
     def _activity(self, frame):
         from .desktop_trading_views import TradingWorkspace
@@ -879,7 +787,7 @@ class DesktopApp:
 
     def _diagnostics(self, frame):
         ttk.Label(frame, text='Execution evidence', font=('Segoe UI', 12, 'bold')).pack(anchor='w')
-        ttk.Label(frame, text='Select a trade in Trading & activity, then load its local timeline. Remote device records are not merged.',
+        ttk.Label(frame, text='Select a trade in Positions, then load its local timeline. Remote device records are not merged.',
                   wraplength=950).pack(anchor='w', pady=6)
         controls = ttk.Frame(frame)
         controls.pack(fill='x', pady=6)
@@ -894,17 +802,42 @@ class DesktopApp:
         readonly_traversal(self.diagnostic_text)
         self.diagnostic_text.pack(fill='both', expand=True)
 
+    def open_decision_timeline(self, trade_id):
+        if self.trades.exists(trade_id):
+            self.trades.selection_set(trade_id)
+            self.tabs.select(self.health_tab)
+            self.health_sections.select(self.timeline_tab)
+            self.load_diagnostics()
+        else:
+            self.notice.set('Select a tracked trade on the current connection first.')
+
     def selected_diagnostic_trade(self):
         selected = self.trades.selection()
         if not selected:
-            self.notice.set('Select a tracked trade in Trading & activity first.')
+            self.notice.set('Select a tracked trade in Positions first.')
             return None
         return selected[0]
 
     def load_diagnostics(self):
         trade_id = self.selected_diagnostic_trade()
         if trade_id:
-            self.submit('diagnostics', trade_id, self.diagnostic_side.get(), callback=self.render_diagnostics)
+            self.diagnostic_revision += 1
+            ticket=(self.action_epoch,self.diagnostic_revision,trade_id)
+            self.clear_diagnostic_view('Reading local evidence. Failed reads are reported in the status bar.')
+            def loaded(report):
+                if ticket!=(self.action_epoch,self.diagnostic_revision,trade_id) or self.trades.selection()!=(trade_id,):
+                    return
+                if not isinstance(report,dict) or report.get('trade_id')!=trade_id:
+                    self.clear_diagnostic_view('Matching evidence is unavailable for the current connection.')
+                    return
+                self.render_diagnostics(report)
+            self.submit('diagnostics', trade_id, self.diagnostic_side.get(), callback=loaded)
+
+    def clear_diagnostic_view(self, message):
+        self.diagnostic_text.configure(state='normal')
+        self.diagnostic_text.delete('1.0','end')
+        self.diagnostic_text.insert('1.0',message)
+        self.diagnostic_text.configure(state='disabled')
 
     def render_diagnostics(self, report):
         premium = report['premium_movement']
@@ -959,15 +892,7 @@ class DesktopApp:
         self.pending.append((future, callback))
 
     def connect(self):
-        self.connect_button.configure(state='disabled')
-        def connected(result):
-            self.pairing.set(''); self.key.set(''); self.secret.set('')
-            settings = result['execution']['settings']
-            for var, name in [(self.mode,'mode'),(self.slippage,'max_slippage_amount'),
-                              (self.bps,'max_slippage_bps'),(self.age,'max_age_seconds'),(self.quantity_cap,'max_quantity')]:
-                var.set(str(settings[name]))
-            self.render(result)
-        self.submit('connect', self.pairing.get(), self.key.get(), self.secret.get(), allow_live=self.live.get(), callback=connected)
+        return self.journeys.connect()
 
     def save_settings(self):
         try:
@@ -998,6 +923,7 @@ class DesktopApp:
         self.latest = state
         self.mobile_shell.render(state)
         self.home_overview.render(state)
+        self.decision_panel.render_state(state)
         from .customer_readiness import connection_summary
         readiness=connection_summary(state)
         self.connection_title.set(readiness['title'])

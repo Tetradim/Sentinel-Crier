@@ -21,6 +21,7 @@ from .trade_diagnostics import trade_report, export_trade_json, export_trade_csv
 from .component_health import emit
 from .push_client import pages
 from .copy_reports import CopyReporter
+from .error_log import emit_error
 
 class IntentDevice:
     def __init__(self,folder,broker=None,*,observe=None,error_log=None):
@@ -54,8 +55,8 @@ class IntentDevice:
             with self.db() as db:
                 db.execute('INSERT INTO device_trace(timestamp,monotonic_ns,trade_id,stage,details) VALUES (?,?,?,?,?)',
                            (datetime.now(timezone.utc).isoformat(),time.monotonic_ns(),trade_id,stage,json.dumps(details,sort_keys=True)))
-        except (sqlite3.Error,TypeError,ValueError):
-            pass
+        except (sqlite3.Error,TypeError,ValueError) as exc:
+            emit_error(self.error_log,'diagnostics.trace_dropped',exc,trade_id=trade_id)
 
     def trade_trace(self,trade_id):
         with self.db() as db:
@@ -140,7 +141,8 @@ class IntentDevice:
                 db.execute('INSERT INTO outgoing VALUES (?,?,?,?,?,?,?)',(event.event_id,self.fingerprint,trade_id,sequence,action,event.model_dump_json(),'pending'))
             self._trace(event.trade_id,'sender_instruction_journaled',event_id=event.event_id,action=event.action,sequence=event.sequence,reference_limit_price=str(event.limit_price),quote_status='not_captured')
             try: self.diagnostics.observe(event,'sender')
-            except Exception: pass
+            except Exception as exc:
+                emit_error(self.error_log,'diagnostics.enqueue_failed',exc,trade_id=event.trade_id)
             self.engine.accept(event)
             self.changed.set()
             self.publish_changed.set()
@@ -244,7 +246,8 @@ class IntentDevice:
                                 continue
                             self._trace(event.trade_id,'receiver_instruction_arrived',event_id=event.event_id,sequence=event.sequence,relay_cursor=item['cursor'],sender_created_at=event.created_at.isoformat(),reference_limit_price=str(event.limit_price),quote_status='not_captured')
                             try: self.diagnostics.observe(event,'receiver')
-                            except Exception: pass
+                            except Exception as exc:
+                                emit_error(self.error_log,'diagnostics.enqueue_failed',exc,trade_id=event.trade_id)
                             self._trace(event.trade_id,'receiver_instruction_stored',event_id=event.event_id,relay_cursor=item['cursor'])
                             self.changed.set()
                             with self.db() as db: db.execute('INSERT OR REPLACE INTO cursors VALUES (?,?)',(fingerprint,item['cursor']))
