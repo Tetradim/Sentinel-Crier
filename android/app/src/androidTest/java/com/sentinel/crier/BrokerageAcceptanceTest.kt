@@ -28,7 +28,9 @@ class BrokerageAcceptanceTest {
    onView(withContentDescription("Stop all connections")).check(matches(isDisplayed()))
    onView(withText("Positions")).perform(click()); capture("android-positions-disconnected")
    onView(withText("Account")).perform(click()); capture("android-account-disconnected")
-   onView(withText("Trade")).perform(click()); capture("android-trade-disconnected")
+   onView(withText("Trade")).perform(click())
+   scenario.onActivity { assertReadableSelectors(it) }
+   capture("android-trade-disconnected")
    onView(withContentDescription("Stop all connections")).check(matches(isDisplayed()))
    scenario.onActivity { assertFalse(SyncService.active) }
   }
@@ -57,6 +59,21 @@ class BrokerageAcceptanceTest {
    }
    onView(withText("Stop connections to edit pools")).inRoot(isDialog()).check(matches(isDisplayed()))
    onView(withText("Close")).inRoot(isDialog()).perform(click())
+  }
+ }
+ private fun assertReadableSelectors(activity:MainActivity) {
+  val root=activity.findViewById<android.view.ViewGroup>(android.R.id.content)
+  val selected=mutableListOf<android.widget.TextView>()
+  fun visit(view:android.view.View) {
+   if(view is android.widget.Spinner && view.isShown) (view.selectedView as? android.widget.TextView)?.let { selected.add(it) }
+   if(view is android.view.ViewGroup) for(i in 0 until view.childCount) visit(view.getChildAt(i))
+  }
+  visit(root); assertTrue("The instrument selector must be rendered",selected.isNotEmpty())
+  val background=android.graphics.Color.luminance(BrokerageShell.bg)
+  for(view in selected) {
+   val foreground=android.graphics.Color.luminance(view.currentTextColor)
+   val contrast=(maxOf(foreground,background)+0.05)/(minOf(foreground,background)+0.05)
+   assertTrue("Selected instrument must be readable on the dark workspace",contrast>=4.5)
   }
  }
  private fun assertSafeNavigation(activity:MainActivity) {
