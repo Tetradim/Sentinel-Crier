@@ -163,5 +163,19 @@
   ],
   "physical_provider_apple_acceptance": "deferred_by_owner",
   "final_customer_acceptance": "success",
-  "final_live_safety": "success"
+  "final_live_safety": "success",
+  "publication": {
+    "workflow_run": 41369500949,
+    "url": "https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.5.1",
+    "tag_source": "f12422f1df39af51abe0b9f4b286a39dad9377f5",
+    "public_assets": 9,
+    "public_manifest_and_package_hashes_verified": true,
+    "actual_updater_check_from_050": {
+      "status": "available",
+      "version": "0.5.1",
+      "installer_bytes": 25195125,
+      "verified": true
+    },
+    "rename_guard_regression_verified": true
+  }
 }

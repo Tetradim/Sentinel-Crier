@@ -81,6 +81,10 @@ Windows is built from `415d3bd`; its runtime/build/version paths are unchanged t
 
 All installer/portable/APK/AAB hashes and the trusted Ed25519 update-catalog signature were verified locally. APK and AAB signature verification passed; the Android signing identity is operator-provided/self-signed. The Windows installer remains Authenticode-unsigned. Installer acceptance used isolated GitHub-hosted state and verifies install, an acceptance-only next-patch upgrade, downgrade rejection, retained journals/credentials and startup preference. It does not establish physical-machine acceptance or a future migration.
 
+**Published:** [Crier 0.5.1 and all nine assets](https://github.com/Tetradim/Sentinel-Crier/releases/tag/v0.5.1), tagged at the documentation/publication commit `f12422f`. [Runner-side publication](https://github.com/Tetradim/Sentinel-Crier/actions/runs/41369500949) reused the immutable accepted artifacts after the desktop upload stalled. It verifies successful source-bound acceptance/safety runs, permits only documentation/publication-helper changes after those runs, rejects hidden runtime renames, verifies artifact hashes and the signed catalog, and requires all nine uploaded assets before publishing. No application binary was rebuilt or changed by that transfer.
+
+After publication, public portable/APK/AAB downloads matched the accepted hashes. The actual bundled updater, tested as an installed **0.5.0** client, discovered **0.5.1**, downloaded its public installer and reverified it. No installer was executed on the owner's PC.
+
 [External review assessment and additional proposed follow-ups](../../../reviews/2026-11-01-external-fixed-review.md). New recommendations are separate from this approved recovery/refactor/UI scope.
 
 ## Unchanged owner deferrals
