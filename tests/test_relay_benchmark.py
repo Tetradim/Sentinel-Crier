@@ -32,7 +32,15 @@ def test_receive_gate_probe_is_bounded_and_does_not_hide_missing_rate_limit():
     assert client.calls==41
 
 
-def test_real_http_benchmark_preserves_deliveries_across_restart(tmp_path):
+def test_real_http_benchmark_preserves_deliveries_across_restart(tmp_path, monkeypatch):
+    # Exercise the actual HTTP gate inside one controlled pairing window. Slow
+    # hosted disks can otherwise spread 41 sequential requests over 3+ minutes,
+    # correctly resetting the production gate before this probe reaches 20.
+    # Replace only this module binding: delivery timestamps/latency clocks stay real.
+    from types import SimpleNamespace
+    from crier import quick_connect
+    instant = quick_connect.time.time()
+    monkeypatch.setattr(quick_connect, 'time', SimpleNamespace(time=lambda: instant))
     result = asyncio.run(run_benchmark(tmp_path, hosts=2, followers=2, events=4))
     assert result['expected_deliveries'] == 16
     assert result['successful_deliveries'] == 16
@@ -72,3 +80,24 @@ def test_cli_failure_is_redacted_and_nonzero(tmp_path):
     assert json.loads(output.read_text()) == {'failures': ['benchmark_aborted'], 'error_type': 'ValueError'}
     assert json.loads(process.stdout) == json.loads(output.read_text())
     assert process.stderr == ''
+
+
+def test_real_receive_limiter_can_legitimately_reset_for_each_slow_request(tmp_path,monkeypatch):
+    from types import SimpleNamespace
+    from crier import quick_connect
+    from crier.intent_relay import IntentRelay
+    from scripts.benchmark_relay import receive_limit_gate
+    wall=[1000000]
+    def advance():
+        wall[0]+=60
+        return wall[0]
+    monkeypatch.setattr(quick_connect,'time',SimpleNamespace(time=advance))
+    service=quick_connect.ConnectionService(IntentRelay(tmp_path/'slow-relay.sqlite3'))
+    class Client:
+        async def post(self,path,**kwargs):
+            try:
+                service.limit('receive','same-source',20,60)
+                return SimpleNamespace(status_code=422)
+            except ValueError:
+                return SimpleNamespace(status_code=429)
+    assert asyncio.run(receive_limit_gate(Client()))==422
