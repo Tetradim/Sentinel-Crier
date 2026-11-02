@@ -15,4 +15,4 @@
 - [x] Restyle the ticket with stock/option controls and clear buy/management actions; preserve frozen command semantics.
 - [x] Implement mobile-style shell, account hub and real-state Home. Keep existing notebook page references usable by internal navigation/tests.
 - [x] Run targeted and full Python/Tk tests, independently review the changes and inspect actual isolated desktop screenshots at scaled window sizes.
-- [ ] Publish a Windows update from verified source and record source-specific acceptance and screenshots. Mobile builds and deferred provider/device work remain outside this visual Windows change.
+- [x] Publish a Windows update from verified source and record source-specific acceptance and screenshots. Mobile builds and deferred provider/device work remain outside this visual Windows change.

@@ -1,0 +1,178 @@
+{
+  "version": "0.5.2",
+  "source": "ca10f9c277853e0ae83cbe6ac18186f02f70d4af",
+  "local_python_passed": 1320,
+  "local_python_skipped": 1,
+  "windows": {
+    "version": "0.5.2",
+    "commit": "ca10f9c277853e0ae83cbe6ac18186f02f70d4af",
+    "platform": "windows-x64",
+    "release_channel": "candidate",
+    "physical_device_acceptance": "deferred_by_owner",
+    "connection_service_url": "https://afvumgzbfqyrugjqrteu.supabase.co/functions/v1/crier",
+    "authenticode": "unsigned",
+    "artifacts": {
+      "SentinelCrier-0.5.2-Windows.zip": {
+        "sha256": "d9eae7bca88f9118a9bab0337092ea0cebaadf363bd01d80cc7cf7dd65788f9f",
+        "bytes": 33037160
+      },
+      "SentinelCrier-0.5.2-Windows-Setup.exe": {
+        "sha256": "14b1758aa10e206d87e6cf622cadf351c04fcf781f883791682a6c13ca28298f",
+        "bytes": 25214258
+      }
+    }
+  },
+  "update_signature_verified": true,
+  "public_artifact_hashes_verified": true,
+  "customer_update_discovery": {
+    "status": "available",
+    "version": "0.5.2",
+    "notes": "Crier 0.5.2 brings the Windows workspace closer to Crier's mobile interface.\n\nThe dark account-first layout includes persistent account and PAPER/LIVE/OFFLINE context, Home/Markets/Trade/Positions/Orders navigation, an Account hub for setup and recovery, and a visible Stop all control. Stock and option tickets use stacked inputs, separate order management, and scrollable tables. Status messages and recovery actions remain reachable at scaled window sizes.\n\nStop all also invalidates pending pairing callbacks and queued reconnects, including when the selected connection changes during shutdown. Existing execution authorization, frozen order commands, ownership journals and allocation checks remain in place. Unavailable balances and chart feeds are explicitly marked unavailable.\n\nBefore installing, stop Crier workers and create a private recovery snapshot. The updater checks compatibility, hashes and the signed update catalog; installation remains explicit. The Windows installer remains Authenticode-unsigned. Android 0.5.1 remains the separately published mobile package; this Windows update does not change its UI.\n\nApple enrollment/signing, physical-device/broker acceptance and Webull/provider activation remain owner-deferred. No real brokerage orders or customer notifications are part of automated acceptance.\n"
+  },
+  "customer_update_staged_and_verified": true,
+  "installer_executed_on_owner_pc": false,
+  "windows_release_run": 41439789533,
+  "workflows": [
+    {
+      "conclusion": "success",
+      "databaseId": 41439789533,
+      "name": "Windows release",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 41439779409,
+      "name": "Android build and intent tests",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 41439779871,
+      "name": "iOS build",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 41439779576,
+      "name": "Backend tests",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 41439779489,
+      "name": "Windows desktop",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 41439779353,
+      "name": "Provider connection preparation",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 41439779532,
+      "name": "Customer acceptance",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 41439779518,
+      "name": "Crier live-trading safety checks",
+      "status": "completed"
+    }
+  ],
+  "ios_native_passed": 199,
+  "ios_ui_passed": 2,
+  "windows_ci_python_passed": 1320,
+  "actual_native_screenshots": 7,
+  "installer_acceptance": {
+    "evidence_scope": "ephemeral GitHub-hosted Windows runner",
+    "physical_customer_machine_verified": false,
+    "upgrade_scope": "Same program payload with acceptance-only next patch installer; no future application migration claim.",
+    "status": "passed",
+    "commands": [
+      {
+        "executable": "ISCC.exe",
+        "returncode": 0
+      },
+      {
+        "executable": "SentinelCrier-0.5.2-Windows-Setup.exe",
+        "returncode": 0
+      },
+      {
+        "executable": "SentinelCrier-0.5.3-Windows-Setup.exe",
+        "returncode": 0
+      },
+      {
+        "executable": "SentinelCrier-0.5.2-Windows-Setup.exe",
+        "returncode": 7
+      },
+      {
+        "executable": "unins000.exe",
+        "returncode": 0
+      }
+    ],
+    "stages": [
+      {
+        "stage": "install",
+        "version": "0.5.2",
+        "startup_opt_in_preserved": true,
+        "data": {
+          "journal_sha256": "daf59efe3defa0cfbbf5ca5d3dbcd6e28ab9d7bb723845f2dc73af13370a8039",
+          "credential_sha256": "c1254d0350ed603567f9f6ac496b8d165d569e2f3f479b7596b6dc4ba2489ce0",
+          "unresolved_order_count": 1,
+          "dpapi_decryption_verified": true
+        }
+      },
+      {
+        "stage": "upgrade",
+        "version": "0.5.3",
+        "startup_opt_in_preserved": true,
+        "data": {
+          "journal_sha256": "daf59efe3defa0cfbbf5ca5d3dbcd6e28ab9d7bb723845f2dc73af13370a8039",
+          "credential_sha256": "c1254d0350ed603567f9f6ac496b8d165d569e2f3f479b7596b6dc4ba2489ce0",
+          "unresolved_order_count": 1,
+          "dpapi_decryption_verified": true
+        }
+      },
+      {
+        "stage": "downgrade_rejected",
+        "returncode": 7,
+        "data": {
+          "journal_sha256": "daf59efe3defa0cfbbf5ca5d3dbcd6e28ab9d7bb723845f2dc73af13370a8039",
+          "credential_sha256": "c1254d0350ed603567f9f6ac496b8d165d569e2f3f479b7596b6dc4ba2489ce0",
+          "unresolved_order_count": 1,
+          "dpapi_decryption_verified": true
+        }
+      },
+      {
+        "stage": "uninstall",
+        "program_removed": true,
+        "uninstall_registry_removed": true,
+        "data": {
+          "journal_sha256": "daf59efe3defa0cfbbf5ca5d3dbcd6e28ab9d7bb723845f2dc73af13370a8039",
+          "credential_sha256": "c1254d0350ed603567f9f6ac496b8d165d569e2f3f479b7596b6dc4ba2489ce0",
+          "unresolved_order_count": 1,
+          "dpapi_decryption_verified": true
+        }
+      }
+    ],
+    "base_version": "0.5.2",
+    "upgrade_version": "0.5.3",
+    "source_file_count": 1672,
+    "initial_data": {
+      "journal_sha256": "daf59efe3defa0cfbbf5ca5d3dbcd6e28ab9d7bb723845f2dc73af13370a8039",
+      "credential_sha256": "c1254d0350ed603567f9f6ac496b8d165d569e2f3f479b7596b6dc4ba2489ce0",
+      "unresolved_order_count": 1,
+      "dpapi_decryption_verified": true
+    },
+    "startup": {
+      "default_off": true,
+      "explicit_opt_in": true,
+      "preserved_on_upgrade": true,
+      "removed_on_uninstall": true
+    },
+    "retention": "Any acceptance-owned synthetic user data and evidence are retained for ephemeral runner disposal by GitHub."
+  }
+}

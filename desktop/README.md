@@ -95,7 +95,7 @@ originate mirrored commands. Standard single-leg long options and whole shares o
 
 ## Inspect execution evidence
 
-Select a tracked trade in **Trading & activity**, open **Diagnostics**, and click
+Select a tracked trade in **Positions**, open **Account → Health & recovery → Trade timeline**, and click
 **Load selected trade**. Export JSON or CSV to keep the local relay and broker
 timeline. Missing market quotes and unmeasured cross-device latency are labeled
 explicitly. See [execution diagnostics](../docs/execution-diagnostics.md).
@@ -133,7 +133,7 @@ Provider sign-in is enabled only after the separate configured service returns v
 capabilities. The bundled Supabase project supplies the default `/functions/v1/crier-oauth`
 base; operators can set `CRIER_OAUTH_SERVICE_URL` to another exact HTTPS Supabase
 function base (20 lowercase project letters). No service/provider secrets are bundled.
-Use Start here to choose alerts or trading, then Provider sign-in to create/sign in to
+Use Home to choose alerts or trading, then Account → Provider sign-in to create/sign in to
 your Crier account and authorize a provider in your browser. Browser login must use
 the same Crier customer. The per-user installer registers `sentinelcrier:` and forwards
 opaque return notifications to the running app. A manual return URL field supports
